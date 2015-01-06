@@ -1,0 +1,200 @@
+// Microsoft Visual C++ generated resource script.
+//
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "winresrc.h"
+#include "windows.h"
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (U.S.) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+#ifdef _WIN32
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+#endif //_WIN32
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Version
+//
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 0,8,1,7
+ PRODUCTVERSION 0,8,1,7
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS 0x1L
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS 0x40000L
+ FILETYPE 0x3L
+ FILESUBTYPE 0xbL
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "000904b0"
+        BEGIN
+            VALUE "CompanyName", "Andrey Kovalchuk"
+            VALUE "FileDescription", "VirtualDub FFMpeg Input Plugin"
+            VALUE "FileVersion", "0.8.1.7"
+            VALUE "InternalName", "FFInputDriver.dll"
+            VALUE "LegalCopyright", "2012,  Andrey Kovalchuk"
+            VALUE "OriginalFilename", "FFInputDriver.vdplugin"
+            VALUE "ProductName", "FFInputDriver"
+            VALUE "ProductVersion", "0.8.1.7"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x9, 1200
+    END
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO 
+BEGIN
+    IDD_FF_INFO, DIALOG
+    BEGIN
+        RIGHTMARGIN, 288
+        BOTTOMMARGIN, 322
+    END
+
+    IDD_FF_OPTIONS, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 184
+        VERTGUIDE, 150
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 227
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_FF_INFO DIALOGEX 0, 0, 290, 326
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Caching Input Driver - Information"
+FONT 8, "MS Shell Dlg", 0, 0, 0x0
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,238,308,50,14
+    LTEXT           "Video Codec:",IDC_STATIC,13,164,92,8
+    LTEXT           "Pixel format (colorspace):",IDC_STATIC,13,174,82,8
+    LTEXT           "Bitrate:",IDC_STATIC,13,204,68,8
+    LTEXT           "Audio Codec:",IDC_STATIC,11,226,46,8
+    LTEXT           "Channels, Sample format:",IDC_STATIC,11,236,95,8
+    LTEXT           "Bitrate:",IDC_STATIC,11,256,25,8
+    LTEXT           "Image size, Frame rate:",IDC_STATIC,13,184,86,8
+    CTEXT           "",IDC_VIDEO_CODECNAME,116,164,161,10,SS_SUNKEN
+    CTEXT           "",IDC_VIDEO_PIXFMT,116,174,161,10,SS_SUNKEN
+    CTEXT           "",IDC_VIDEO_WXH,116,184,161,10,SS_SUNKEN
+    CTEXT           "",IDC_VIDEO_BITRATE,116,204,161,9,SS_SUNKEN
+    CTEXT           "",IDC_AUDIO_CODECNAME,116,226,161,10,SS_SUNKEN
+    CTEXT           "",IDC_AUDIO_CHANNELS,116,236,161,10,SS_SUNKEN
+    CTEXT           "",IDC_AUDIO_BITRATE,116,256,161,10,SS_SUNKEN
+    LTEXT           "Sampling rate:",IDC_STATIC,11,246,76,8
+    CTEXT           "",IDC_AUDIO_SAMPLERATE,116,246,161,10,SS_SUNKEN
+    LTEXT           "Container Format:",IDC_STATIC,13,31,86,8
+    LTEXT           "Duration:",IDC_STATIC,13,41,32,8
+    LTEXT           "Streams:",IDC_STATIC,13,61,35,8
+    CTEXT           "",IDC_FORMATNAME,115,30,161,10,SS_SUNKEN
+    CTEXT           "",IDC_DURATION,115,40,161,10,SS_SUNKEN
+    CTEXT           "",IDC_STREAMSCOUNT,115,60,161,10,SS_SUNKEN
+    LTEXT           "Bitrate:",IDC_STATIC,13,51,43,8
+    CTEXT           "",IDC_BITRATE,115,50,161,10,SS_SUNKEN
+    CTEXT           "",IDC_VIDEO_ASPECTRATIO,116,194,161,10,SS_SUNKEN
+    LTEXT           "Pixel Aspect Ratio:",IDC_STATIC,13,194,72,8
+    LTEXT           "Vx.x.x.x",IDC_STATICVerNumber,8,311,29,8
+    LTEXT           "Metadata:",IDC_STATIC,13,73,36,8
+    EDITTEXT        IDC_METADATA,53,73,228,84,ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_READONLY | NOT WS_BORDER
+    LTEXT           "Index state: Good",IDC_INDEX_INFO,11,282,270,8
+    LTEXT           "Memory cache: 100 frames / 512M",IDC_MEMORY_INFO,11,293,270,8
+    LTEXT           "Segment 1 of 1: file.mp4",IDC_SEGMENT,43,5,238,10
+    PUSHBUTTON      "<",IDC_SEGMENT_PREV,7,9,13,11,BS_FLAT
+    PUSHBUTTON      ">",IDC_SEGMENT_NEXT,23,9,13,11,BS_FLAT
+    LTEXT           "Timeline: frame 0 to 999",IDC_SEGMENT_TIMELINE,43,16,238,10
+END
+
+IDD_FF_OPTIONS DIALOGEX 0, 0, 191, 234
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Open options: FFMpeg"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,76,213,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,134,213,50,14
+    CONTROL         "Adjust Pixel Aspect Ratio",IDC_VIDEO_ADJUSTPAR,"Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,53,7,95,10,WS_EX_RIGHT
+    CONTROL         "Downmix Audio",IDC_AUDIO_DOWNMIX,"Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,83,18,65,10,WS_EX_RIGHT
+    CONTROL         "Limit Audio To 16-bit",IDC_AUDIO_LIMITAUDIO16BIT,"Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,67,29,81,10,WS_EX_RIGHT
+    CONTROL         "Use 709",IDC_IFHEIGHT720_709,"Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,15,82,133,10,WS_EX_RIGHT
+    CONTROL         "Autodetect 601/709, Full/Limited",IDC_AUTODETECT709,
+                    "Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,27,48,121,10,WS_EX_RIGHT
+    RTEXT           "Convert unusual pixels formats to",IDC_STATIC,7,115,140,8
+    COMBOBOX        IDC_COMBODEFAULTVIDEO,83,126,65,44,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "Use Full Range",IDC_IFHEIGHT720_FULLRANGE,"Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,15,93,133,10,WS_EX_RIGHT
+    RTEXT           "If undetected and H>720 or W>1280",IDC_STATIC,7,72,142,8
+    LTEXT           "V0.8.1.0",IDC_STATICVerNumber2,7,219,29,8
+    COMBOBOX        IDC_COMBO_ERRORALLOWANCE,85,161,65,46,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    RTEXT           "Allow missing frames",IDC_STATIC,7,150,143,8
+    CONTROL         "Resync Audio To Video",IDC_RESYNC,"Button",BS_AUTOCHECKBOX | BS_LEFTTEXT | WS_TABSTOP,17,186,133,10,WS_EX_RIGHT
+END
+
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""winresrc.h""\r\n"
+    "#include ""windows.h""\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+#endif    // English (U.S.) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+
