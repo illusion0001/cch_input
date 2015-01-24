@@ -562,6 +562,13 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     perfect_bitexact = true;
     // examples: tga32
     break;
+
+  default:
+    perfect_format = kPixFormat_XRGB8888;
+    perfect_av_fmt = AV_PIX_FMT_BGRA;
+    trigger = kPixFormat_XRGB8888;
+    perfect_bitexact = false;
+    // examples: utvideo rgb (AV_PIX_FMT_RGB24) 
   }
 
   if(opt_format==0){
