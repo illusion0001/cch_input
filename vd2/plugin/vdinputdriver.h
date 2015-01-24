@@ -26,11 +26,6 @@
 #ifndef f_VD2_PLUGIN_VDINPUTDRIVER_H
 #define f_VD2_PLUGIN_VDINPUTDRIVER_H
 
-#ifdef _MSC_VER
-	#pragma once
-	#pragma pack(push, 8)
-#endif
-
 #include "vdplugin.h"
 
 /// Unsigned 32-bit fraction.
@@ -240,12 +235,6 @@ class IVDXInputFileDriver : public IVDXUnknown {
 public:
 	enum { kIID = VDXMAKEFOURCC('X', 'i', 'f', 'd') };
 
-	enum {
-		kFlagNone				= 0x00000000,
-		kFlagQuiet				= 0x00000001,
-		kFlagAll				= 0xFFFFFFFF
-	};
-
 	virtual int		VDXAPIENTRY DetectBySignature(const void *pHeader, sint32 nHeaderSize, const void *pFooter, sint32 nFooterSize, sint64 nFileSize) = 0;
 	virtual bool	VDXAPIENTRY CreateInputFile(uint32 flags, IVDXInputFile **ppFile) = 0;
 };
@@ -288,9 +277,5 @@ enum {
 	// V4 (1.10.1): Added NoOptions definition flag.
 	kVDXPlugin_InputDriverAPIVersion = 4
 };
-
-#ifdef _MSC_VER
-	#pragma pack(pop)
-#endif
 
 #endif

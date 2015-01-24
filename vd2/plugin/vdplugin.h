@@ -26,11 +26,6 @@
 #ifndef f_VD2_PLUGIN_VDPLUGIN_H
 #define f_VD2_PLUGIN_VDPLUGIN_H
 
-#ifdef _MSC_VER
-	#pragma once
-	#pragma pack(push, 8)
-#endif
-
 #include <stddef.h>
 
 // Copied from <vd2/system/vdtypes.h>.  Must be in sync.
@@ -57,6 +52,10 @@
 	typedef ptrdiff_t			sintptr;
 	typedef size_t				uintptr;
 #endif
+
+typedef struct VDXHINSTANCEStruct *VDXHINSTANCE;
+typedef struct VDXHDCStruct *VDXHDC;
+typedef struct VDXHWNDStruct *VDXHWND;
 
 #ifndef VDXAPIENTRY
 	#define VDXAPIENTRY __stdcall
@@ -91,6 +90,9 @@ enum {
 	kVDXPluginType_Input
 };
 
+typedef bool (VDXAPIENTRY *VDXShowStaticAboutProc)(VDXHWND parent);
+typedef bool (VDXAPIENTRY *VDXShowStaticConfigureProc)(VDXHWND parent);
+
 struct VDXPluginInfo {
 	uint32			mSize;				// size of this structure in bytes
 	const wchar_t	*mpName;
@@ -104,6 +106,10 @@ struct VDXPluginInfo {
 	uint32			mTypeAPIVersionRequired;
 	uint32			mTypeAPIVersionUsed;
 	const void *	mpTypeSpecificInfo;
+
+	// NEW
+	VDXShowStaticAboutProc		mpStaticAboutProc;
+	VDXShowStaticConfigureProc	mpStaticConfigureProc;
 };
 
 typedef const VDXPluginInfo *const *(VDXAPIENTRY *tpVDXGetPluginInfo)();
@@ -244,9 +250,5 @@ public:
 	virtual int VDXAPIENTRY Release() = 0;
 	virtual void *VDXAPIENTRY AsInterface(uint32 iid) = 0;
 };
-
-#ifdef _MSC_VER
-	#pragma pack(pop)
-#endif
 
 #endif

@@ -69,7 +69,7 @@
 				OutputFile=".\..\bin\cch_input.vdf"
 				LinkIncremental="2"
 				AdditionalLibraryDirectories="..\ffmpeg\win32\lib,..\cineform\lib"
-				IgnoreDefaultLibraryNames="vdxframe.lib"
+				IgnoreDefaultLibraryNames=""
 				ModuleDefinitionFile="..\ffmpeg.def"
 				DelayLoadDLLs="avcodec-56.dll;avformat-56.dll;avutil-54.dll;swscale-3.dll;swresample-1.dll;cfhddecoder.dll"
 				GenerateDebugInformation="true"
@@ -157,7 +157,7 @@
 				OutputFile=".\..\bin\cch_input.vdf"
 				LinkIncremental="1"
 				AdditionalLibraryDirectories="..\ffmpeg\win32\lib,..\cineform\lib"
-				IgnoreDefaultLibraryNames="vdxframe.lib"
+				IgnoreDefaultLibraryNames=""
 				ModuleDefinitionFile="..\ffmpeg.def"
 				DelayLoadDLLs="avcodec-56.dll;avformat-56.dll;avutil-54.dll;swscale-3.dll;swresample-1.dll;cfhddecoder.dll"
 				GenerateDebugInformation="true"
@@ -362,10 +362,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\vd2\plugin\vdaudiofilt.h"
-				>
-			</File>
-			<File
 				RelativePath="..\vd2\plugin\vdinputdriver.h"
 				>
 			</File>
@@ -374,27 +370,11 @@
 				>
 			</File>
 			<File
-				RelativePath="..\vd2\plugin\vdvideofilt.h"
-				>
-			</File>
-			<File
-				RelativePath="..\vd2\plugin\vdvideoutil.h"
-				>
-			</File>
-			<File
-				RelativePath="..\vd2\VDXFrame\VideoFilter.h"
-				>
-			</File>
-			<File
 				RelativePath="..\vd2\VDXFrame\VideoFilterDialog.cpp"
 				>
 			</File>
 			<File
 				RelativePath="..\vd2\VDXFrame\VideoFilterDialog.h"
-				>
-			</File>
-			<File
-				RelativePath="..\vd2\VDXFrame\VideoFilterEntry.h"
 				>
 			</File>
 		</Filter>

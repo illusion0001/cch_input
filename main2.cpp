@@ -41,7 +41,7 @@ wchar_t option_a[1024] = L"FFMpeg (select formats)|*.mov;*.mp4;*.avi";
 
 VDXInputDriverDefinition ff_class_a={
   sizeof(VDXInputDriverDefinition),
-  VDXInputDriverDefinition::kFlagSupportsVideo|VDXInputDriverDefinition::kFlagSupportsAudio|VDXInputDriverDefinition::kFlagCustomSignature,
+  VDXInputDriverDefinition::kFlagSupportsVideo|VDXInputDriverDefinition::kFlagSupportsAudio|VDXInputDriverDefinition::kFlagCustomSignature|VDXInputDriverDefinition::kFlagNoOptions,
   1, //priority, reset from options
   0, //SignatureLength
   0, //Signature
@@ -55,7 +55,7 @@ wchar_t option_b[1024] = L"FFMpeg (all formats)|*.mov;*.mp4;*.avi";
 
 VDXInputDriverDefinition ff_class_b={
   sizeof(VDXInputDriverDefinition),
-  VDXInputDriverDefinition::kFlagSupportsVideo|VDXInputDriverDefinition::kFlagSupportsAudio,
+  VDXInputDriverDefinition::kFlagSupportsVideo|VDXInputDriverDefinition::kFlagSupportsAudio|VDXInputDriverDefinition::kFlagNoOptions,
   -2, //priority, reset from options
   0, //SignatureLength
   0, //Signature
