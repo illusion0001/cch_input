@@ -366,9 +366,10 @@ AVFormatContext* VDFFInputFile::open_file(AVMediaType type)
 
 int VDFFInputFile::find_stream(AVFormatContext* fmt, AVMediaType type)
 {
-  {for(int i=0; i<(int)fmt->nb_streams; i++)
-    if(fmt->streams[i]->codec->codec_type==type) return i; }
-  return -1;
+  int video = av_find_best_stream(fmt,AVMEDIA_TYPE_VIDEO,-1,-1,0,0);
+  if(type==AVMEDIA_TYPE_VIDEO) return video;
+
+  return av_find_best_stream(fmt,type,-1,video,0,0);
 }
 
 bool VDFFInputFile::GetVideoSource(int index, IVDXVideoSource **ppVS) 
