@@ -190,6 +190,8 @@ VDFFInputFile::VDFFInputFile(const VDXInputDriverContext& context)
   next_segment = 0;
   head_segment = 0;
   auto_append = false;
+  is_image = false;
+  is_image_list = false;
 }
 
 VDFFInputFile::~VDFFInputFile()
@@ -334,6 +336,29 @@ AVFormatContext* VDFFInputFile::open_file(AVMediaType type)
     return 0;
   }
 
+  is_image = false;
+  is_image_list = false;
+  if(strcmp(fmt->iformat->name,"image2")==0) is_image=true;
+  if(strcmp(fmt->iformat->name,"sgi_pipe")==0) is_image=true;
+
+  if(is_image){
+    wchar_t list_path[MAX_PATH];
+    char start_number[MAX_PATH];
+    if(detect_image_list(list_path,MAX_PATH,start_number,MAX_PATH)){
+      is_image_list = true;
+      avformat_close_input(&fmt);
+      widechar_to_utf8(ff_path, ff_path_size, list_path);
+      AVDictionary* options = 0;
+      av_dict_set(&options, "start_number", start_number, 0);
+      err = avformat_open_input(&fmt, ff_path, 0, &options);
+      av_dict_free(&options);
+      if(err!=0){
+        mContext.mpCallbacks->SetError("FFMPEG: Unable to open image sequence.");
+        return 0;
+      }
+    }
+  }
+
   if(type==AVMEDIA_TYPE_VIDEO){
     // I absolutely do not want index getting condensed
     fmt->max_index_size = 512 * 1024 * 1024;
@@ -362,6 +387,47 @@ AVFormatContext* VDFFInputFile::open_file(AVMediaType type)
   }
 
   return fmt;
+}
+
+bool VDFFInputFile::detect_image_list(wchar_t* dst, int dst_count, char* start, int start_count)
+{
+  wchar_t* p = wcsrchr(path,'.');
+  if(!p) return false;
+
+  int digit0 = -1;
+  int digit1 = -1;
+
+  while(p>path){
+    p--;
+    int c = *p;
+    if(c=='\\' || c=='/') break;
+    if(c>='0' && c<='9'){
+      if(digit0==-1){
+        digit0 = p-path;
+        digit1 = digit0;
+      } else digit0--;
+    } else if(digit0!=-1) break;
+  }
+
+  if(digit0==-1) return false;
+
+  char* s = start;
+  {for(int i=digit0; i<=digit1; i++){
+    int c = path[i];
+    *s = c;
+    s++;
+  }}
+  *s = 0;
+
+  wchar_t buf[20];
+  swprintf(buf,20,L"%%0%dd",digit1-digit0+1);
+
+  wcsncpy(dst,path,digit0);
+  dst[digit0] = 0;
+  wcscat(dst,buf);
+  wcscat(dst,path+digit1+1);
+
+  return true;
 }
 
 int VDFFInputFile::find_stream(AVFormatContext* fmt, AVMediaType type)

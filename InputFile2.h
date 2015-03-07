@@ -42,6 +42,8 @@ public:
   int64_t video_start_time;
   wchar_t path[MAX_PATH];
   bool auto_append;
+  bool is_image_list;
+  bool is_image;
 
 	AVFormatContext* m_pFormatCtx;
   VDFFVideoSource* video_source;
@@ -66,6 +68,7 @@ public:
 	AVFormatContext* getContext( void ) { return m_pFormatCtx; }
   int find_stream(AVFormatContext* fmt, AVMediaType type);
   AVFormatContext* open_file(AVMediaType type);
+  bool detect_image_list(wchar_t* dst, int dst_count, char* start, int start_count);
   void do_auto_append(const wchar_t *szFile);
 
 protected:

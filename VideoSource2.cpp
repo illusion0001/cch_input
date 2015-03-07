@@ -31,6 +31,7 @@ VDFFVideoSource::VDFFVideoSource(const VDXInputDriverContext& context)
   frame_type = 0;
   flip_image = false;
   direct_buffer = false;
+  is_image_list = false;
   buffer = 0;
   mem = 0;
 }
@@ -97,8 +98,12 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
 
   if(m_pStreamCtx->duration == AV_NOPTS_VALUE){
     if(m_pFormatCtx->duration == AV_NOPTS_VALUE){
-      mContext.mpCallbacks->SetError("FFMPEG: Cannot figure stream duration. Unsupported.");
-      return -1;
+      if(pSource->is_image){
+        sample_count = 1;
+      } else {
+        mContext.mpCallbacks->SetError("FFMPEG: Cannot figure stream duration. Unsupported.");
+        return -1;
+      }
     } else {
       AVRational m;
       av_reduce(&m.num, &m.den, fr.num, fr.den*AV_TIME_BASE, INT_MAX);
@@ -109,26 +114,34 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
     sample_count = (int)((m_pStreamCtx->duration * time_base.num + rndd) / time_base.den);
   }
 
-  trust_index = false;
-  if(abs(m_pStreamCtx->nb_index_entries - sample_count)<2){
-    // hopefully there is index with useful timestamps
-    sample_count = m_pStreamCtx->nb_index_entries;
-    trust_index = true;
-  }
-  /*
-  if(m_pFormatCtx->iformat->flags & AVFMT_GENERIC_INDEX){
-    // generic index only ever collects keyframes, useless
+  if(pSource->is_image){
+    is_image_list = true;
     trust_index = false;
-  }*/
+    keyframe_gap = 1;
+    fw_seek_threshold = 0;
 
-  keyframe_gap = 0;
-  int d = 1;
-  if(trust_index){for(int i=0; i<m_pStreamCtx->nb_index_entries; i++){
-    if(m_pStreamCtx->index_entries[i].flags & AVINDEX_KEYFRAME){
-      if(d>keyframe_gap) keyframe_gap = d;
-      d = 1;
-    } else d++;
-  }}
+  } else {
+    trust_index = false;
+    if(m_pStreamCtx->nb_index_entries>2 && abs(m_pStreamCtx->nb_index_entries - sample_count)<2){
+      // hopefully there is index with useful timestamps
+      sample_count = m_pStreamCtx->nb_index_entries;
+      trust_index = true;
+    }
+    /*
+    if(m_pFormatCtx->iformat->flags & AVFMT_GENERIC_INDEX){
+      // generic index only ever collects keyframes, useless
+      trust_index = false;
+    }*/
+
+    keyframe_gap = 0;
+    int d = 1;
+    if(trust_index){for(int i=0; i<m_pStreamCtx->nb_index_entries; i++){
+      if(m_pStreamCtx->index_entries[i].flags & AVINDEX_KEYFRAME){
+        if(d>keyframe_gap) keyframe_gap = d;
+        d = 1;
+      } else d++;
+    }}
+  }
 
   // threading has big negative impact on random access within all-keyframe files
   if(keyframe_gap==1) m_pCodecCtx->thread_count = 1;
@@ -290,6 +303,8 @@ bool VDFFVideoSource::IsKey(int64_t sample)
     if(m_pSource->next_segment) v1 = m_pSource->next_segment->video_source;
     return v1->IsKey(sample-sample_count);
   }
+
+  if(is_image_list) return true;
 
   if(trust_index){
     return (m_pStreamCtx->index_entries[sample].flags & AVINDEX_KEYFRAME)!=0;
@@ -914,7 +929,7 @@ bool VDFFVideoSource::Read(sint64 start, uint32 lCount, void *lpBuffer, uint32 c
     if(jump==0 && pos>0) pos = 0;
     avcodec_flush_buffers(m_pCodecCtx);
     av_seek_frame(m_pFormatCtx,m_streamIndex,pos,AVSEEK_FLAG_BACKWARD);
-    next_frame = -1;
+    if(is_image_list) next_frame = jump; else next_frame = -1;
   }
 
   while(1){
@@ -1016,7 +1031,7 @@ void VDFFVideoSource::handle_frame()
   if(ts==AV_NOPTS_VALUE) ts = frame->pkt_dts;
   int pos = next_frame;
 
-  if(!trust_index){
+  if(!trust_index && !is_image_list){
     // guess where we are
     // timestamp to frame number is at times unreliable
     if(ts!=AV_NOPTS_VALUE){

@@ -124,15 +124,25 @@ void VDFFInputFileInfoDialog::print_format()
 
   SetDlgItemTextA(mhdlg, IDC_FORMATNAME, pInputFormat->long_name);
 
-  // convert the tick number into the number of seconds
-  double seconds =  pFormatCtx->duration/(double)AV_TIME_BASE;
-  int hours = (int)(seconds/3600);
-  seconds -= (hours * 3600);
-  int minutes = (int)(seconds/60);
-  seconds -= (minutes * 60);
+  if(segment->is_image){
+    int n = segment->video_source->sample_count;
+    if(n>1){
+      sprintf(buf, "%d images", n);
+      SetDlgItemText(mhdlg, IDC_DURATION, buf);
+    } else {
+      SetDlgItemText(mhdlg, IDC_DURATION, "single image");
+    }
+  } else {
+    // convert the tick number into the number of seconds
+    double seconds =  pFormatCtx->duration/(double)AV_TIME_BASE;
+    int hours = (int)(seconds/3600);
+    seconds -= (hours * 3600);
+    int minutes = (int)(seconds/60);
+    seconds -= (minutes * 60);
 
-  sprintf(buf, "%d h : %d min : %.2f sec", hours, minutes, seconds);
-  SetDlgItemText(mhdlg, IDC_DURATION, buf);
+    sprintf(buf, "%d h : %d min : %.2f sec", hours, minutes, seconds);
+    SetDlgItemText(mhdlg, IDC_DURATION, buf);
+  }
 
   sprintf(buf, "%u kb/sec", pFormatCtx->bit_rate/1000);
   SetDlgItemText(mhdlg, IDC_BITRATE, buf);
@@ -187,9 +197,14 @@ void VDFFInputFileInfoDialog::print_video()
     SetDlgItemTextA(mhdlg, IDC_VIDEO_PIXFMT, "N/A");
   }
 
-  AVRational fr = pVideoStream->r_frame_rate;
-  sprintf(buf, "%u x %u, %.2f fps", pVideoCtx->width, pVideoCtx->height, fr.num/double(fr.den));
-  SetDlgItemText(mhdlg, IDC_VIDEO_WXH, buf);
+  if(segment->is_image){
+    sprintf(buf, "%u x %u", pVideoCtx->width, pVideoCtx->height);
+    SetDlgItemText(mhdlg, IDC_VIDEO_WXH, buf);
+  } else {
+    AVRational fr = pVideoStream->r_frame_rate;
+    sprintf(buf, "%u x %u, %.2f fps", pVideoCtx->width, pVideoCtx->height, fr.num/double(fr.den));
+    SetDlgItemText(mhdlg, IDC_VIDEO_WXH, buf);
+  }
 
   AVRational ar = av_make_q(1,1);
   if ( pVideoStream->sample_aspect_ratio.num ){
@@ -352,13 +367,17 @@ void VDFFInputFileInfoDialog::print_performance()
   sprintf(buf,"Memory cache: %d frames / %dM reserved, %d%% used", buf_max, int(mem_max), buf_used);
   SetDlgItemText(mhdlg, IDC_MEMORY_INFO, buf);
 
-  if(trust_index){
-    if(all_key){
-      SetDlgItemText(mhdlg, IDC_INDEX_INFO, "Seeking: index present, optimal random access");
-    } else {
-      SetDlgItemText(mhdlg, IDC_INDEX_INFO, "Seeking: index present");
-    }
+  if(segment->is_image){
+    SetDlgItemText(mhdlg, IDC_INDEX_INFO, "Seeking: image list (random access)");
   } else {
-    SetDlgItemText(mhdlg, IDC_INDEX_INFO, "Seeking: index missing, reverse scan may be slow");
+    if(trust_index){
+      if(all_key){
+        SetDlgItemText(mhdlg, IDC_INDEX_INFO, "Seeking: index present, optimal random access");
+      } else {
+        SetDlgItemText(mhdlg, IDC_INDEX_INFO, "Seeking: index present");
+      }
+    } else {
+      SetDlgItemText(mhdlg, IDC_INDEX_INFO, "Seeking: index missing, reverse scan may be slow");
+    }
   }
 }

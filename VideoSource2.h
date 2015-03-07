@@ -132,6 +132,7 @@ public:
   bool flip_image;
   bool trust_index;
   bool direct_buffer;
+  bool is_image_list;
   int64_t dead_range_start;
   int64_t dead_range_end;
 

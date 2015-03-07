@@ -23,7 +23,11 @@ typedef struct AVCodecTag {
 #ifdef USE_CINEFORM_API
 
 #include "cineform/include/CFHDDecoder.h"
+#ifdef _WIN64
+#pragma comment(lib,"CFHDDecoder64.lib")
+#else
 #pragma comment(lib,"CFHDDecoderVS2008.lib")
+#endif
 
 struct DecoderObj{
   void* buf;

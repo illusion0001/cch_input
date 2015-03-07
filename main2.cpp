@@ -177,7 +177,11 @@ void unloadModules(HINSTANCE hDllHandle)
     "swscale-3.dll",
     "avcodec-56.dll",
     "avformat-56.dll",
+    #ifdef _WIN64
+    "cfhddecoder64.dll",
+    #else
     "cfhddecoder.dll",
+    #endif
   };
 
   {for(int i=5; i>=0; i--){
