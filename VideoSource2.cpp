@@ -34,6 +34,12 @@ VDFFVideoSource::VDFFVideoSource(const VDXInputDriverContext& context)
   is_image_list = false;
   buffer = 0;
   mem = 0;
+
+  kPixFormat_XRGB64 = 0;
+  IFilterModPixmap* fmpixmap = (IFilterModPixmap*)context.mpCallbacks->GetExtendedAPI("IFilterModPixmap");
+  if(fmpixmap){
+    kPixFormat_XRGB64 = fmpixmap->GetFormat_XRGB64();
+  }
 }
 
 VDFFVideoSource::~VDFFVideoSource() 
@@ -71,6 +77,9 @@ void *VDXAPIENTRY VDFFVideoSource::AsInterface(uint32_t iid)
 
   if (iid == IVDXVideoDecoder::kIID)
     return static_cast<IVDXVideoDecoder *>(this);
+
+  if (iid == IFilterModVideoDecoder::kIID)
+    return static_cast<IFilterModVideoDecoder *>(this);
 
   return vdxunknown<IVDXStreamSource>::AsInterface(iid);
 }
@@ -439,6 +448,17 @@ const VDXPixmap& VDFFVideoSource::GetFrameBuffer()
   return m_pixmap;
 }
 
+const FilterModPixmapInfo& VDFFVideoSource::GetFrameBufferInfo()
+{
+  if(m_pixmap_frame>=sample_count){
+    VDFFVideoSource* v1 = 0;
+    if(m_pSource->next_segment) v1 = m_pSource->next_segment->video_source;
+    return v1->GetFrameBufferInfo();
+  }
+
+  return m_pixmap_info;
+}
+
 const void* VDFFVideoSource::GetFrameBufferBase()
 {
   if(m_pixmap_data) return align_buf(m_pixmap_data);
@@ -494,10 +514,12 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   convertInfo.req_format = opt_format;
   convertInfo.req_dib = useDIBAlignment;
   convertInfo.direct_copy = false;
-  convertInfo.in_yuv = false; //isYUV(m_pCodecCtx->pix_fmt); why is it internal
-  convertInfo.in_subs = false;
   convertInfo.out_rgb = false;
   convertInfo.out_garbage = false;
+
+  const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(m_pCodecCtx->pix_fmt);
+  convertInfo.in_yuv = !(desc->flags & AV_PIX_FMT_FLAG_RGB) && desc->nb_components >= 3;
+  convertInfo.in_subs = convertInfo.in_yuv && (desc->log2_chroma_w+desc->log2_chroma_h)>0;
 
   switch(m_pCodecCtx->pix_fmt){
   case AV_PIX_FMT_YUV420P:
@@ -505,8 +527,6 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     src_fmt = AV_PIX_FMT_YUV420P;
     perfect_format = kPixFormat_YUV420_Planar;
     trigger = kPixFormat_YUV420_Planar;
-    convertInfo.in_yuv = true;
-    convertInfo.in_subs = true;
     perfect_bitexact = true;
     // examples: xvid
     // examples: gopro avc (FR)
@@ -517,8 +537,6 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     src_fmt = AV_PIX_FMT_YUV422P;
     perfect_format = kPixFormat_YUV422_Planar;
     trigger = kPixFormat_YUV422_Planar;
-    convertInfo.in_yuv = true;
-    convertInfo.in_subs = true;
     perfect_bitexact = true;
     // examples: jpeg (FR)
     break;
@@ -529,8 +547,6 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     perfect_format = kPixFormat_YUV444_Planar;
     perfect_av_fmt = AV_PIX_FMT_YUV444P;
     trigger = kPixFormat_YUV444_Planar;
-    convertInfo.in_yuv = true;
-    convertInfo.in_subs = true;
     perfect_bitexact = false;
     // examples: 422 jpeg lossless-transposed (FR)
     break;
@@ -538,8 +554,6 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   case AV_PIX_FMT_UYVY422:
     perfect_format = kPixFormat_YUV422_UYVY;
     trigger = kPixFormat_YUV422_UYVY;
-    convertInfo.in_yuv = true;
-    convertInfo.in_subs = true;
     perfect_bitexact = true;
     //! not tested at all
     break;
@@ -547,8 +561,6 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   case AV_PIX_FMT_YUYV422:
     perfect_format = kPixFormat_YUV422_YUYV;
     trigger = kPixFormat_YUV422_YUYV;
-    convertInfo.in_yuv = true;
-    convertInfo.in_subs = true;
     perfect_bitexact = true;
     //! not tested at all
     break;
@@ -559,7 +571,6 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     perfect_format = kPixFormat_YUV444_Planar;
     perfect_av_fmt = AV_PIX_FMT_YUV444P;
     trigger = kPixFormat_YUV444_Planar;
-    convertInfo.in_yuv = true;
     perfect_bitexact = true;
     // examples: 444 jpeg by photoshop (FR)
     break;
@@ -578,12 +589,31 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     // examples: tga32
     break;
 
+  case AV_PIX_FMT_BGRA64:
+    if(kPixFormat_XRGB64){
+      perfect_format = (VDXPixmapFormat)kPixFormat_XRGB64;
+      perfect_av_fmt = AV_PIX_FMT_BGRA64;
+      trigger = (VDXPixmapFormat)kPixFormat_XRGB64;
+      perfect_bitexact = true;
+      break;
+    }
+
   default:
     perfect_format = kPixFormat_XRGB8888;
     perfect_av_fmt = AV_PIX_FMT_BGRA;
     trigger = kPixFormat_XRGB8888;
     perfect_bitexact = false;
     // examples: utvideo rgb (AV_PIX_FMT_RGB24) 
+
+    if(kPixFormat_XRGB64){
+      if(desc->flags & AV_PIX_FMT_FLAG_RGB && desc->comp[0].depth_minus1>7){
+        // examples: sgi - RGB48BE, tiff - RGB48LE/BE, RGBA64LE/BE
+        perfect_format = (VDXPixmapFormat)kPixFormat_XRGB64;
+        perfect_av_fmt = AV_PIX_FMT_BGRA64;
+        trigger = (VDXPixmapFormat)kPixFormat_XRGB64;
+        perfect_bitexact = false;
+      }
+    }
   }
 
   if(opt_format==0){
@@ -598,6 +628,17 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     }
 
     if(!convertInfo.in_yuv && (useDIBAlignment^flip_image)) convertInfo.direct_copy = false;
+
+  } else if(opt_format==kPixFormat_XRGB64){
+    if(opt_format==perfect_format){
+      base_format = perfect_format;
+      convertInfo.av_fmt = perfect_av_fmt;
+      convertInfo.direct_copy = perfect_bitexact;
+    } else {
+      base_format = (VDXPixmapFormat)kPixFormat_XRGB64;
+      convertInfo.av_fmt = AV_PIX_FMT_BGRA64;
+      convertInfo.direct_copy = false;
+    }
 
   } else {
     switch(opt_format){
@@ -680,14 +721,8 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     }
   }
 
-  //convertInfo.out_rgb = isRGB(convertInfo.av_fmt); why is it internal
-  switch(convertInfo.av_fmt){
-  case AV_PIX_FMT_BGRA:
-  case AV_PIX_FMT_BGR24:
-  case AV_PIX_FMT_RGB565:
-  case AV_PIX_FMT_RGB555:
-    convertInfo.out_rgb = true;
-  }
+  const AVPixFmtDescriptor* out_desc = av_pix_fmt_desc_get(convertInfo.av_fmt);
+  convertInfo.out_rgb = (desc->flags & AV_PIX_FMT_FLAG_RGB) && desc->nb_components >= 3;
 
   // tweak output yuv formats for VD here
   VDXPixmapFormat format = base_format;
@@ -756,6 +791,18 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   int32_t h = m_pCodecCtx->height;
   m_pixmap.w = w;
   m_pixmap.h = h;
+
+  m_pixmap_info.clear();
+  if(format==kPixFormat_XRGB64){
+    m_pixmap_info.ref_r = 0xFFFF;
+    m_pixmap_info.ref_g = 0xFFFF;
+    m_pixmap_info.ref_b = 0xFFFF;
+    m_pixmap_info.ref_a = 0xFFFF;
+  }
+  if((desc->flags & AV_PIX_FMT_FLAG_ALPHA) && (out_desc->flags & AV_PIX_FMT_FLAG_ALPHA)){
+    m_pixmap_info.alpha_type = FilterModPixmapInfo::kAlphaMask;
+  }
+
   if(convertInfo.direct_copy){
     // now pixmap_data should be useless
     // but VD thinks its a good idea to call GetFrameBuffer immediately and use it as destination for something in "fast recompress"

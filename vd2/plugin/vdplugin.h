@@ -156,6 +156,49 @@ struct VDXRect {
 	sint32	bottom;
 };
 
+struct FilterModPixmapInfo {
+	enum MappingType {
+		kTransferUnknown = 0,
+		kTransferGamma = 1,
+		kTransferLinear = 2,
+	};
+	enum AlphaType {
+		kAlphaInvalid = 0,
+		kAlphaMask = 1,
+		kAlphaMask_pm = 2,
+	};
+
+	uint32 ref_r;
+	uint32 ref_g;
+	uint32 ref_b;
+	uint32 ref_a;
+
+	uint32 transfer_type;
+	uint32 alpha_type;
+	int64 frame_num;
+
+	FilterModPixmapInfo() {
+		clear();
+	}
+
+	void clear() {
+		ref_r = 0;
+		ref_g = 0;
+		ref_b = 0;
+		ref_a = 0;
+		transfer_type = kTransferUnknown;
+		alpha_type = kAlphaInvalid;
+		frame_num = -1;
+	}
+
+	void copy_frame(FilterModPixmapInfo& a) {
+		frame_num = a.frame_num;
+	}
+	void copy_alpha(FilterModPixmapInfo& a) {
+		alpha_type = a.alpha_type;
+	}
+};
+
 struct VDXPixmap {
 	void			*data;
 	const uint32	*palette;
@@ -184,6 +227,12 @@ struct VDXPixmapLayout {
 	ptrdiff_t		pitch2;
 	ptrdiff_t		data3;		// Cr (V) for YCbCr
 	ptrdiff_t		pitch3;
+};
+
+class IFilterModPixmap {
+public:
+	virtual FilterModPixmapInfo* GetPixmapInfo(VDXPixmap* pixmap)=0;
+	virtual uint64 GetFormat_XRGB64()=0;
 };
 
 namespace nsVDXPixmap {

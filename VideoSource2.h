@@ -15,7 +15,7 @@ extern "C"
 
 class VDFFInputFile;
 
-class VDFFVideoSource : public vdxunknown<IVDXStreamSource>, public IVDXVideoSource, public IVDXVideoDecoder, public IVDXVideoDecoderModel{
+class VDFFVideoSource : public vdxunknown<IVDXStreamSource>, public IVDXVideoSource, public IVDXVideoDecoder, public IVDXVideoDecoderModel, public IFilterModVideoDecoder{
 public:
   VDFFVideoSource(const VDXInputDriverContext& context);
   ~VDFFVideoSource();
@@ -64,6 +64,7 @@ public:
   uint32_t	VDXAPIENTRY GetDecodePadding();
   bool		VDXAPIENTRY IsFrameBufferValid();
   const VDXPixmap& VDXAPIENTRY GetFrameBuffer();
+	const FilterModPixmapInfo& VDXAPIENTRY GetFrameBufferInfo();
   bool		VDXAPIENTRY SetTargetFormat(int format, bool useDIBAlignment);
   bool		SetTargetFormat(nsVDXPixmap::VDXPixmapFormat format, bool useDIBAlignment, VDFFVideoSource* head);
   bool		VDXAPIENTRY SetDecompressedFormat(const VDXBITMAPINFOHEADER *pbih);
@@ -86,6 +87,7 @@ public:
   AVFrame* frame;
   SwsContext* m_pSwsCtx;
   VDXPixmap	m_pixmap;
+  FilterModPixmapInfo m_pixmap_info;
   uint8_t* m_pixmap_data;
   int m_pixmap_frame;
 
@@ -135,6 +137,8 @@ public:
   bool is_image_list;
   int64_t dead_range_start;
   int64_t dead_range_end;
+
+  uint64 kPixFormat_XRGB64;
 
   int	 initStream(VDFFInputFile* pSource, int indexStream);
   void set_pixmap_layout(uint8_t* p);
