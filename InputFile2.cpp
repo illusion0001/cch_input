@@ -339,7 +339,18 @@ AVFormatContext* VDFFInputFile::open_file(AVMediaType type)
   is_image = false;
   is_image_list = false;
   if(strcmp(fmt->iformat->name,"image2")==0) is_image=true;
+  if(strcmp(fmt->iformat->name,"bmp_pipe")==0) is_image=true;
+  if(strcmp(fmt->iformat->name,"dpx_pipe")==0) is_image=true;
+  if(strcmp(fmt->iformat->name,"exr_pipe")==0) is_image=true;
+  if(strcmp(fmt->iformat->name,"j2k_pipe")==0) is_image=true;
+  if(strcmp(fmt->iformat->name,"jpeg_pipe")==0) is_image=true;
+  if(strcmp(fmt->iformat->name,"jpegls_pipe")==0) is_image=true;
+  if(strcmp(fmt->iformat->name,"pictor_pipe")==0) is_image=true;
+  if(strcmp(fmt->iformat->name,"png_pipe")==0) is_image=true;
   if(strcmp(fmt->iformat->name,"sgi_pipe")==0) is_image=true;
+  if(strcmp(fmt->iformat->name,"sunrast_pipe")==0) is_image=true;
+  if(strcmp(fmt->iformat->name,"tiff_pipe")==0) is_image=true;
+  if(strcmp(fmt->iformat->name,"webp_pipe")==0) is_image=true;
 
   if(is_image){
     wchar_t list_path[MAX_PATH];
