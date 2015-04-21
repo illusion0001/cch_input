@@ -193,6 +193,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   memset(frame_type,' ',ft_size);
   frame_size = av_image_get_buffer_size(m_pCodecCtx->pix_fmt, m_pCodecCtx->width, m_pCodecCtx->height, line_align);
 
+  #ifndef _WIN64
   uint64_t max_heap = 0x20000000;
   uint64_t mem_size = uint64_t(frame_size)*buffer_reserve;
   uint64_t mem_other = 0;
@@ -210,6 +211,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
     mem_size = (mem_size|0xFFFF)+1;
     mem = CreateFileMapping(INVALID_HANDLE_VALUE,0,PAGE_READWRITE,mem_size>>32,(DWORD)mem_size,0);
   }
+  #endif
 
   m_streamInfo.mSampleCount = sample_count;
 

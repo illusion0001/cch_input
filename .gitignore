@@ -1,6 +1,7 @@
 Debug
 Release
 bin
+bin64
 *.ncb
 *.suo
 *.user
