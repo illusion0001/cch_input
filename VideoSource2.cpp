@@ -405,6 +405,11 @@ const void* VDFFVideoSource::DecodeFrame(const void* inputBuffer, uint32_t data_
 
     AVPicture pic = {0};
     av_image_fill_arrays(pic.data, pic.linesize, src, m_pCodecCtx->pix_fmt, w, h, line_align);
+    if(direct_buffer){
+      // output from vfw is flipped, need better way to deliver this
+      pic.data[0] = pic.data[0] + pic.linesize[0]*(h-1);
+      pic.linesize[0] = -pic.linesize[0];
+    }
 
     AVPicture pic2 = {0};
     pic2.data[0] = (uint8_t*)m_pixmap.data;
@@ -480,6 +485,8 @@ bool VDFFVideoSource::SetTargetFormat(int format, bool useDIBAlignment)
 {
   nsVDXPixmap::VDXPixmapFormat opt_format = (nsVDXPixmap::VDXPixmapFormat)format;
   bool r = SetTargetFormat(opt_format,useDIBAlignment,0);
+  if(!r && opt_format!=0) r = SetTargetFormat(nsVDXPixmap::kPixFormat_Null,useDIBAlignment,0);
+  // note: compatibility between segments is enforced in SetTargetFormat
   VDFFInputFile* f1 = m_pSource;
   while(1){
     f1 = f1->next_segment;
