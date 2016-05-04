@@ -108,10 +108,10 @@ AVCodec cfhd_decoder;
 
 void av_register_cfhd()
 {
-  cfhd_decoder.name = "CineForm HD";
-  cfhd_decoder.long_name = "CineForm HD";
+  cfhd_decoder.name = "CineForm HD (sdk)";
+  cfhd_decoder.long_name = "CineForm HD (sdk)";
   cfhd_decoder.type = AVMEDIA_TYPE_VIDEO;
-  cfhd_decoder.id = (AVCodecID)MKBETAG('C','F','H','D');
+  cfhd_decoder.id = CFHD_ID;
   cfhd_decoder.priv_data_size = sizeof(DecoderObj);
   cfhd_decoder.init = cfhd_init_decoder;
   cfhd_decoder.close = cfhd_close_decoder;
@@ -119,18 +119,19 @@ void av_register_cfhd()
   cfhd_decoder.priv_class = 0;
   cfhd_decoder.capabilities = 0;
 
+  /*
   AVCodecTag* tag = (AVCodecTag*)avformat_get_riff_video_tags();
   while(tag->id!=AV_CODEC_ID_NONE){
     if(tag->id==AV_CODEC_ID_KGV1){
       DWORD old_protect;
       VirtualProtect(tag,sizeof(*tag),PAGE_READWRITE,&old_protect);
       tag->id = cfhd_decoder.id;
-      tag->tag = MKTAG('C', 'F', 'H', 'D');
+      tag->tag = CFHD_TAG;
       VirtualProtect(tag,sizeof(*tag),old_protect,0);
       break;
     }
     tag++;
-  }
+  }*/
 
   avcodec_register(&cfhd_decoder);
 }
@@ -251,10 +252,14 @@ AVCodec vfw_cfhd_decoder;
 
 void av_register_vfw_cfhd()
 {
-  vfw_cfhd_decoder.name = "CineForm HD";
-  vfw_cfhd_decoder.long_name = "CineForm HD";
+  HIC codec = ICOpen(ICTYPE_VIDEO, MAKEFOURCC('C','F','H','D'), ICMODE_DECOMPRESS);
+  ICClose(codec);
+  if(!codec) return;
+
+  vfw_cfhd_decoder.name = "CineForm HD (vfw)";
+  vfw_cfhd_decoder.long_name = "CineForm HD (vfw)";
   vfw_cfhd_decoder.type = AVMEDIA_TYPE_VIDEO;
-  vfw_cfhd_decoder.id = (AVCodecID)MKBETAG('C','F','H','D');
+  vfw_cfhd_decoder.id = CFHD_ID;
   vfw_cfhd_decoder.priv_data_size = sizeof(DecoderObjVfw);
   vfw_cfhd_decoder.init = vfw_cfhd_init_decoder;
   vfw_cfhd_decoder.close = vfw_cfhd_close_decoder;
@@ -262,18 +267,19 @@ void av_register_vfw_cfhd()
   vfw_cfhd_decoder.priv_class = 0;
   vfw_cfhd_decoder.capabilities = 0;
 
+  /*
   AVCodecTag* tag = (AVCodecTag*)avformat_get_riff_video_tags();
   while(tag->id!=AV_CODEC_ID_NONE){
     if(tag->id==AV_CODEC_ID_KGV1){
       DWORD old_protect;
       VirtualProtect(tag,sizeof(*tag),PAGE_READWRITE,&old_protect);
       tag->id = vfw_cfhd_decoder.id;
-      tag->tag = MKTAG('C', 'F', 'H', 'D');
+      tag->tag = CFHD_TAG;
       VirtualProtect(tag,sizeof(*tag),old_protect,0);
       break;
     }
     tag++;
-  }
+  }*/
 
   avcodec_register(&vfw_cfhd_decoder);
 }

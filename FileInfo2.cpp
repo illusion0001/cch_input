@@ -154,20 +154,21 @@ void VDFFInputFileInfoDialog::print_format()
 void VDFFInputFileInfoDialog::print_video()
 {
   AVStream* pVideoStream = segment->video_source->m_pStreamCtx;
-  AVCodecContext* pVideoCtx = pVideoStream->codec;
+  AVCodecContext* pVideoCtx = segment->video_source->m_pCodecCtx;
+  AVCodecParameters* codecpar = pVideoStream->codecpar;
   if(!pVideoCtx) return;
 
   char buf[256];
 
-  AVCodec* pCodec = avcodec_find_decoder(pVideoCtx->codec_id);
+  AVCodec* pCodec = avcodec_find_decoder(codecpar->codec_id);
   const char* codec_name = "N/A";
   if (pCodec) codec_name = pCodec->name; else {
-    if (pVideoCtx->codec_id == CODEC_ID_MPEG2TS) codec_name = "mpeg2ts";
+    if (codecpar->codec_id == AV_CODEC_ID_MPEG2TS) codec_name = "mpeg2ts";
   }
 
   SetDlgItemTextA(mhdlg, IDC_VIDEO_CODECNAME, codec_name); 
 
-  if ( pVideoCtx->pix_fmt != PIX_FMT_NONE )
+  if ( pVideoCtx->pix_fmt != AV_PIX_FMT_NONE )
   {
     strncpy(buf, av_get_pix_fmt_name(pVideoCtx->pix_fmt), 128);
 
@@ -228,7 +229,7 @@ void VDFFInputFileInfoDialog::print_video()
 void VDFFInputFileInfoDialog::print_audio()
 {
   AVStream* pAudioStream = segment->audio_source->m_pStreamCtx;
-  AVCodecContext* pAudioCtx = pAudioStream->codec;
+  AVCodecContext* pAudioCtx = segment->audio_source->m_pCodecCtx;
   if(!pAudioCtx) return;
 
   char buf[128];
@@ -255,7 +256,7 @@ void VDFFInputFileInfoDialog::print_audio()
   SetDlgItemText(mhdlg, IDC_AUDIO_CHANNELS, buf);
 
   int bits_per_sample = av_get_bits_per_sample(pAudioCtx->codec_id);
-  int bit_rate = bits_per_sample ? pAudioCtx->sample_rate * pAudioCtx->channels * bits_per_sample : pAudioCtx->bit_rate;
+  int64_t bit_rate = bits_per_sample ? pAudioCtx->sample_rate * pAudioCtx->channels * bits_per_sample : pAudioCtx->bit_rate;
   if ( bit_rate ){
     sprintf(buf, "%u kb/sec", bit_rate/1000);
     SetDlgItemText(mhdlg, IDC_AUDIO_BITRATE, buf);

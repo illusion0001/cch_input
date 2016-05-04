@@ -45,6 +45,9 @@ public:
   bool is_image_list;
   bool is_image;
 
+  int cfg_frame_buffers;
+  bool cfg_skip_cfhd;
+
 	AVFormatContext* m_pFormatCtx;
   VDFFVideoSource* video_source;
   VDFFAudioSource* audio_source;

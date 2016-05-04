@@ -7,11 +7,11 @@
 #include "version2.h"
 #include <delayimp.h>
 
-#pragma comment(lib, "avcodec")
-#pragma comment(lib, "avformat")
-#pragma comment(lib, "avutil")
-#pragma comment(lib, "swscale")
-#pragma comment(lib, "swresample")
+#pragma comment(lib, "avcodec-57")
+#pragma comment(lib, "avformat-57")
+#pragma comment(lib, "avutil-55")
+#pragma comment(lib, "swscale-4")
+#pragma comment(lib, "swresample-2")
 #pragma comment(lib, "delayimp")
 
 HINSTANCE hInstance;
@@ -107,11 +107,11 @@ static bool processAttach(HINSTANCE hDllHandle)
   p1+=8;
 
   wchar_t* module_name[5] = {
-    L"avutil-54.dll",
-    L"swresample-1.dll",
-    L"swscale-3.dll",
-    L"avcodec-56.dll",
-    L"avformat-56.dll",
+    L"avutil-55.dll",
+    L"swresample-2.dll",
+    L"swscale-4.dll",
+    L"avcodec-57.dll",
+    L"avformat-57.dll",
   };
 
   {for(int i=0; i<5; i++){
@@ -172,11 +172,11 @@ static bool processAttach(HINSTANCE hDllHandle)
 void unloadModules(HINSTANCE hDllHandle)
 {
   char* module_name[6] = {
-    "avutil-54.dll",
-    "swresample-1.dll",
-    "swscale-3.dll",
-    "avcodec-56.dll",
-    "avformat-56.dll",
+    "avutil-55.dll",
+    "swresample-2.dll",
+    "swscale-4.dll",
+    "avcodec-57.dll",
+    "avformat-57.dll",
     #ifdef _WIN64
     "cfhddecoder64.dll",
     #else

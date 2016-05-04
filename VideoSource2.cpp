@@ -45,7 +45,7 @@ VDFFVideoSource::VDFFVideoSource(const VDXInputDriverContext& context)
 VDFFVideoSource::~VDFFVideoSource() 
 {
   if(frame) av_frame_free(&frame);
-  if(m_pCodecCtx) avcodec_close(m_pCodecCtx);
+  if(m_pCodecCtx) avcodec_free_context(&m_pCodecCtx);
   if(m_pSwsCtx) sws_freeContext(m_pSwsCtx);
 
   if(buffer) {for(int i=0; i<buffer_count; i++){
@@ -91,15 +91,24 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
 
   m_pFormatCtx = pSource->getContext();  
   m_pStreamCtx = m_pFormatCtx->streams[m_streamIndex];
-  m_pCodecCtx = m_pStreamCtx->codec;
 
-  AVCodec* pDecoder = avcodec_find_decoder(m_pCodecCtx->codec_id);
+  if(m_pStreamCtx->codecpar->codec_tag==CFHD_TAG && !pSource->cfg_skip_cfhd){
+    // use vfw thunk instead of internal decoder
+    if(avcodec_find_decoder(CFHD_ID))
+      m_pStreamCtx->codecpar->codec_id = CFHD_ID;
+  }
+  AVCodec* pDecoder = avcodec_find_decoder(m_pStreamCtx->codecpar->codec_id);
   if(!pDecoder){
     char buf[80];
-    av_get_codec_tag_string(buf,80,m_pCodecCtx->codec_tag);
+    av_get_codec_tag_string(buf,80,m_pStreamCtx->codecpar->codec_tag);
     mContext.mpCallbacks->SetError("FFMPEG: Unsupported codec (%s)", buf);
     return -1;
   }
+  m_pCodecCtx = avcodec_alloc_context3(pDecoder);
+  if(!m_pCodecCtx){
+    return -1;
+  }
+  avcodec_parameters_to_context(m_pCodecCtx,m_pStreamCtx->codecpar);
 
   AVRational tb = m_pStreamCtx->time_base;
   AVRational fr = av_stream_get_r_frame_rate(m_pStreamCtx);
@@ -165,7 +174,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
     return -1;
   }
 
-  if(pDecoder->id==MKBETAG('C','F','H','D')){
+  if(pDecoder->id==CFHD_ID){
     flip_image = true;
     if(trust_index) direct_buffer = true;
   }
@@ -178,7 +187,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   used_frames = 0;
   next_frame = 0;
   buffer_count = keyframe_gap*2;
-  if(buffer_count<40) buffer_count = 40;
+  if(buffer_count<pSource->cfg_frame_buffers) buffer_count = pSource->cfg_frame_buffers;
   if(buffer_count>sample_count) buffer_count = sample_count;
   buffer_reserve = buffer_count;
 
@@ -403,21 +412,20 @@ const void* VDFFVideoSource::DecodeFrame(const void* inputBuffer, uint32_t data_
     int w = m_pixmap.w;
     int h = m_pixmap.h;
 
-    AVPicture pic = {0};
+    AVFrame pic = {0};
     av_image_fill_arrays(pic.data, pic.linesize, src, m_pCodecCtx->pix_fmt, w, h, line_align);
-    if(direct_buffer){
-      // output from vfw is flipped, need better way to deliver this
+    if(flip_image){
       pic.data[0] = pic.data[0] + pic.linesize[0]*(h-1);
       pic.linesize[0] = -pic.linesize[0];
     }
 
-    AVPicture pic2 = {0};
+    AVFrame pic2 = {0};
     pic2.data[0] = (uint8_t*)m_pixmap.data;
     pic2.data[1] = (uint8_t*)m_pixmap.data2;
     pic2.data[2] = (uint8_t*)m_pixmap.data3;
-    pic2.linesize[0] = m_pixmap.pitch;
-    pic2.linesize[1] = m_pixmap.pitch2;
-    pic2.linesize[2] = m_pixmap.pitch3;
+    pic2.linesize[0] = int(m_pixmap.pitch);
+    pic2.linesize[1] = int(m_pixmap.pitch2);
+    pic2.linesize[2] = int(m_pixmap.pitch3);
     sws_scale(m_pSwsCtx, pic.data, pic.linesize, 0, h, pic2.data, pic2.linesize);
     return align_buf(m_pixmap_data);
   }
@@ -615,7 +623,7 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     // examples: utvideo rgb (AV_PIX_FMT_RGB24) 
 
     if(kPixFormat_XRGB64){
-      if(desc->flags & AV_PIX_FMT_FLAG_RGB && desc->comp[0].depth_minus1>7){
+      if(desc->flags & AV_PIX_FMT_FLAG_RGB && desc->comp[0].depth>8){
         // examples: sgi - RGB48BE, tiff - RGB48LE/BE, RGBA64LE/BE
         perfect_format = (VDXPixmapFormat)kPixFormat_XRGB64;
         perfect_av_fmt = AV_PIX_FMT_BGRA64;
@@ -873,7 +881,7 @@ void VDFFVideoSource::set_pixmap_layout(uint8_t* p)
   int w = m_pixmap.w;
   int h = m_pixmap.h;
 
-  AVPicture pic = {0};
+  AVFrame pic = {0};
   av_image_fill_arrays(pic.data, pic.linesize, p, convertInfo.av_fmt, w, h, line_align);
 
   m_pixmap.palette = 0;
@@ -1029,8 +1037,11 @@ bool VDFFVideoSource::read_frame(bool init)
       // end of stream, grab buffered images
       pkt.stream_index = m_streamIndex;
       while(1){
-        int got_frame = 0;
         if(direct_buffer) alloc_direct_buffer();
+        //avcodec_send_packet(m_pCodecCtx, &pkt);
+        //int f = avcodec_receive_frame(m_pCodecCtx, frame);
+        //if(f!=0) return false;
+        int got_frame = 0;
         avcodec_decode_video2(m_pCodecCtx, frame, &got_frame, &pkt);
         if(!got_frame) return false;
         if(init){
@@ -1048,8 +1059,11 @@ bool VDFFVideoSource::read_frame(bool init)
       do {
         int s = pkt.size;
         if(pkt.stream_index == m_streamIndex){
-          int got_frame = 0;
           if(direct_buffer) alloc_direct_buffer();
+          //!new api fails with cfhd
+          //avcodec_send_packet(m_pCodecCtx, &pkt);
+          //int f = avcodec_receive_frame(m_pCodecCtx, frame);
+          int got_frame = 0;
           s = avcodec_decode_video2(m_pCodecCtx, frame, &got_frame, &pkt);
           if(s<0) break;
           if(got_frame){
@@ -1066,7 +1080,7 @@ bool VDFFVideoSource::read_frame(bool init)
         pkt.data += s;
         pkt.size -= s;
       } while (pkt.size > 0);
-      av_free_packet(&orig_pkt);
+      av_packet_unref(&orig_pkt);
       if(done_frames>0) return true;
     }
   }

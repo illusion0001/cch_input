@@ -272,7 +272,7 @@ bool VDFFAudioSource::Read(int64_t start, uint32_t count, void *lpBuffer, uint32
         pkt.data += s;
         pkt.size -= s;
       } while (pkt.size > 0);
-      av_free_packet(&orig_pkt);
+      av_packet_unref(&orig_pkt);
     }
 
     int n = buffer[px].copy(s0,count,lpBuffer,mRawFormat.mBlockAlign);

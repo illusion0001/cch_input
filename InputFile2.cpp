@@ -4,42 +4,78 @@
 #include "AudioSource2.h"
 #include "cineform.h"
 #include <windows.h>
+#include <vfw.h>
+#include <aviriff.h>
 
-struct AVIChunk{
-  DWORD fourcc;
-  DWORD size;
-};
+typedef struct AVCodecTag {
+  enum AVCodecID id;
+  unsigned int tag;
+} AVCodecTag;
 
-struct avimainheader_trim{
-  DWORD  fcc;
-  DWORD  cb;
-  DWORD  dwMicroSecPerFrame;
-  DWORD  dwMaxBytesPerSec;
-  DWORD  dwPaddingGranularity;
-  DWORD  dwFlags;
-  DWORD  dwTotalFrames;
-  DWORD  dwInitialFrames;
-  DWORD  dwStreams;
-  DWORD  dwSuggestedBufferSize;
-};
+void init_av();
 
 int detect_avi(const void *pHeader, int32_t nHeaderSize)
 {
   if(nHeaderSize<64) return -1;
   uint8_t* data = (uint8_t*)pHeader;
+  int rsize = nHeaderSize;
 
-  AVIChunk ch;
-  memcpy(&ch,data,sizeof(ch)); data+=sizeof(ch);
-  if(ch.fourcc!=0x46464952) return -1; //RIFF
+  RIFFCHUNK ch;
+  memcpy(&ch,data,sizeof(ch)); data+=sizeof(ch); rsize-=sizeof(ch);
+  if(ch.fcc!=0x46464952) return -1; //RIFF
   DWORD fmt;
-  memcpy(&fmt,data,4); data+=4;
+  memcpy(&fmt,data,4); data+=4; rsize-=4;
   if(fmt!=0x20495641) return -1; //AVI
-  memcpy(&ch,data,sizeof(ch)); data+=sizeof(ch);
-  if(ch.fourcc!=0x5453494C) return -1; //LIST
-  memcpy(&fmt,data,4); data+=4;
+  memcpy(&ch,data,sizeof(ch)); data+=sizeof(ch); rsize-=sizeof(ch);
+  if(ch.fcc!=0x5453494C) return -1; //LIST
+  memcpy(&fmt,data,4); data+=4; rsize-=4;
   if(fmt!=0x6C726468) return -1; //hdrl
-  avimainheader_trim mh;
-  memcpy(&mh,data,sizeof(mh)); data+=sizeof(mh);
+
+  memcpy(&ch,data,sizeof(ch));
+  if(ch.fcc!=ckidMAINAVIHEADER) return -1; //avih
+
+  if(rsize<sizeof(AVIMAINHEADER)){
+    AVIMAINHEADER mh = {0};
+    memcpy(&mh,data,rsize); data+=rsize; rsize=0;
+    return 1;
+  }
+
+  AVIMAINHEADER mh;
+  memcpy(&mh,data,sizeof(mh)); data+=sizeof(mh); rsize-=sizeof(mh);
+
+  if(rsize<sizeof(ch)) return 1;
+  memcpy(&ch,data,sizeof(ch)); data+=sizeof(ch); rsize-=sizeof(ch);
+  if(ch.fcc!=0x5453494C) return -1; //LIST
+
+  if(rsize<sizeof(fmt)) return 1;
+  memcpy(&fmt,data,4); data+=4; rsize-=4;
+  if(fmt!=ckidSTREAMLIST) return -1; //strl
+
+  if(rsize<sizeof(AVISTREAMHEADER)) return 1;
+  AVISTREAMHEADER sh;
+  memcpy(&sh,data,sizeof(sh)); data+=sizeof(sh); rsize-=sizeof(sh);
+  if(sh.fcc!=ckidSTREAMHEADER) return -1; //strh
+
+  // reject is there is unsupported video codec
+  if(sh.fccType==streamtypeVIDEO){
+    init_av();
+    bool have_codec = false;
+    AVCodecTag* tag = (AVCodecTag*)avformat_get_riff_video_tags();
+    char* chandler = (char*)(&sh.fccHandler);
+    {for(int i=0; i<4; i++){
+      int v = chandler[i];
+      if(v>='a' && v<='z') chandler[i] = v+'A'-'a';
+    }}
+
+    while(tag->id!=AV_CODEC_ID_NONE){
+      if(tag->tag==sh.fccHandler){
+        have_codec = true;
+        break;
+      }
+      tag++;
+    }
+    if(!have_codec) return -1;
+  }
 
   return 1;
 }
@@ -103,6 +139,12 @@ void widechar_to_utf8(char *dst, int max_dst, const wchar_t *src)
   WideCharToMultiByte(CP_UTF8, 0, src, -1, dst, max_dst, 0, 0);
 }
 
+void utf8_to_widechar(wchar_t *dst, int max_dst, const char *src)
+{
+  *dst = 0;
+  MultiByteToWideChar(CP_UTF8, 0, src, -1, dst, max_dst);
+}
+
 bool FileExist(const wchar_t* name)
 {
   DWORD a = GetFileAttributesW(name);
@@ -136,6 +178,7 @@ bool VDXAPIENTRY VDFFInputFileDriver::CreateInputFile(uint32_t flags, IVDXInputF
 
   if(flags & kOF_AutoSegmentScan) p->auto_append = true;
   //p->auto_append = true;
+  if(!select_mode) p->cfg_skip_cfhd = true;
 
   *ppFile = p;
   p->AddRef();
@@ -176,8 +219,8 @@ VDFFInputFile::VDFFInputFile(const VDXInputDriverContext& context)
 {
   //! I wonder what happens if any other piece of system uses shared ffmpeg too
   #ifdef FFDEBUG
-  av_log_set_callback(av_log_func);
-  av_log_set_level(AV_LOG_INFO);
+  //av_log_set_callback(av_log_func);
+  //av_log_set_level(AV_LOG_INFO);
   //av_log_set_flags(AV_LOG_SKIP_REPEATED);
   #endif
 
@@ -192,6 +235,9 @@ VDFFInputFile::VDFFInputFile(const VDXInputDriverContext& context)
   auto_append = false;
   is_image = false;
   is_image_list = false;
+
+  cfg_frame_buffers = 40;
+  cfg_skip_cfhd = false;
 }
 
 VDFFInputFile::~VDFFInputFile()
@@ -252,14 +298,14 @@ bool VDFFInputFile::test_append(VDFFInputFile* f0, VDFFInputFile* f1)
   if(s0==-1 || s1==-1) return false;
   AVStream* v0 = f0->m_pFormatCtx->streams[s0];
   AVStream* v1 = f1->m_pFormatCtx->streams[s1];
-  if(v0->codec->width != v1->codec->width) return false;
-  if(v0->codec->height != v1->codec->height) return false;
+  if(v0->codecpar->width != v1->codecpar->width) return false;
+  if(v0->codecpar->height != v1->codecpar->height) return false;
 
   s0 = f0->find_stream(f0->m_pFormatCtx,AVMEDIA_TYPE_AUDIO);
   s1 = f1->find_stream(f1->m_pFormatCtx,AVMEDIA_TYPE_AUDIO);
   AVStream* a0 = f0->m_pFormatCtx->streams[s0];
   AVStream* a1 = f1->m_pFormatCtx->streams[s1];
-  if(a0->codec->sample_rate!=a1->codec->sample_rate) return false;
+  if(a0->codecpar->sample_rate!=a1->codecpar->sample_rate) return false;
 
   return true;
 }

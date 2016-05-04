@@ -6,6 +6,7 @@
 #define IDCANCEL                        2
 #define IDD_FF_OPTIONS                  101
 #define IDD_FF_INFO                     102
+#define IDD_FFLAYER                     103
 #define IDC_VIDEO_ADJUSTPAR             1002
 #define IDC_AUDIO_DOWNMIX               1003
 #define IDC_FORMATNAME                  1004
@@ -44,17 +45,34 @@
 #define IDC_SEGMENT                     1027
 #define IDC_SEGMENT_PREV                1028
 #define IDC_SEGMENT_NEXT                1029
+#define IDC_LOGOFILE                    1029
 #define IDC_SEGMENT2                    1030
 #define IDC_SEGMENT_TIMELINE            1030
+#define IDC_LOGOFILE_BROWSE             1031
+#define IDC_ALPHABLEND                  1032
+#define IDC_PREMULTALPHA                1033
+#define IDC_PREVIEW                     1034
+#define IDPREVIEW                       1034
+#define IDC_XPOS                        1035
+#define IDC_CHECK5                      1036
+#define IDC_YPOS                        1036
+#define IDC_FILE_INFO                   1037
+#define IDC_ANIM_SINGLE                 1038
+#define IDC_ANIM_FOLLOW                 1039
+#define IDC_REF_SINGLE                  1040
+#define IDC_REF_FOLLOW                  1041
+#define IDC_LOOP                        1042
+#define IDC_REF_FOLLOW2                 1043
+#define IDC_FOLLOW_RATE                 1043
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        103
+#define _APS_NEXT_RESOURCE_VALUE        104
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1029
+#define _APS_NEXT_CONTROL_VALUE         1039
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif
