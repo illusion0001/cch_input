@@ -38,32 +38,21 @@ LRESULT CALLBACK EditWndProc(HWND wnd,UINT msg,WPARAM wparam,LPARAM lparam)
 //-------------------------------------------------------------------------------------------------
 
 bool logoOpenImage(HWND hwnd, wchar_t* path, int max_path) {
-  OPENFILENAMEW ofn;
+  OPENFILENAMEW ofn = {0};
   wchar_t szFile[MAX_PATH];
-  wchar_t szFileTitle[MAX_PATH];
-
-  ///////////////
 
   if (path)
     wcscpy(szFile,path);
   else
     szFile[0] = 0;
 
-  szFileTitle[0]=0;
-
-  ofn.lStructSize			= OPENFILENAME_SIZE_VERSION_400;
-  ofn.hwndOwner			= hwnd;
-  ofn.lpstrFilter			= L"Image file (*.bmp,*.tga,*.jpg,*.jpeg,*.png)\0*.bmp;*.tga;*.jpg;*.jpeg;*.png\0Video file (*.avi,*.mp4,*.mov)\0*.avi;*.mp4;*.mov\0All files (*.*)\0*.*\0";
-  ofn.lpstrCustomFilter	= NULL;
-  ofn.nFilterIndex		= 1;
-  ofn.lpstrFile			= szFile;
-  ofn.nMaxFile			= sizeof szFile;
-  ofn.lpstrFileTitle		= szFileTitle;
-  ofn.nMaxFileTitle		= sizeof szFileTitle;
-  ofn.lpstrInitialDir		= NULL;
-  ofn.lpstrTitle			= L"Select source";
-  ofn.Flags				= OFN_EXPLORER | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY | OFN_ENABLESIZING;
-  ofn.lpstrDefExt			= NULL;
+  ofn.lStructSize = sizeof(ofn);
+  ofn.hwndOwner = hwnd;
+  ofn.lpstrFilter = L"Image file (*.bmp,*.tga,*.jpg,*.jpeg,*.png)\0*.bmp;*.tga;*.jpg;*.jpeg;*.png\0Video file (*.avi,*.mp4,*.mov)\0*.avi;*.mp4;*.mov\0All files (*.*)\0*.*\0";
+  ofn.nFilterIndex = 1;
+  ofn.lpstrFile = szFile;
+  ofn.nMaxFile = sizeof szFile;
+  ofn.Flags = OFN_EXPLORER | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY | OFN_ENABLESIZING | OFN_ENABLETEMPLATE;
 
   if (GetOpenFileNameW(&ofn)){
     wcscpy(path,szFile);

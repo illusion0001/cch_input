@@ -915,6 +915,21 @@ bool VDFFVideoSource::IsDecodable(int64_t sample_num64)
   return true;
 }
 
+int64_t VDFFVideoSource::frame_to_pts_next(sint64 start)
+{
+  if(trust_index){
+    int next_key = -1;
+    {for(int i=(int)start; i<m_pStreamCtx->nb_index_entries; i++)
+      if(m_pStreamCtx->index_entries[i].flags & AVINDEX_KEYFRAME){ next_key=i; break; } }
+    if(next_key==-1) return -1;
+    int64_t pos = m_pStreamCtx->index_entries[next_key].timestamp;
+    return pos;
+  } else {
+    int64_t pos = start*time_base.den / time_base.num + start_time;
+    return pos;
+  }
+}
+
 bool VDFFVideoSource::Read(sint64 start, uint32 lCount, void *lpBuffer, uint32 cbBuffer, uint32 *lBytesRead, uint32 *lSamplesRead)
 {
   if(start>=sample_count){

@@ -56,19 +56,21 @@ int detect_avi(const void *pHeader, int32_t nHeaderSize)
   memcpy(&sh,data,sizeof(sh)); data+=sizeof(sh); rsize-=sizeof(sh);
   if(sh.fcc!=ckidSTREAMHEADER) return -1; //strh
 
-  // reject is there is unsupported video codec
+  // reject if there is unsupported video codec
   if(sh.fccType==streamtypeVIDEO){
     init_av();
     bool have_codec = false;
     AVCodecTag* tag = (AVCodecTag*)avformat_get_riff_video_tags();
-    char* chandler = (char*)(&sh.fccHandler);
+    DWORD h1 = sh.fccHandler;
+    DWORD h2 = sh.fccHandler;
+    char* ch2 = (char*)(&h2);
     {for(int i=0; i<4; i++){
-      int v = chandler[i];
-      if(v>='a' && v<='z') chandler[i] = v+'A'-'a';
+      int v = ch2[i];
+      if(v>='a' && v<='z') ch2[i] = v+'A'-'a';
     }}
 
     while(tag->id!=AV_CODEC_ID_NONE){
-      if(tag->tag==sh.fccHandler){
+      if(tag->tag==h1 || tag->tag==h2){
         have_codec = true;
         break;
       }
@@ -368,7 +370,7 @@ bool VDXAPIENTRY VDFFInputFile::Append(const wchar_t* szFile)
   return true;
 }
 
-AVFormatContext* VDFFInputFile::open_file(AVMediaType type)
+AVFormatContext* VDFFInputFile::open_file(AVMediaType type, int streamIndex)
 {
   const int ff_path_size = MAX_PATH*4; // utf8, worst case
   char ff_path[ff_path_size];
@@ -428,7 +430,8 @@ AVFormatContext* VDFFInputFile::open_file(AVMediaType type)
   }
 
 
-  int st = find_stream(fmt,type);
+  int st = streamIndex;
+  if(st==-1) st = find_stream(fmt,type);
   if(st!=-1){
     // disable unwanted streams
     bool is_avi = strcmp(fmt->iformat->name,"avi")==0;
@@ -535,17 +538,29 @@ bool VDFFInputFile::GetAudioSource(int index, IVDXAudioSource **ppAS)
   if(ppAS) *ppAS = 0;
 
   if(!m_pFormatCtx) return false;
-  if(index!=0) return false;
 
-  index = find_stream(m_pFormatCtx, AVMEDIA_TYPE_AUDIO);
+  int s_index = find_stream(m_pFormatCtx, AVMEDIA_TYPE_AUDIO);
+  if(index>0){
+    int n = 0;
+    {for(int i=0; i<(int)m_pFormatCtx->nb_streams; i++){
+      AVStream* st = m_pFormatCtx->streams[i];
+      if(i==s_index) continue;
+      if(st->codecpar->codec_type!=AVMEDIA_TYPE_AUDIO) continue;
+      if(!st->codecpar->channels) continue;
+      if(!st->codecpar->sample_rate) continue;
+      n++;
+      if(n==index){ s_index=i; break; }
+    }}
+    if(n!=index) return false;
+  }
 
-  if(index < 0) return false;
+  if(s_index < 0) return false;
 
   VDFFAudioSource *pAS = new VDFFAudioSource(mContext);
 
   if(!pAS) return false;
 
-  if(pAS->initStream(this, index) < 0){
+  if(pAS->initStream(this, s_index) < 0){
     delete pAS;
     return false;
   }

@@ -108,6 +108,7 @@ public:
   int64_t next_sample;
   int discard_samples;
   bool trust_sample_pos;
+  bool use_keys;
 
   int initStream( VDFFInputFile* pSource, int streamIndex );
   void init_start_time();
@@ -115,4 +116,5 @@ public:
   void insert_silence(int64_t start, uint32_t count);
   void invalidate(int64_t start, uint32_t count);
   void alloc_page(int i);
+  int64_t frame_to_pts(sint64 start, AVStream* video);
 };

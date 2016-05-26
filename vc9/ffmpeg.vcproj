@@ -448,6 +448,10 @@
 			>
 		</File>
 		<File
+			RelativePath="..\export.cpp"
+			>
+		</File>
+		<File
 			RelativePath="..\ffmpeg.def"
 			>
 		</File>

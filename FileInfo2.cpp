@@ -144,7 +144,7 @@ void VDFFInputFileInfoDialog::print_format()
     SetDlgItemText(mhdlg, IDC_DURATION, buf);
   }
 
-  sprintf(buf, "%u kb/sec", pFormatCtx->bit_rate/1000);
+  sprintf(buf, "%lu kb/sec", pFormatCtx->bit_rate/1000);
   SetDlgItemText(mhdlg, IDC_BITRATE, buf);
 
   sprintf(buf, "%u", pFormatCtx->nb_streams);
@@ -183,13 +183,26 @@ void VDFFInputFileInfoDialog::print_video()
 
     if(!is_rgb){
       const char* spc = "?";
+      const char* r = 0;
+      if ( pVideoCtx->colorspace == AVCOL_SPC_UNSPECIFIED ) spc = 0;
       if ( pVideoCtx->colorspace == AVCOL_SPC_BT709 ) spc = "709";
+      if ( pVideoCtx->colorspace == AVCOL_SPC_BT470BG) spc = "601";
       if ( pVideoCtx->colorspace == AVCOL_SPC_SMPTE170M) spc = "601";
       if ( pVideoCtx->colorspace == AVCOL_SPC_SMPTE240M) spc = "601";
-      strcat(buf, " (");
-      strcat(buf, spc);
-      if ( pVideoCtx->color_range == AVCOL_RANGE_JPEG ) strcat(buf, ":FR");
-      strcat(buf, ")");
+      if ( pVideoCtx->colorspace == AVCOL_SPC_FCC) spc = "FCC";
+      if ( pVideoCtx->colorspace == AVCOL_SPC_YCOCG) spc = "SG16";
+      if ( pVideoCtx->colorspace == AVCOL_SPC_BT2020_NCL) spc = "2020";
+      if ( pVideoCtx->colorspace == AVCOL_SPC_BT2020_CL) spc = "2020";
+      if ( pVideoCtx->color_range == AVCOL_RANGE_JPEG ) r = "FR";
+      if(spc){
+        strcat(buf, " (");
+        strcat(buf, spc);
+        if(r){
+          strcat(buf, ":");
+          strcat(buf, r);
+        }
+        strcat(buf, ")");
+      }
     }
 
     SetDlgItemTextA(mhdlg, IDC_VIDEO_PIXFMT, buf);
@@ -219,7 +232,7 @@ void VDFFInputFileInfoDialog::print_video()
   SetDlgItemText(mhdlg, IDC_VIDEO_ASPECTRATIO, buf);
 
   if ( pVideoCtx->bit_rate ){
-    sprintf(buf, "%u kb/sec", pVideoCtx->bit_rate/1000);
+    sprintf(buf, "%lu kb/sec", pVideoCtx->bit_rate/1000);
     SetDlgItemText(mhdlg, IDC_VIDEO_BITRATE, buf);
   } else {
     SetDlgItemText(mhdlg, IDC_VIDEO_BITRATE, "N/A");
@@ -258,7 +271,7 @@ void VDFFInputFileInfoDialog::print_audio()
   int bits_per_sample = av_get_bits_per_sample(pAudioCtx->codec_id);
   int64_t bit_rate = bits_per_sample ? pAudioCtx->sample_rate * pAudioCtx->channels * bits_per_sample : pAudioCtx->bit_rate;
   if ( bit_rate ){
-    sprintf(buf, "%u kb/sec", bit_rate/1000);
+    sprintf(buf, "%lu kb/sec", bit_rate/1000);
     SetDlgItemText(mhdlg, IDC_AUDIO_BITRATE, buf);
   } else {
     SetDlgItemText(mhdlg, IDC_AUDIO_BITRATE, "N/A");

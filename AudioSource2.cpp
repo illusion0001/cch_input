@@ -44,7 +44,7 @@ void *VDXAPIENTRY VDFFAudioSource::AsInterface(uint32_t iid)
 
 int	VDFFAudioSource::initStream(VDFFInputFile* pSource, int streamIndex)
 {
-  m_pFormatCtx = pSource->open_file(AVMEDIA_TYPE_AUDIO);
+  m_pFormatCtx = pSource->open_file(AVMEDIA_TYPE_AUDIO, streamIndex);
   if(!m_pFormatCtx) return -1;
 
   m_pSource = pSource;
@@ -71,6 +71,9 @@ int	VDFFAudioSource::initStream(VDFFInputFile* pSource, int streamIndex)
 
   trust_sample_pos = false;
   if(time_base.den==1) trust_sample_pos = true; // works for mp4
+  use_keys = false;
+  {for(int i=0; i<m_pStreamCtx->nb_index_entries; i++)
+    if(m_pStreamCtx->index_entries[i].flags & AVINDEX_KEYFRAME){ use_keys=true; break; } }
 
   if(m_pStreamCtx->duration == AV_NOPTS_VALUE){
     /*
@@ -198,6 +201,16 @@ void VDFFAudioSource::init_start_time()
   }
 }
 
+int64_t VDFFAudioSource::frame_to_pts(sint64 frame, AVStream* video)
+{
+  AVRational rate;
+  AVRational fr = av_stream_get_r_frame_rate(video);
+  av_reduce(&rate.num,&rate.den,m_pCodecCtx->sample_rate*fr.den,fr.num,INT_MAX);
+  int64 start = frame*rate.num/rate.den;
+  int64_t pos = start * time_base.den / time_base.num - time_adjust;
+  return pos;
+}
+
 bool VDFFAudioSource::Read(int64_t start, uint32_t count, void *lpBuffer, uint32_t cbBuffer, uint32_t *lBytesRead, uint32_t *lSamplesRead)
 {
   if(start>=sample_count){
@@ -246,7 +259,8 @@ bool VDFFAudioSource::Read(int64_t start, uint32_t count, void *lpBuffer, uint32
     int64_t pos = (start-discard_samples) * time_base.den / time_base.num - time_adjust;
     if(start==0 && pos>0) pos = 0;
     avcodec_flush_buffers(m_pCodecCtx);
-    av_seek_frame(m_pFormatCtx,m_streamIndex,pos,AVSEEK_FLAG_BACKWARD);
+    int flags = use_keys ? 0 : AVSEEK_FLAG_ANY;
+    av_seek_frame(m_pFormatCtx,m_streamIndex,pos,AVSEEK_FLAG_BACKWARD|flags);
     next_sample = -1;
   }
 
