@@ -237,6 +237,7 @@ VDFFInputFile::VDFFInputFile(const VDXInputDriverContext& context)
   auto_append = false;
   is_image = false;
   is_image_list = false;
+  is_anim_image = false;
 
   cfg_frame_buffers = 40;
   cfg_skip_cfhd = false;
@@ -386,6 +387,7 @@ AVFormatContext* VDFFInputFile::open_file(AVMediaType type, int streamIndex)
 
   is_image = false;
   is_image_list = false;
+  is_anim_image = false;
   if(strcmp(fmt->iformat->name,"image2")==0) is_image=true;
   if(strcmp(fmt->iformat->name,"bmp_pipe")==0) is_image=true;
   if(strcmp(fmt->iformat->name,"dpx_pipe")==0) is_image=true;
@@ -399,6 +401,7 @@ AVFormatContext* VDFFInputFile::open_file(AVMediaType type, int streamIndex)
   if(strcmp(fmt->iformat->name,"sunrast_pipe")==0) is_image=true;
   if(strcmp(fmt->iformat->name,"tiff_pipe")==0) is_image=true;
   if(strcmp(fmt->iformat->name,"webp_pipe")==0) is_image=true;
+  if(strcmp(fmt->iformat->name,"apng")==0) is_anim_image=true;
 
   if(is_image){
     wchar_t list_path[MAX_PATH];

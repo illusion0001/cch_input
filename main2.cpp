@@ -38,6 +38,7 @@ bool VDXAPIENTRY ff_create_b(const VDXInputDriverContext *pContext, IVDXInputFil
 }
 
 wchar_t option_a[1024] = L"FFMpeg (select formats)|*.mov;*.mp4;*.avi";
+wchar_t pattern_a[1024] = L""; // example "*.mov|*.mp4|*.avi"
 
 VDXInputDriverDefinition ff_class_a={
   sizeof(VDXInputDriverDefinition),
@@ -45,7 +46,7 @@ VDXInputDriverDefinition ff_class_a={
   1, //priority, reset from options
   0, //SignatureLength
   0, //Signature
-  L"*.mov|*.mp4|*.avi",
+  pattern_a,
   option_a,
   L"ffmpeg_select",
   ff_create_a
@@ -59,7 +60,7 @@ VDXInputDriverDefinition ff_class_b={
   -2, //priority, reset from options
   0, //SignatureLength
   0, //Signature
-  L"*.mov|*.mp4|*.avi",
+  0,
   option_b,
   L"ffmpeg_default",
   ff_create_b
@@ -147,6 +148,26 @@ static bool processAttach(HINSTANCE hDllHandle)
     GetPrivateProfileStringW(L"file_mask",L"select",mp+1,mask,1024,buf);
     mp[1] = 0;
     wcscat_s(option_a,1024,mask);
+
+    int p = 0;
+    int n = wcslen(mask);
+    pattern_a[0] = 0;
+    while(p<n){
+      int p1 = n;
+      wchar_t* p2 = wcschr(mask+p,';');
+      if(p2 && p2-mask<p1) p1 = p2-mask;
+
+      bool skip = false;
+      if(wcsncmp(mask+p,L"*.avi",5)==0) skip = true;
+      if(wcsncmp(mask+p,L"*.mp4",5)==0) skip = true;
+      if(wcsncmp(mask+p,L"*.mov",5)==0) skip = true;
+
+      if(!skip){
+        if(pattern_a[0]!=0) wcscat_s(pattern_a,1024,L"|");
+        wcsncat_s(pattern_a,1024,mask+p,p1-p);
+      }
+      p = p1+1;
+    }
   }
   mp = wcsrchr(option_b,'|');
   if(mp){

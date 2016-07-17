@@ -134,7 +134,14 @@ void VDFFInputFileInfoDialog::print_format()
     }
   } else {
     // convert the tick number into the number of seconds
-    double seconds =  pFormatCtx->duration/(double)AV_TIME_BASE;
+    double seconds = 0;
+    if(segment->is_anim_image){
+      AVRational fr = av_stream_get_r_frame_rate(segment->video_source->m_pStreamCtx);
+      seconds = double(segment->video_source->sample_count)*fr.den/fr.num;
+    } else {
+      seconds = pFormatCtx->duration/(double)AV_TIME_BASE;
+    }
+
     int hours = (int)(seconds/3600);
     seconds -= (hours * 3600);
     int minutes = (int)(seconds/60);

@@ -44,6 +44,7 @@ public:
   bool auto_append;
   bool is_image_list;
   bool is_image;
+  bool is_anim_image;
 
   int cfg_frame_buffers;
   bool cfg_skip_cfhd;
