@@ -7,12 +7,14 @@
 #include "version2.h"
 #include <delayimp.h>
 
+#ifndef __GNUC__
 #pragma comment(lib, "avcodec-57")
 #pragma comment(lib, "avformat-57")
 #pragma comment(lib, "avutil-55")
 #pragma comment(lib, "swscale-4")
 #pragma comment(lib, "swresample-2")
 #pragma comment(lib, "delayimp")
+#endif
 
 HINSTANCE hInstance;
 
@@ -42,7 +44,7 @@ wchar_t pattern_a[1024] = L""; // example "*.mov|*.mp4|*.avi"
 
 VDXInputDriverDefinition ff_class_a={
   sizeof(VDXInputDriverDefinition),
-  VDXInputDriverDefinition::kFlagSupportsVideo|VDXInputDriverDefinition::kFlagSupportsAudio|VDXInputDriverDefinition::kFlagCustomSignature|VDXInputDriverDefinition::kFlagNoOptions,
+  VDXInputDriverDefinition::kFlagSupportsVideo|VDXInputDriverDefinition::kFlagSupportsAudio|VDXInputDriverDefinition::kFlagCustomSignature|VDXInputDriverDefinition::kFlagForceByName|VDXInputDriverDefinition::kFlagNoOptions,
   1, //priority, reset from options
   0, //SignatureLength
   0, //Signature
@@ -84,60 +86,29 @@ VDXPluginInfo ff_plugin_b={
 VDXPluginInfo ff_plugin_a;
 VDPluginInfo* kPlugins[]={0,0,0};
 
-extern "C" VDPluginInfo** VDXAPIENTRY VDGetPluginInfo()
+extern "C" __declspec(dllexport) VDPluginInfo** __cdecl VDGetPluginInfo()
 {
   return kPlugins;
 }
 
-HINSTANCE module_base[5];
-
-static bool processAttach(HINSTANCE hDllHandle)
+void loadConfig()
 {
   wchar_t buf[MAX_PATH+128];
-  size_t n = GetModuleFileNameW(hDllHandle, buf, MAX_PATH);
-  if(n<=0) return false;
+  size_t n = GetModuleFileNameW(hInstance, buf, MAX_PATH);
+  if(n<=0) return;
   buf[n] = 0;
 
   wchar_t* p1 = wcsrchr(buf,'\\');
   wchar_t* p2 = wcsrchr(buf,'/');
   if(p2>p1) p1=p2;
-  if(!p1) return false;
-
+  if(!p1) return;
   *p1 = 0;
-  wcscat(buf,L"\\ffdlls\\");
-  p1+=8;
 
-  wchar_t* module_name[5] = {
-    L"avutil-55.dll",
-    L"swresample-2.dll",
-    L"swscale-4.dll",
-    L"avcodec-57.dll",
-    L"avformat-57.dll",
-  };
-
-  {for(int i=0; i<5; i++){
-    *p1 = 0;
-    wcscat(buf,module_name[i]);
-    HINSTANCE h = LoadLibraryW(buf);
-    if(!h){
-      wchar_t buf2[MAX_PATH+128];
-      wcscpy(buf2,L"Module failed to load correctly:\n");
-      wcscat(buf2,buf);
-      MessageBoxW(0,buf2,L"FFMpeg input driver",MB_OK|MB_ICONSTOP);
-      return false;
-    }
-    module_base[i] = h;
-  }}
+  wcscat(buf,L"\\cch_input.ini");
 
   ff_plugin_a = ff_plugin_b;
   ff_plugin_a.mpTypeSpecificInfo = &ff_class_a;
   ff_plugin_a.mpName = L"FFMpeg (select formats)"; // name must be unique
-
-  p1-=8;
-  *p1 = 0;
-  wcscat(buf,L"\\cch_input.ini");
-
-  ff_plugin_a.mpTypeSpecificInfo = &ff_class_a;
 
   int priority_a = GetPrivateProfileIntW(L"priority",L"select",ff_class_a.mPriority,buf);
   int priority_b = GetPrivateProfileIntW(L"priority",L"default",ff_class_b.mPriority,buf);
@@ -186,11 +157,54 @@ static bool processAttach(HINSTANCE hDllHandle)
     kPlugins[0] = &ff_plugin_a;
     kPlugins[1] = &ff_plugin_b;
   }
+}
+
+#ifndef __GNUC__
+
+HINSTANCE module_base[5];
+
+bool loadModules()
+{
+  wchar_t buf[MAX_PATH+128];
+  size_t n = GetModuleFileNameW(hInstance, buf, MAX_PATH);
+  if(n<=0) return false;
+  buf[n] = 0;
+
+  wchar_t* p1 = wcsrchr(buf,'\\');
+  wchar_t* p2 = wcsrchr(buf,'/');
+  if(p2>p1) p1=p2;
+  if(!p1) return false;
+
+  *p1 = 0;
+  wcscat(buf,L"\\ffdlls\\");
+  p1+=8;
+
+  wchar_t* module_name[5] = {
+    L"avutil-55.dll",
+    L"swresample-2.dll",
+    L"swscale-4.dll",
+    L"avcodec-57.dll",
+    L"avformat-57.dll",
+  };
+
+  {for(int i=0; i<5; i++){
+    *p1 = 0;
+    wcscat(buf,module_name[i]);
+    HINSTANCE h = LoadLibraryW(buf);
+    if(!h){
+      wchar_t buf2[MAX_PATH+128];
+      wcscpy(buf2,L"Module failed to load correctly:\n");
+      wcscat(buf2,buf);
+      MessageBoxW(0,buf2,L"FFMpeg input driver",MB_OK|MB_ICONSTOP);
+      return false;
+    }
+    module_base[i] = h;
+  }}
 
   return true;
 }
 
-void unloadModules(HINSTANCE hDllHandle)
+void unloadModules()
 {
   char* module_name[6] = {
     "avutil-55.dll",
@@ -220,12 +234,35 @@ BOOLEAN WINAPI DllMain( IN HINSTANCE hDllHandle, IN DWORD nReason, IN LPVOID Res
   switch ( nReason ){
   case DLL_PROCESS_ATTACH:
     hInstance = hDllHandle;
-    return processAttach(hDllHandle);
+    if(!loadModules()) return false;
+    loadConfig();
+    return true;
 
   case DLL_PROCESS_DETACH:
-    if(Reserved==0) unloadModules(hDllHandle);
+    if(Reserved==0) unloadModules();
     return true;
   }
 
   return true;
 }
+
+#endif
+
+#ifdef __GNUC__
+
+BOOLEAN WINAPI DllMain( IN HINSTANCE hDllHandle, IN DWORD nReason, IN LPVOID Reserved )
+{
+  switch ( nReason ){
+  case DLL_PROCESS_ATTACH:
+    hInstance = hDllHandle;
+    loadConfig();
+    return true;
+
+  case DLL_PROCESS_DETACH:
+    return true;
+  }
+
+  return true;
+}
+
+#endif

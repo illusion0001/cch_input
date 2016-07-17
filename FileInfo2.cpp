@@ -4,11 +4,10 @@
 #include "VideoSource2.h"
 #include "AudioSource2.h"
 #include "resource.h"
-#include "version2.h"
 
 #include <string>
 
-static char* vsnstr = "V" VER_FILE_VERSION_STR;
+static const char* vsnstr = "Version 1.9";
 
 extern HINSTANCE hInstance;
  

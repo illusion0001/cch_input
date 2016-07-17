@@ -84,6 +84,16 @@ bool VDXAPIENTRY VDFFInputFile::ExecuteExport(int id, VDXHWND parent, IProjectSt
 
     AVFormatContext* fmt = 0;
     AVFormatContext* ofmt = 0;
+    bool v_end;
+    bool a_end;
+    int64_t vt_end=-1;
+    int64_t at_end=-1;
+    int64_t pos0,pos1;
+    int video = -1;
+    int audio = -1;
+    AVStream* out_video=0;
+    AVStream* out_audio=0;
+
     int err = 0; 
     err = avformat_open_input(&fmt, ff_path, 0, 0);
     if(err<0) goto end;
@@ -93,12 +103,9 @@ bool VDXAPIENTRY VDFFInputFile::ExecuteExport(int id, VDXHWND parent, IProjectSt
     avformat_alloc_output_context2(&ofmt, 0, 0, out_ff_path);
     if(!ofmt){ err=AVERROR_UNKNOWN; goto end; }
 
-    int video = video_source->m_streamIndex;
-    int audio = -1;
+    video = video_source->m_streamIndex;
     if(audio_source)
       audio = audio_source->m_streamIndex;
-    AVStream* out_video=0;
-    AVStream* out_audio=0;
  
     {for(int i=0; i<(int)fmt->nb_streams; i++){
       if(i!=video && i!=audio) continue;
@@ -135,11 +142,8 @@ bool VDXAPIENTRY VDFFInputFile::ExecuteExport(int id, VDXHWND parent, IProjectSt
     if(out_audio) at_end = audio_source->frame_to_pts(end,video_source->m_pStreamCtx);
     */
 
-    int64_t pos1 = end*video_source->time_base.den / video_source->time_base.num + video_source->start_time;
+    pos1 = end*video_source->time_base.den / video_source->time_base.num + video_source->start_time;
     av_seek_frame(fmt,video,pos1,0);
-
-    int64_t vt_end=-1;
-    int64_t at_end=-1;
 
     while(1){
       AVPacket pkt;
@@ -160,11 +164,11 @@ bool VDXAPIENTRY VDFFInputFile::ExecuteExport(int id, VDXHWND parent, IProjectSt
       if(vt_end!=-1 && (at_end!=-1 || audio==-1)) break;
     }
 
-    int64_t pos0 = start*video_source->time_base.den / video_source->time_base.num + video_source->start_time;
+    pos0 = start*video_source->time_base.den / video_source->time_base.num + video_source->start_time;
     av_seek_frame(fmt,video,pos0,AVSEEK_FLAG_BACKWARD);
 
-    bool v_end = out_video==0;
-    bool a_end = out_audio==0;
+    v_end = out_video==0;
+    a_end = out_audio==0;
 
     while(1){
       if(v_end && a_end) break;

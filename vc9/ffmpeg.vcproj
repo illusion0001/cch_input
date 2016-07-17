@@ -484,10 +484,6 @@
 			>
 		</File>
 		<File
-			RelativePath="..\version2.h"
-			>
-		</File>
-		<File
 			RelativePath="..\VideoSource2.cpp"
 			>
 		</File>

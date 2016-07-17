@@ -18,7 +18,7 @@ void widechar_to_utf8(char *dst, int max_dst, const wchar_t *src);
 void edit_changed(HWND wnd)
 {
   WPARAM id = GetWindowLong(wnd,GWL_ID);
-  SendMessage(GetParent(wnd),WM_EDIT_CHANGED,id,(LONG)wnd);
+  SendMessage(GetParent(wnd),WM_EDIT_CHANGED,id,(LPARAM)wnd);
 }
 
 LRESULT CALLBACK EditWndProc(HWND wnd,UINT msg,WPARAM wparam,LPARAM lparam)
