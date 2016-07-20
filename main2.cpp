@@ -4,10 +4,9 @@
 #include <vd2/plugin/vdplugin.h>
 #include <vd2/plugin/vdinputdriver.h>
 #include "InputFile2.h"
-#include "version2.h"
-#include <delayimp.h>
 
-#ifndef __GNUC__
+#ifdef _MSC_VER
+#include <delayimp.h>
 #pragma comment(lib, "avcodec-57")
 #pragma comment(lib, "avformat-57")
 #pragma comment(lib, "avutil-55")
@@ -39,12 +38,17 @@ bool VDXAPIENTRY ff_create_b(const VDXInputDriverContext *pContext, IVDXInputFil
   return true;
 }
 
-wchar_t option_a[1024] = L"FFMpeg (select formats)|*.mov;*.mp4;*.avi";
+#define option_a_init L"FFMpeg (select formats)|*.mov;*.mp4;*.avi"
+wchar_t option_a[1024] = option_a_init;
 wchar_t pattern_a[1024] = L""; // example "*.mov|*.mp4|*.avi"
 
 VDXInputDriverDefinition ff_class_a={
   sizeof(VDXInputDriverDefinition),
-  VDXInputDriverDefinition::kFlagSupportsVideo|VDXInputDriverDefinition::kFlagSupportsAudio|VDXInputDriverDefinition::kFlagCustomSignature|VDXInputDriverDefinition::kFlagForceByName|VDXInputDriverDefinition::kFlagNoOptions,
+  VDXInputDriverDefinition::kFlagSupportsVideo|
+  VDXInputDriverDefinition::kFlagSupportsAudio|
+  VDXInputDriverDefinition::kFlagCustomSignature|
+  VDXInputDriverDefinition::kFlagForceByName|
+  VDXInputDriverDefinition::kFlagNoOptions,
   1, //priority, reset from options
   0, //SignatureLength
   0, //Signature
@@ -54,11 +58,14 @@ VDXInputDriverDefinition ff_class_a={
   ff_create_a
 };
 
-wchar_t option_b[1024] = L"FFMpeg (all formats)|*.mov;*.mp4;*.avi";
+#define option_b_init L"FFMpeg (all formats)|*.mov;*.mp4;*.avi"
+wchar_t option_b[1024] = option_b_init;
 
 VDXInputDriverDefinition ff_class_b={
   sizeof(VDXInputDriverDefinition),
-  VDXInputDriverDefinition::kFlagSupportsVideo|VDXInputDriverDefinition::kFlagSupportsAudio|VDXInputDriverDefinition::kFlagNoOptions,
+  VDXInputDriverDefinition::kFlagSupportsVideo|
+  VDXInputDriverDefinition::kFlagSupportsAudio|
+  VDXInputDriverDefinition::kFlagNoOptions,
   -2, //priority, reset from options
   0, //SignatureLength
   0, //Signature
@@ -73,13 +80,13 @@ VDXPluginInfo ff_plugin_b={
   L"FFMpeg (all formats)",
   L"Anton Shekhovtsov",
   L"Loads and decode files through ffmpeg libs.",
-  (FFDRIVER_VERSION_MAJOR << 24) + (FFDRIVER_VERSION_MINOR << 16) + (FFDRIVER_VERSION_REVISION << 8) + FFDRIVER_VERSION_BUILD,
+  (1 << 24) + (9 << 16),
   kVDXPluginType_Input,
   0,
-  kVDXPlugin_APIVersion,										// 10
-  kVDXPlugin_APIVersion,                    // 10
-  kVDXPlugin_InputDriverAPIVersion,         //  2
-  kVDXPlugin_InputDriverAPIVersion,         //  2
+  10, // min api version
+  kVDXPlugin_APIVersion,
+  4,  // min input api version
+  kVDXPlugin_InputDriverAPIVersion,
   &ff_class_b
 };
 
@@ -113,17 +120,19 @@ void loadConfig()
   int priority_a = GetPrivateProfileIntW(L"priority",L"select",ff_class_a.mPriority,buf);
   int priority_b = GetPrivateProfileIntW(L"priority",L"default",ff_class_b.mPriority,buf);
 
-  wchar_t* mp = wcsrchr(option_a,'|');
-  if(mp){
+  {
+    wcscpy(option_a,option_a_init);
+    wchar_t* mp = wcsrchr(option_a,'|');
     wchar_t mask[1024];
     GetPrivateProfileStringW(L"file_mask",L"select",mp+1,mask,1024,buf);
     mp[1] = 0;
-    wcscat_s(option_a,1024,mask);
 
     int p = 0;
     int n = wcslen(mask);
     pattern_a[0] = 0;
-    while(p<n){
+    int count1 = 0;
+    int count2 = 0;
+    while(p<n && p<512){
       int p1 = n;
       wchar_t* p2 = wcschr(mask+p,';');
       if(p2 && p2-mask<p1) p1 = p2-mask;
@@ -133,19 +142,40 @@ void loadConfig()
       if(wcsncmp(mask+p,L"*.mp4",5)==0) skip = true;
       if(wcsncmp(mask+p,L"*.mov",5)==0) skip = true;
 
+      if(count1) wcscat(option_a,L";");
+      wcsncat(option_a,mask+p,p1-p);
+
       if(!skip){
-        if(pattern_a[0]!=0) wcscat_s(pattern_a,1024,L"|");
-        wcsncat_s(pattern_a,1024,mask+p,p1-p);
+        if(count2) wcscat(pattern_a,L"|");
+        wcsncat(pattern_a,mask+p,p1-p);
       }
       p = p1+1;
+      count1++;
+      count2++;
     }
   }
-  mp = wcsrchr(option_b,'|');
-  if(mp){
+
+  {
+    wcscpy(option_b,option_b_init);
+    wchar_t* mp = wcsrchr(option_b,'|');
     wchar_t mask[1024];
     GetPrivateProfileStringW(L"file_mask",L"default",mp+1,mask,1024,buf);
     mp[1] = 0;
-    wcscat_s(option_b,1024,mask);
+
+    int p = 0;
+    int n = wcslen(mask);
+    int count1 = 0;
+    while(p<n && p<512){
+      int p1 = n;
+      wchar_t* p2 = wcschr(mask+p,';');
+      if(p2 && p2-mask<p1) p1 = p2-mask;
+
+      if(count1) wcscat(option_b,L";");
+      wcsncat(option_b,mask+p,p1-p);
+
+      p = p1+1;
+      count1++;
+    }
   }
 
   if(priority_a==priority_b){
@@ -159,7 +189,7 @@ void loadConfig()
   }
 }
 
-#ifndef __GNUC__
+#ifdef _MSC_VER
 
 HINSTANCE module_base[5];
 
