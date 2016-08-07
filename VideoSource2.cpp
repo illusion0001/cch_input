@@ -159,6 +159,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
         d = 1;
       } else d++;
     }}
+    if(d>keyframe_gap) keyframe_gap = d;
   }
 
   // threading has big negative impact on random access within all-keyframe files
