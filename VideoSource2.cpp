@@ -740,7 +740,7 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   }
 
   const AVPixFmtDescriptor* out_desc = av_pix_fmt_desc_get(convertInfo.av_fmt);
-  convertInfo.out_rgb = (desc->flags & AV_PIX_FMT_FLAG_RGB) && desc->nb_components >= 3;
+  convertInfo.out_rgb = (out_desc->flags & AV_PIX_FMT_FLAG_RGB) && out_desc->nb_components >= 3;
 
   // tweak output yuv formats for VD here
   VDXPixmapFormat format = base_format;
