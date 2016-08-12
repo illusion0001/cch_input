@@ -7,7 +7,7 @@
 
 #include <string>
 
-static const char* vsnstr = "Version 1.9";
+static const char* vsnstr = "Version 1.10";
 
 extern HINSTANCE hInstance;
  
@@ -150,7 +150,7 @@ void VDFFInputFileInfoDialog::print_format()
     SetDlgItemText(mhdlg, IDC_DURATION, buf);
   }
 
-  sprintf(buf, "%lu kb/sec", pFormatCtx->bit_rate/1000);
+  sprintf(buf, "%I64d kb/sec", pFormatCtx->bit_rate/1000);
   SetDlgItemText(mhdlg, IDC_BITRATE, buf);
 
   sprintf(buf, "%u", pFormatCtx->nb_streams);
@@ -177,15 +177,8 @@ void VDFFInputFileInfoDialog::print_video()
   if ( pVideoCtx->pix_fmt != AV_PIX_FMT_NONE )
   {
     strncpy(buf, av_get_pix_fmt_name(pVideoCtx->pix_fmt), 128);
-
-    bool is_rgb = false;
-    switch(pVideoCtx->pix_fmt){
-    case AV_PIX_FMT_BGRA:
-    case AV_PIX_FMT_BGR24:
-    case AV_PIX_FMT_RGB565:
-    case AV_PIX_FMT_RGB555:
-      is_rgb = true;
-    }
+    const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(pVideoCtx->pix_fmt);
+    bool is_rgb = (desc->flags & AV_PIX_FMT_FLAG_RGB)!=0;
 
     if(!is_rgb){
       const char* spc = "?";
@@ -238,7 +231,7 @@ void VDFFInputFileInfoDialog::print_video()
   SetDlgItemText(mhdlg, IDC_VIDEO_ASPECTRATIO, buf);
 
   if ( pVideoCtx->bit_rate ){
-    sprintf(buf, "%lu kb/sec", pVideoCtx->bit_rate/1000);
+    sprintf(buf, "%I64d kb/sec", pVideoCtx->bit_rate/1000);
     SetDlgItemText(mhdlg, IDC_VIDEO_BITRATE, buf);
   } else {
     SetDlgItemText(mhdlg, IDC_VIDEO_BITRATE, "N/A");
@@ -277,7 +270,7 @@ void VDFFInputFileInfoDialog::print_audio()
   int bits_per_sample = av_get_bits_per_sample(pAudioCtx->codec_id);
   int64_t bit_rate = bits_per_sample ? pAudioCtx->sample_rate * pAudioCtx->channels * bits_per_sample : pAudioCtx->bit_rate;
   if ( bit_rate ){
-    sprintf(buf, "%lu kb/sec", bit_rate/1000);
+    sprintf(buf, "%I64d kb/sec", bit_rate/1000);
     SetDlgItemText(mhdlg, IDC_AUDIO_BITRATE, buf);
   } else {
     SetDlgItemText(mhdlg, IDC_AUDIO_BITRATE, "N/A");
