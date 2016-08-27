@@ -448,7 +448,15 @@
 			>
 		</File>
 		<File
+			RelativePath="..\compress.cpp"
+			>
+		</File>
+		<File
 			RelativePath="..\export.cpp"
+			>
+		</File>
+		<File
+			RelativePath="..\ffmpeg.bmp"
 			>
 		</File>
 		<File

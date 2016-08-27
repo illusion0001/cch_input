@@ -80,14 +80,15 @@ enum VDXCPUFeatureFlags {
 };
 
 enum {
-	kVDXPlugin_APIVersion		= 10
+	kVDXPlugin_APIVersion		= 11
 };
 
 
 enum {
 	kVDXPluginType_Video,		// Updated video filter API is not yet complete.
 	kVDXPluginType_Audio,
-	kVDXPluginType_Input
+	kVDXPluginType_Input,
+	kVDXPluginType_Tool
 };
 
 typedef bool (VDXAPIENTRY *VDXShowStaticAboutProc)(VDXHWND parent);
@@ -156,6 +157,22 @@ struct VDXRect {
 	sint32	bottom;
 };
 
+namespace nsVDXPixmap {
+	enum ColorSpaceMode {
+		kColorSpaceMode_None,
+		kColorSpaceMode_601,
+		kColorSpaceMode_709,
+		kColorSpaceModeCount
+	};
+
+	enum ColorRangeMode {
+		kColorRangeMode_None,
+		kColorRangeMode_Limited,
+		kColorRangeMode_Full,
+		kColorRangeModeCount
+	};
+};
+
 struct FilterModPixmapInfo {
 	enum MappingType {
 		kTransferUnknown = 0,
@@ -163,9 +180,10 @@ struct FilterModPixmapInfo {
 		kTransferLinear = 2,
 	};
 	enum AlphaType {
-		kAlphaInvalid = 0,
-		kAlphaMask = 1,
-		kAlphaMask_pm = 2,
+		kAlphaInvalid = 0,      // not present or garbage
+		kAlphaMask = 1,         // arbitrary data, no default display
+		kAlphaOpacity_pm = 2,   // display with transparency
+		kAlphaOpacity = 3,      // display with transparency
 	};
 
 	uint32 ref_r;
@@ -176,6 +194,10 @@ struct FilterModPixmapInfo {
 	uint32 transfer_type;
 	uint32 alpha_type;
 	int64 frame_num;
+
+	// FilterModVersion>=5
+	nsVDXPixmap::ColorSpaceMode colorSpaceMode;
+	nsVDXPixmap::ColorRangeMode colorRangeMode;
 
 	FilterModPixmapInfo() {
 		clear();
@@ -189,12 +211,20 @@ struct FilterModPixmapInfo {
 		transfer_type = kTransferUnknown;
 		alpha_type = kAlphaInvalid;
 		frame_num = -1;
+		colorSpaceMode = nsVDXPixmap::kColorSpaceMode_None;
+		colorRangeMode = nsVDXPixmap::kColorRangeMode_None;
 	}
 
-	void copy_frame(FilterModPixmapInfo& a) {
+	void copy_ref(const FilterModPixmapInfo& a) {
+		ref_r = a.ref_r;
+		ref_g = a.ref_g;
+		ref_b = a.ref_b;
+		ref_a = a.ref_a;
+	}
+	void copy_frame(const FilterModPixmapInfo& a) {
 		frame_num = a.frame_num;
 	}
-	void copy_alpha(FilterModPixmapInfo& a) {
+	void copy_alpha(const FilterModPixmapInfo& a) {
 		alpha_type = a.alpha_type;
 	}
 };
@@ -231,7 +261,7 @@ struct VDXPixmapLayout {
 
 class IFilterModPixmap {
 public:
-	virtual FilterModPixmapInfo* GetPixmapInfo(VDXPixmap* pixmap)=0;
+	virtual FilterModPixmapInfo* GetPixmapInfo(const VDXPixmap* pixmap)=0;
 	virtual uint64 GetFormat_XRGB64()=0;
 };
 
@@ -285,6 +315,11 @@ namespace nsVDXPixmap {
 		kPixFormat_YUV420ib_Planar_709		= 55,
 		kPixFormat_YUV420ib_Planar_709_FR	= 56,
 
+		kPixFormat_XRGB64			= 57,
+		kPixFormat_YUV444_Planar16	= 58,
+		kPixFormat_YUV422_Planar16	= 59,
+		kPixFormat_YUV420_Planar16	= 60,
+
 		kPixFormat_VDXA_RGB			= 0x10001,
 		kPixFormat_VDXA_YUV			= 0x10002
 	};
@@ -298,6 +333,21 @@ public:
 	virtual int VDXAPIENTRY AddRef() = 0;
 	virtual int VDXAPIENTRY Release() = 0;
 	virtual void *VDXAPIENTRY AsInterface(uint32 iid) = 0;
+};
+
+enum {
+  VDICM_COMPRESS_INPUT_FORMAT = 1,  // query which format to use as input
+  VDICM_COMPRESS_QUERY = 2,         // same as compress_query but src is PixmapLayout
+  VDICM_COMPRESS_GET_FORMAT = 3,
+  VDICM_COMPRESS_GET_SIZE = 4,
+  VDICM_COMPRESS_BEGIN = 5,
+  VDICM_COMPRESS = 6,
+  VDICM_COMPRESS_MATRIX_INFO = 7,
+  VDICM_ENUMFORMATS = 8,
+};
+
+enum {
+	VDCOMPRESS_WAIT = 0x10000000L,
 };
 
 #endif

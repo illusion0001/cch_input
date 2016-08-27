@@ -163,7 +163,11 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   }
 
   // threading has big negative impact on random access within all-keyframe files
-  if(keyframe_gap==1) m_pCodecCtx->thread_count = 1;
+  if(keyframe_gap==1){
+    //m_pCodecCtx->thread_count = 1;
+    m_pCodecCtx->thread_count = 0;
+    m_pCodecCtx->thread_type = FF_THREAD_SLICE;
+  }
 
   fw_seek_threshold = 10;
   if(keyframe_gap==1) fw_seek_threshold = 0; // assume seek is free with all-keyframe
@@ -601,6 +605,7 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     break;
 
   case AV_PIX_FMT_BGRA:
+  case AV_PIX_FMT_BGR0:
     perfect_format = kPixFormat_XRGB8888;
     trigger = kPixFormat_XRGB8888;
     perfect_bitexact = true;

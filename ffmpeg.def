@@ -1,3 +1,7 @@
-LIBRARY
 EXPORTS
-	VDGetPluginInfo		PRIVATE
+	VDGetPluginInfo
+	VirtualdubFilterModuleInit2
+	FilterModModuleInit
+	VirtualdubFilterModuleDeinit
+	DriverProc
+	VDDriverProc

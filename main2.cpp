@@ -93,7 +93,7 @@ VDXPluginInfo ff_plugin_b={
 VDXPluginInfo ff_plugin_a;
 VDPluginInfo* kPlugins[]={0,0,0};
 
-extern "C" __declspec(dllexport) VDPluginInfo** __cdecl VDGetPluginInfo()
+extern "C" VDPluginInfo** __cdecl VDGetPluginInfo()
 {
   return kPlugins;
 }
