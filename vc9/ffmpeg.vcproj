@@ -476,6 +476,14 @@
 			>
 		</File>
 		<File
+			RelativePath="..\gopro.cpp"
+			>
+		</File>
+		<File
+			RelativePath="..\gopro.h"
+			>
+		</File>
+		<File
 			RelativePath="..\InputFile2.cpp"
 			>
 		</File>
@@ -485,6 +493,14 @@
 		</File>
 		<File
 			RelativePath="..\main2.cpp"
+			>
+		</File>
+		<File
+			RelativePath="..\mov_mp4.cpp"
+			>
+		</File>
+		<File
+			RelativePath="..\mov_mp4.h"
 			>
 		</File>
 		<File

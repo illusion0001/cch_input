@@ -3,6 +3,7 @@
 #include "VideoSource2.h"
 #include "AudioSource2.h"
 #include "cineform.h"
+#include "mov_mp4.h"
 #include <windows.h>
 #include <vfw.h>
 #include <aviriff.h>
@@ -82,56 +83,23 @@ int detect_avi(const void *pHeader, int32_t nHeaderSize)
   return 1;
 }
 
-// copied from quicktime driver
-#define bswap32(x) \
-{ unsigned long eax = *((unsigned long *)&(x)); \
-  *((unsigned long *)&(x)) = (eax >> 24) | ((eax >> 8) & 0x0000FF00UL) | ((eax << 8) & 0x00FF0000UL) | (eax << 24); \
-}
-
-#define bswap64(x) \
-{ unsigned long eax = *((unsigned long *)&(x) + 0); \
-  unsigned long edx = *((unsigned long *)&(x) + 1); \
-  *((unsigned long *)&(x) + 0) = (edx >> 24) | ((edx >> 8) & 0x0000FF00UL) | ((edx << 8) & 0x00FF0000UL) | (edx << 24); \
-  *((unsigned long *)&(x) + 1) = (eax >> 24) | ((eax >> 8) & 0x0000FF00UL) | ((eax << 8) & 0x00FF0000UL) | (eax << 24); \
-}
-
 int detect_mp4_mov(const void *pHeader, int32_t nHeaderSize, int64_t nFileSize)
 {
-  if (pHeader != NULL && nHeaderSize >= 16)
-  {
-    __int64 sz = *(unsigned long *)pHeader;
-    unsigned long t = *((unsigned long *)pHeader + 1);
-    bswap32(sz);
+  MovParser parser(pHeader,nHeaderSize,nFileSize);
 
-    if (sz == 0)
-    {
-      sz = nFileSize;
-    }
-    else if (sz == 1)
-    {
-      sz = *((__int64 *)pHeader + 1);
-      bswap64(sz);
-      if (sz < 16) goto Abort;
-    }
-    else
-    {
-      if (sz < 8) goto Abort;
-    }
+  MovAtom a;
+  if(!parser.read(a)) return -1;
+  if(a.sz>nFileSize && nFileSize>0) return -1;
 
-    if (sz <= nFileSize || nFileSize == 0)
-    {
-      switch (t) {
-        case 'ediw':
-        case 'pytf':
-        case 'piks':
-        case 'tadm':
-        case 'voom':
-          return 1;
-      }
-    }
+  switch(a.t){
+  case 'wide':
+  case 'ftyp':
+  case 'skip':
+  case 'mdat':
+  case 'moov':
+    return 1;
   }
 
-Abort:
   return -1;
 }
 

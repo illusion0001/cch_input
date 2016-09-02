@@ -4,6 +4,7 @@
 #include "VideoSource2.h"
 #include "AudioSource2.h"
 #include "resource.h"
+#include "gopro.h"
 
 #include <string>
 
@@ -346,6 +347,21 @@ void VDFFInputFileInfoDialog::print_metadata()
     }
   }
 
+  GoproInfo gi;
+  gi.find_info(segment->path);
+
+  if(gi.type){
+    _stprintf_s(buf, buf_size, "GoPro info:\t%s\r\n", gi.type->Name);
+    s += buf;
+    _stprintf_s(buf, buf_size, "\tfirmware = %s\r\n", gi.firmware);
+    s += buf;
+    _stprintf_s(buf, buf_size, "\tserial# = %s\r\n", gi.cam_serial);
+    s += buf;
+    s += gi.setup_info;
+  }
+
+  int tab[2] = {42,90};
+  SendDlgItemMessage(mhdlg, IDC_METADATA, EM_SETTABSTOPS, 2, (LPARAM)tab);
   SetDlgItemText(mhdlg, IDC_METADATA, s.c_str());
 }
 
