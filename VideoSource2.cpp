@@ -650,8 +650,6 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
       convertInfo.direct_copy = perfect_bitexact;
     }
 
-    if(!convertInfo.in_yuv && (useDIBAlignment^flip_image)) convertInfo.direct_copy = false;
-
   } else if(opt_format==kPixFormat_XRGB64){
     if(opt_format==perfect_format){
       base_format = perfect_format;
@@ -743,6 +741,8 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
       return false;
     }
   }
+
+  if(convertInfo.direct_copy) convertInfo.req_dib = false;
 
   const AVPixFmtDescriptor* out_desc = av_pix_fmt_desc_get(convertInfo.av_fmt);
   convertInfo.out_rgb = (out_desc->flags & AV_PIX_FMT_FLAG_RGB) && out_desc->nb_components >= 3;
@@ -898,7 +898,7 @@ void VDFFVideoSource::set_pixmap_layout(uint8_t* p)
   m_pixmap.pitch2 = pic.linesize[1];
   m_pixmap.pitch3 = pic.linesize[2];
 
-  if(convertInfo.req_dib){
+  if(convertInfo.req_dib^flip_image){
     switch(m_pixmap.format){
     case kPixFormat_XRGB1555:
     case kPixFormat_RGB565:
