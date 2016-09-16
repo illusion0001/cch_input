@@ -175,7 +175,7 @@ bool VDXAPIENTRY VDFFInputFile::ExecuteExport(int id, VDXHWND parent, IProjectSt
 
       AVPacket pkt;
       err = av_read_frame(fmt, &pkt);
-      if(err<0) break;
+      if(err<0){ err=0; break; }
 
       AVStream* in_stream = fmt->streams[pkt.stream_index];
       int64_t t = pkt.pts;

@@ -15,7 +15,13 @@ extern "C"
 
 class VDFFInputFile;
 
-class VDFFVideoSource : public vdxunknown<IVDXStreamSource>, public IVDXVideoSource, public IVDXVideoDecoder, public IVDXVideoDecoderModel, public IFilterModVideoDecoder{
+class VDFFVideoSource : public vdxunknown<IVDXStreamSource>, 
+  public IVDXStreamSourceV5, 
+  public IVDXVideoSource, 
+  public IVDXVideoDecoder, 
+  public IVDXVideoDecoderModel, 
+  public IFilterModVideoDecoder
+{
 public:
   VDFFVideoSource(const VDXInputDriverContext& context);
   ~VDFFVideoSource();
@@ -28,6 +34,8 @@ public:
   void		VDXAPIENTRY GetStreamSourceInfo(VDXStreamSourceInfo&);
   bool		VDXAPIENTRY Read(int64_t lStart, uint32_t lCount, void *lpBuffer, uint32_t cbBuffer, uint32_t *lBytesRead, uint32_t *lSamplesRead);
 
+  void VDXAPIENTRY ApplyStreamMode(uint32 flags);
+  bool VDXAPIENTRY QueryStreamMode(uint32 flags);
   const void *VDXAPIENTRY GetDirectFormat();
   int			VDXAPIENTRY GetDirectFormatLen();
 
@@ -81,6 +89,8 @@ public:
   AVStream*	m_pStreamCtx;
   AVCodecContext* m_pCodecCtx;
   VDXStreamSourceInfo	m_streamInfo;
+  void* direct_format;
+  int direct_format_len;
   AVRational time_base;
   int64_t start_time;
 
@@ -135,21 +145,27 @@ public:
   bool trust_index;
   bool direct_buffer;
   bool is_image_list;
+  bool copy_mode;
+  bool decode_mode;
   int64_t dead_range_start;
   int64_t dead_range_end;
+
+  AVPacket copy_pkt;
 
   uint64 kPixFormat_XRGB64;
 
   int	 initStream(VDFFInputFile* pSource, int indexStream);
   void set_pixmap_layout(uint8_t* p);
-  void handle_frame();
+  int handle_frame();
   void set_start_time();
-  bool read_frame(bool init=false);
+  bool read_frame(sint64 desired_frame, bool init=false);
   void alloc_direct_buffer();
   void alloc_page(int pos);
+  void free_buffers();
   void open_page(BufferPage* p, int flag);
   void open_read(BufferPage* p){ open_page(p,1); }
   void open_write(BufferPage* p){ open_page(p,2); }
   void copy(int start, int end, BufferPage* p);
   int64_t frame_to_pts_next(sint64 start);
+  void setCopyMode(bool v);
 };

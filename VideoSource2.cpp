@@ -22,7 +22,10 @@ VDFFVideoSource::VDFFVideoSource(const VDXInputDriverContext& context)
   m_pStreamCtx = 0;
   m_pCodecCtx = 0;
   m_pSwsCtx = 0;
+  direct_format = 0;
+  direct_format_len = 0;
   frame = 0;
+  memset(&copy_pkt,0,sizeof(copy_pkt));
   CurrentDecoderErrorMode = kErrorModeReportAll;
   m_pixmap_data = 0;
   m_pixmap_frame = -1;
@@ -32,6 +35,8 @@ VDFFVideoSource::VDFFVideoSource(const VDXInputDriverContext& context)
   flip_image = false;
   direct_buffer = false;
   is_image_list = false;
+  copy_mode = false;
+  decode_mode = true;
   buffer = 0;
   mem = 0;
 
@@ -44,6 +49,8 @@ VDFFVideoSource::VDFFVideoSource(const VDXInputDriverContext& context)
 
 VDFFVideoSource::~VDFFVideoSource() 
 {
+  av_packet_unref(&copy_pkt);
+  free(direct_format);
   if(frame) av_frame_free(&frame);
   if(m_pCodecCtx) avcodec_free_context(&m_pCodecCtx);
   if(m_pSwsCtx) sws_freeContext(m_pSwsCtx);
@@ -80,6 +87,9 @@ void *VDXAPIENTRY VDFFVideoSource::AsInterface(uint32_t iid)
 
   if (iid == IFilterModVideoDecoder::kIID)
     return static_cast<IFilterModVideoDecoder *>(this);
+
+  if (iid == IVDXStreamSourceV5::kIID)
+    return static_cast<IVDXStreamSourceV5 *>(this);
 
   return vdxunknown<IVDXStreamSource>::AsInterface(iid);
 }
@@ -152,14 +162,16 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
     }*/
 
     keyframe_gap = 0;
-    int d = 1;
-    if(trust_index){for(int i=0; i<m_pStreamCtx->nb_index_entries; i++){
-      if(m_pStreamCtx->index_entries[i].flags & AVINDEX_KEYFRAME){
-        if(d>keyframe_gap) keyframe_gap = d;
-        d = 1;
-      } else d++;
-    }}
-    if(d>keyframe_gap) keyframe_gap = d;
+    if(trust_index){
+      int d = 1;
+      {for(int i=0; i<m_pStreamCtx->nb_index_entries; i++){
+        if(m_pStreamCtx->index_entries[i].flags & AVINDEX_KEYFRAME){
+          if(d>keyframe_gap) keyframe_gap = d;
+          d = 1;
+        } else d++;
+      }}
+      if(d>keyframe_gap) keyframe_gap = d;
+    }
   }
 
   // threading has big negative impact on random access within all-keyframe files
@@ -240,10 +252,23 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   m_streamInfo.mPixelAspectRatio.mNumerator = ar1.num;
   m_streamInfo.mPixelAspectRatio.mDenominator = ar1.den;
 
+  if(!is_image_list && trust_index && keyframe_gap==1){
+    direct_format_len = sizeof(BITMAPINFOHEADER);
+    direct_format_len += (m_pCodecCtx->extradata_size+1) & ~1;
+    direct_format = malloc(direct_format_len);
+    memset(direct_format, 0, direct_format_len);
+    BITMAPINFOHEADER* outhdr = (BITMAPINFOHEADER*)direct_format;
+    outhdr->biSize        = sizeof(BITMAPINFOHEADER);
+    outhdr->biWidth       = m_pCodecCtx->width;
+    outhdr->biHeight      = m_pCodecCtx->height;
+    outhdr->biCompression = m_pCodecCtx->codec_tag;
+    memcpy(((uint8*)direct_format)+sizeof(BITMAPINFOHEADER),m_pCodecCtx->extradata,m_pCodecCtx->extradata_size);
+  }
+
   //! hack around start_time
   // looks like ffmpeg will save first packet pts as start_time
   // this is bullshit if the packet belongs to reordered frame (example: BBI frame sequence)
-  read_frame(true);
+  read_frame(0,true);
   pSource->video_start_time = start_time;
 
   return 0;
@@ -254,14 +279,39 @@ void VDXAPIENTRY VDFFVideoSource::GetStreamSourceInfo(VDXStreamSourceInfo& srcIn
   srcInfo = m_streamInfo;
 }
 
+void VDXAPIENTRY VDFFVideoSource::ApplyStreamMode(uint32 flags)
+{
+  if(direct_format){
+    bool copy_mode = false;
+    if(flags & kStreamModeDirectCopy) copy_mode = true;
+    decode_mode = false;
+    if(flags & kStreamModeUncompress) decode_mode = true;
+    setCopyMode(copy_mode);
+    next_frame = -1;
+  }
+}
+
+bool VDXAPIENTRY VDFFVideoSource::QueryStreamMode(uint32 flags)
+{
+  if(flags==kStreamModeDirectCopy) return direct_format_len!=0;
+  return false;
+}
+
 const void *VDFFVideoSource::GetDirectFormat()
 {
-  return NULL;
+  return copy_mode ? direct_format : 0;
 }
 
 int VDFFVideoSource::GetDirectFormatLen() 
 {
-  return 0;
+  return copy_mode ? direct_format_len: 0;
+}
+
+void VDFFVideoSource::setCopyMode(bool v)
+{
+  copy_mode = v;
+  if(v) free_buffers();
+  av_packet_unref(&copy_pkt);
 }
 
 IVDXStreamSource::ErrorMode VDFFVideoSource::GetDecodeErrorMode() 
@@ -950,14 +1000,24 @@ bool VDFFVideoSource::Read(sint64 start, uint32 lCount, void *lpBuffer, uint32 c
     return true;
   }
 
-  if(!lpBuffer){
-    *lBytesRead = 0;
-    *lSamplesRead = 1;
-    return false;
-  }
-
   *lBytesRead = 0;
   *lSamplesRead = 1;
+
+  if(copy_mode && copy_pkt.data){
+    *lBytesRead = copy_pkt.size;
+    if(!lpBuffer) return true;
+    if(cbBuffer<uint32(copy_pkt.size)) return false;
+    memcpy(lpBuffer,copy_pkt.data,copy_pkt.size);
+    av_packet_unref(&copy_pkt);
+    return true;
+  }
+
+  if(!copy_mode && !lpBuffer) return false;
+
+  av_packet_unref(&copy_pkt);
+  if(copy_mode && start!=next_frame){
+    free_buffers();
+  }
 
   VDFFVideoSource* head = this;
   if(m_pSource->head_segment) head = m_pSource->head_segment->video_source;
@@ -1018,19 +1078,32 @@ bool VDFFVideoSource::Read(sint64 start, uint32 lCount, void *lpBuffer, uint32 c
   }
 
   while(1){
-    if(!read_frame()){
+    if(!read_frame(start)){
+      bool fail = true;
       if(next_frame>0){
         // end of stream, fill with dups
         BufferPage* page = frame_array[next_frame-1];
         if(page){
           copy(next_frame, int(start), page);
           next_frame = int(start)+1;
+          fail = false;
         }
-      } else {
+      }
+      if(fail){
         mContext.mpCallbacks->SetError("unexpected end of stream");
         return false;
       }
     }
+
+    if(copy_mode && copy_pkt.data){
+      *lBytesRead = copy_pkt.size;
+      if(!lpBuffer) return true;
+      if(cbBuffer<uint32(copy_pkt.size)) return false;
+      memcpy(lpBuffer,copy_pkt.data,copy_pkt.size);
+      av_packet_unref(&copy_pkt);
+      return true;
+    }
+
     if(frame_array[start]) return true;
 
     //! missed seek or bad stream, just fail
@@ -1046,11 +1119,30 @@ bool VDFFVideoSource::Read(sint64 start, uint32 lCount, void *lpBuffer, uint32 c
   return false;
 }
 
-bool VDFFVideoSource::read_frame(bool init)
+bool VDFFVideoSource::read_frame(sint64 desired_frame, bool init)
 {
   AVPacket pkt;
   pkt.data = 0;
   pkt.size = 0;
+
+  if(copy_mode && !decode_mode){
+    while(1){
+      int rf = av_read_frame(m_pFormatCtx, &pkt);
+      if(rf<0) return false;
+      bool done = false;
+      if(pkt.stream_index == m_streamIndex){
+        int pos = next_frame;
+        next_frame++;
+        if(pos==desired_frame){
+          av_packet_unref(&copy_pkt);
+          av_packet_ref(&copy_pkt,&pkt);
+          done = true;
+        }
+      }
+      av_packet_unref(&pkt);
+      if(done) return true;
+    }
+  }
 
   while(1){
     int rf = av_read_frame(m_pFormatCtx, &pkt);
@@ -1092,9 +1184,13 @@ bool VDFFVideoSource::read_frame(bool init)
               init = false;
               set_start_time();
             }
-            handle_frame();
+            int pos = handle_frame();
             av_frame_unref(frame);
             done_frames++;
+            if(copy_mode && pos==desired_frame){
+              av_packet_unref(&copy_pkt);
+              av_packet_ref(&copy_pkt,&orig_pkt);
+            }
           }
         }
 
@@ -1114,7 +1210,7 @@ void VDFFVideoSource::set_start_time()
   start_time = ts;
 }
 
-void VDFFVideoSource::handle_frame()
+int VDFFVideoSource::handle_frame()
 {
   dead_range_start = -1;
   dead_range_end = -1;
@@ -1130,7 +1226,7 @@ void VDFFVideoSource::handle_frame()
       int rndd = time_base.den/2;
       pos = int((ts*time_base.num + rndd) / time_base.den);
     } else {
-      if(next_frame==-1) return;
+      if(next_frame==-1) return -1;
       pos = next_frame;
     }
   }
@@ -1144,7 +1240,7 @@ void VDFFVideoSource::handle_frame()
 
   // ignore anything outside promised range
   if(pos<0 || pos>=sample_count){
-    return;
+    return -1;
   }
 
   if(!frame_array[pos]){
@@ -1160,6 +1256,7 @@ void VDFFVideoSource::handle_frame()
   }
 
   next_frame = pos+1;
+  return pos;
 }
 
 void VDFFVideoSource::alloc_direct_buffer()
@@ -1169,6 +1266,24 @@ void VDFFVideoSource::alloc_direct_buffer()
   BufferPage* page = frame_array[pos];
   open_write(page);
   cfhd_set_buffer(m_pCodecCtx,align_buf(page->p));
+}
+
+void VDFFVideoSource::free_buffers()
+{
+  {for(int i=0; i<buffer_count; i++){
+    BufferPage& page = buffer[i];
+    frame_array[page.target] = 0;
+    page.refs = 0;
+    page.access = 0;
+    page.target = 0;
+  }}
+
+  dead_range_start = -1;
+  dead_range_end = -1;
+  first_frame = 0;
+  last_frame = 0;
+  used_frames = 0;
+  next_frame = -1;
 }
 
 void VDFFVideoSource::alloc_page(int pos)
