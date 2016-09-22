@@ -911,6 +911,78 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     #ifdef FFDEBUG
     flags |= SWS_PRINT_INFO;
     #endif
+
+    int proxy_max_value = 0;
+    AVPixelFormat proxy_fmt = AV_PIX_FMT_NONE;
+    switch(src_fmt){
+    case AV_PIX_FMT_GBRP9LE:
+      proxy_max_value = 0x01FF;
+      proxy_fmt = AV_PIX_FMT_GBRP16LE;
+      break;
+    case AV_PIX_FMT_GBRP10LE:
+      proxy_max_value = 0x03FF;
+      proxy_fmt = AV_PIX_FMT_GBRP16LE;
+      break;
+    case AV_PIX_FMT_GBRP12LE:
+      proxy_max_value = 0x0FFF;
+      proxy_fmt = AV_PIX_FMT_GBRP16LE;
+      break;
+    case AV_PIX_FMT_GBRP14LE:
+      proxy_max_value = 0x0FFF;
+      proxy_fmt = AV_PIX_FMT_GBRP16LE;
+      break;
+    case AV_PIX_FMT_GBRP16LE:
+      proxy_max_value = 0xFFFF;
+      proxy_fmt = AV_PIX_FMT_GBRP16LE;
+      break;
+
+    case AV_PIX_FMT_GBRP9BE:
+      proxy_max_value = 0x01FF;
+      proxy_fmt = AV_PIX_FMT_GBRP16BE;
+      break;
+    case AV_PIX_FMT_GBRP10BE:
+      proxy_max_value = 0x03FF;
+      proxy_fmt = AV_PIX_FMT_GBRP16BE;
+      break;
+    case AV_PIX_FMT_GBRP12BE:
+      proxy_max_value = 0x0FFF;
+      proxy_fmt = AV_PIX_FMT_GBRP16BE;
+      break;
+    case AV_PIX_FMT_GBRP14BE:
+      proxy_max_value = 0x0FFF;
+      proxy_fmt = AV_PIX_FMT_GBRP16BE;
+      break;
+    case AV_PIX_FMT_GBRP16BE:
+      proxy_max_value = 0xFFFF;
+      proxy_fmt = AV_PIX_FMT_GBRP16BE;
+      break;
+
+    case AV_PIX_FMT_GBRAP12LE:
+      proxy_max_value = 0x0FFF;
+      proxy_fmt = AV_PIX_FMT_GBRAP16LE;
+      break;
+    case AV_PIX_FMT_GBRAP16LE:
+      proxy_max_value = 0xFFFF;
+      proxy_fmt = AV_PIX_FMT_GBRAP16LE;
+      break;
+
+    case AV_PIX_FMT_GBRAP12BE:
+      proxy_max_value = 0x0FFF;
+      proxy_fmt = AV_PIX_FMT_GBRAP16BE;
+      break;
+    case AV_PIX_FMT_GBRAP16BE:
+      proxy_max_value = 0xFFFF;
+      proxy_fmt = AV_PIX_FMT_GBRAP16BE;
+      break;
+    }
+    if(proxy_fmt!=AV_PIX_FMT_NONE){
+      m_pixmap_info.ref_r = proxy_max_value;
+      m_pixmap_info.ref_g = proxy_max_value;
+      m_pixmap_info.ref_b = proxy_max_value;
+      m_pixmap_info.ref_a = proxy_max_value;
+      src_fmt = proxy_fmt;
+    }
+
     m_pSwsCtx = sws_getContext(w, h, src_fmt, w, h, convertInfo.av_fmt, flags, 0, 0, 0);
     if(convertInfo.in_yuv && convertInfo.out_rgb){
       // range and color space only makes sence for yuv->rgb
