@@ -149,8 +149,8 @@ struct CodecBase{
 
   virtual void reset_config(){ config->clear(); }
 
-  virtual bool load_config(void* data, int size){
-    int rsize = config_size();
+  virtual bool load_config(void* data, size_t size){
+    size_t rsize = config_size();
     if(size!=rsize) return false;
     int src_version = *(int*)data;
     if(src_version!=config->version) return false;
@@ -532,6 +532,7 @@ void ConfigBase::init_bits()
     enable_10 = true;
     enable_12 = true;
     enable_14 = true;
+    enable_16 = codec->test_av_format(AV_PIX_FMT_GBRP16LE);
     break;
   case CodecBase::format_yuv420:
   case CodecBase::format_yuv422:
@@ -577,7 +578,7 @@ INT_PTR ConfigBase::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam){
 
     case IDC_COLORSPACE:
       if(HIWORD(wParam)==LBN_SELCHANGE){
-        codec->config->format = SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_GETCURSEL, 0, 0)+1;
+        codec->config->format = (int)SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_GETCURSEL, 0, 0)+1;
         change_format();
         return TRUE;
       }
@@ -720,7 +721,7 @@ INT_PTR ConfigHUFF::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
     case IDC_PREDICTION:
       if(HIWORD(wParam)==LBN_SELCHANGE){
         CodecHUFF::Config* config = (CodecHUFF::Config*)codec->config;
-        config->prediction = SendDlgItemMessage(mhdlg, IDC_PREDICTION, CB_GETCURSEL, 0, 0);
+        config->prediction = (int)SendDlgItemMessage(mhdlg, IDC_PREDICTION, CB_GETCURSEL, 0, 0);
         return TRUE;
       }
       break;
@@ -848,8 +849,8 @@ extern "C" LRESULT WINAPI VDDriverProc(DWORD_PTR dwDriverId, HDRVR hDriver, UINT
 
   case VDICM_COMPRESS_MATRIX_INFO:
     {
-      int colorSpaceMode = lParam1;
-      int colorRangeMode = lParam2;
+      int colorSpaceMode = (int)lParam1;
+      int colorRangeMode = (int)lParam2;
 
       switch(colorSpaceMode){
       case nsVDXPixmap::kColorSpaceMode_601:

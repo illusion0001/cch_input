@@ -3,6 +3,7 @@
 
 #include <vd2/plugin/vdplugin.h>
 #include <vd2/plugin/vdinputdriver.h>
+#include <string>
 #include "InputFile2.h"
 
 #ifdef _MSC_VER
@@ -39,8 +40,8 @@ bool VDXAPIENTRY ff_create_b(const VDXInputDriverContext *pContext, IVDXInputFil
 }
 
 #define option_a_init L"FFMpeg (select formats)|*.mov;*.mp4;*.avi"
-wchar_t option_a[1024] = option_a_init;
-wchar_t pattern_a[1024] = L""; // example "*.mov|*.mp4|*.avi"
+std::wstring option_a = option_a_init;
+std::wstring pattern_a; // example "*.mov|*.mp4|*.avi"
 
 VDXInputDriverDefinition ff_class_a={
   sizeof(VDXInputDriverDefinition),
@@ -52,14 +53,14 @@ VDXInputDriverDefinition ff_class_a={
   1, //priority, reset from options
   0, //SignatureLength
   0, //Signature
-  pattern_a,
-  option_a,
+  pattern_a.c_str(),
+  option_a.c_str(),
   L"ffmpeg_select",
   ff_create_a
 };
 
 #define option_b_init L"FFMpeg (all formats)|*.mov;*.mp4;*.avi"
-wchar_t option_b[1024] = option_b_init;
+std::wstring option_b = option_b_init;
 
 VDXInputDriverDefinition ff_class_b={
   sizeof(VDXInputDriverDefinition),
@@ -70,7 +71,7 @@ VDXInputDriverDefinition ff_class_b={
   0, //SignatureLength
   0, //Signature
   0,
-  option_b,
+  option_b.c_str(),
   L"ffmpeg_default",
   ff_create_b
 };
@@ -121,18 +122,18 @@ void loadConfig()
   int priority_b = GetPrivateProfileIntW(L"priority",L"default",ff_class_b.mPriority,buf);
 
   {
-    wcscpy(option_a,option_a_init);
-    wchar_t* mp = wcsrchr(option_a,'|');
-    wchar_t mask[1024];
-    GetPrivateProfileStringW(L"file_mask",L"select",mp+1,mask,1024,buf);
-    mp[1] = 0;
+    option_a = option_a_init;
+    int mp = option_a.rfind('|');
+    wchar_t mask[2048];
+    GetPrivateProfileStringW(L"file_mask",L"select",&option_a[mp+1],mask,2048,buf);
+    option_a.resize(mp+1);
 
     int p = 0;
     int n = wcslen(mask);
-    pattern_a[0] = 0;
+    pattern_a = L"";
     int count1 = 0;
     int count2 = 0;
-    while(p<n && p<512){
+    while(p<n){
       int p1 = n;
       wchar_t* p2 = wcschr(mask+p,';');
       if(p2 && p2-mask<p1) p1 = p2-mask;
@@ -142,40 +143,45 @@ void loadConfig()
       if(wcsncmp(mask+p,L"*.mp4",5)==0) skip = true;
       if(wcsncmp(mask+p,L"*.mov",5)==0) skip = true;
 
-      if(count1) wcscat(option_a,L";");
-      wcsncat(option_a,mask+p,p1-p);
+      if(count1) option_a += L";";
+      option_a += std::wstring(mask+p,p1-p);
 
       if(!skip){
-        if(count2) wcscat(pattern_a,L"|");
-        wcsncat(pattern_a,mask+p,p1-p);
+        if(count2) pattern_a += L"|";
+        pattern_a += std::wstring(mask+p,p1-p);
       }
       p = p1+1;
       count1++;
       count2++;
     }
+
+    ff_class_a.mpFilenameDetectPattern = pattern_a.c_str();
+    ff_class_a.mpFilenamePattern = option_a.c_str();
   }
 
   {
-    wcscpy(option_b,option_b_init);
-    wchar_t* mp = wcsrchr(option_b,'|');
-    wchar_t mask[1024];
-    GetPrivateProfileStringW(L"file_mask",L"default",mp+1,mask,1024,buf);
-    mp[1] = 0;
+    option_b = option_b_init;
+    int mp = option_b.rfind('|');
+    wchar_t mask[2048];
+    GetPrivateProfileStringW(L"file_mask",L"default",&option_b[mp+1],mask,2048,buf);
+    option_b.resize(mp+1);
 
     int p = 0;
     int n = wcslen(mask);
     int count1 = 0;
-    while(p<n && p<512){
+    while(p<n){
       int p1 = n;
       wchar_t* p2 = wcschr(mask+p,';');
       if(p2 && p2-mask<p1) p1 = p2-mask;
 
-      if(count1) wcscat(option_b,L";");
-      wcsncat(option_b,mask+p,p1-p);
+      if(count1) option_b += L";";
+      option_b += std::wstring(mask+p,p1-p);
 
       p = p1+1;
       count1++;
     }
+
+    ff_class_b.mpFilenamePattern = option_b.c_str();
   }
 
   if(priority_a==priority_b){
