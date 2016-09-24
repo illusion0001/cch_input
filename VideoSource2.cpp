@@ -217,7 +217,11 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   int ft_size = sample_count;
   frame_type = (char*)malloc(ft_size);
   memset(frame_type,' ',ft_size);
-  frame_size = av_image_get_buffer_size(m_pCodecCtx->pix_fmt, m_pCodecCtx->width, m_pCodecCtx->height, line_align);
+
+  frame_fmt = m_pCodecCtx->pix_fmt;
+  frame_width = m_pCodecCtx->width;
+  frame_height = m_pCodecCtx->height;
+  frame_size = av_image_get_buffer_size(frame_fmt, frame_width, frame_height, line_align);
 
   #ifndef _WIN64
   uint64_t max_heap = 0x20000000;
@@ -456,6 +460,11 @@ const void* VDFFVideoSource::DecodeFrame(const void* inputBuffer, uint32_t data_
     mContext.mpCallbacks->SetError("Cache overflow: set \"Performance \\ Video buffering\" to 32 or less");
     return 0;
   }
+  if(page->error==BufferPage::err_badformat){
+    mContext.mpCallbacks->SetError("Frame format is incompatible");
+    return 0;
+  }
+
   open_read(page);
   uint8_t* src = align_buf(page->p);
 
@@ -468,7 +477,7 @@ const void* VDFFVideoSource::DecodeFrame(const void* inputBuffer, uint32_t data_
     int h = m_pixmap.h;
 
     AVFrame pic = {0};
-    av_image_fill_arrays(pic.data, pic.linesize, src, m_pCodecCtx->pix_fmt, w, h, line_align);
+    av_image_fill_arrays(pic.data, pic.linesize, src, frame_fmt, w, h, line_align);
     if(flip_image){
       pic.data[0] = pic.data[0] + pic.linesize[0]*(h-1);
       pic.linesize[0] = -pic.linesize[0];
@@ -578,8 +587,8 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   VDXPixmapFormat base_format = kPixFormat_Null;
   VDXPixmapFormat trigger = kPixFormat_Null;
   VDXPixmapFormat perfect_format = kPixFormat_Null;
-  AVPixelFormat perfect_av_fmt = m_pCodecCtx->pix_fmt;
-  AVPixelFormat src_fmt = m_pCodecCtx->pix_fmt;
+  AVPixelFormat perfect_av_fmt = frame_fmt;
+  AVPixelFormat src_fmt = frame_fmt;
   bool perfect_bitexact = false;
   bool skip_colorspace = false;
 
@@ -589,11 +598,11 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   convertInfo.out_rgb = false;
   convertInfo.out_garbage = false;
 
-  const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(m_pCodecCtx->pix_fmt);
+  const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(frame_fmt);
   convertInfo.in_yuv = !(desc->flags & AV_PIX_FMT_FLAG_RGB) && desc->nb_components >= 3;
   convertInfo.in_subs = convertInfo.in_yuv && (desc->log2_chroma_w+desc->log2_chroma_h)>0;
 
-  switch(m_pCodecCtx->pix_fmt){
+  switch(frame_fmt){
   case AV_PIX_FMT_YUV420P:
   case AV_PIX_FMT_YUVJ420P:
     src_fmt = AV_PIX_FMT_YUV420P;
@@ -1320,15 +1329,28 @@ int VDFFVideoSource::handle_frame()
     frame_type[pos] = av_get_picture_type_char(frame->pict_type);
     BufferPage* page = frame_array[pos];
     open_write(page);
+    page->error = 0;
 
-    uint8_t* dst = align_buf(page->p);
-    av_image_copy_to_buffer(dst, frame_size, frame->data, frame->linesize, (AVPixelFormat)frame->format, frame->width, frame->height, line_align);
+    if(check_frame_format()){
+      uint8_t* dst = align_buf(page->p);
+      av_image_copy_to_buffer(dst, frame_size, frame->data, frame->linesize, (AVPixelFormat)frame->format, frame->width, frame->height, line_align);
+    } else {
+      page->error = BufferPage::err_badformat;
+    }
   } else if(direct_buffer){
     frame_type[pos] = av_get_picture_type_char(frame->pict_type);
   }
 
   next_frame = pos+1;
   return pos;
+}
+
+bool VDFFVideoSource::check_frame_format()
+{
+  if(frame->format!=frame_fmt) return false;
+  if(frame->width!=frame_width) return false;
+  if(frame->height!=frame_height) return false;
+  return true;
 }
 
 void VDFFVideoSource::alloc_direct_buffer()

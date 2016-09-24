@@ -116,9 +116,14 @@ public:
   ErrorMode CurrentDecoderErrorMode;
 
   struct BufferPage{
+    enum {
+      err_badformat = 1
+    };
+
     int i;
     int target;
     int refs;
+    int error;
     volatile LONG access;
     void* map_base;
     uint8_t* p;
@@ -139,6 +144,10 @@ public:
   int used_frames;
   int keyframe_gap;
   int fw_seek_threshold;
+
+  AVPixelFormat frame_fmt;
+  int frame_width;
+  int frame_height;
   int frame_size;
 
   bool flip_image;
@@ -157,6 +166,7 @@ public:
   int	 initStream(VDFFInputFile* pSource, int indexStream);
   void set_pixmap_layout(uint8_t* p);
   int handle_frame();
+  bool check_frame_format();
   void set_start_time();
   bool read_frame(sint64 desired_frame, bool init=false);
   void alloc_direct_buffer();
