@@ -58,7 +58,7 @@ void VDFFInputFileInfoDialog::load_segment()
 
   const int buf_size = 80+MAX_PATH;
   wchar_t buf[buf_size];
-  swprintf(buf,buf_size,L"Segment %d of %d: %s",segment_pos+1,segment_count,name);
+  swprintf(buf,buf_size,L"Segment %d of %d: %ls",segment_pos+1,segment_count,name);
   SetDlgItemTextW(mhdlg, IDC_SEGMENT, buf);
 
   int end_frame = start_frame;

@@ -34,7 +34,7 @@ bool exportSaveFile(HWND hwnd, wchar_t* path, int max_path) {
 
   wchar_t filter[256];
   wchar_t* p = wcsrchr(path,'.');
-  swprintf(filter,256,L"Same as source (*%s)",p);
+  swprintf(filter,256,L"Same as source (*%ls)",p);
   size_t n = wcslen(filter)+1;
   filter[n] = '*'; n++;
   filter[n] = 0; wcscat(filter+n,p); n+=wcslen(p);
