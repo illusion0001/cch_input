@@ -122,7 +122,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
 
   AVRational tb = m_pStreamCtx->time_base;
   AVRational fr = av_stream_get_r_frame_rate(m_pStreamCtx);
-  av_reduce(&time_base.num, &time_base.den, fr.num*tb.num, fr.den*tb.den, INT_MAX);
+  av_reduce(&time_base.num, &time_base.den, int64_t(fr.num)*tb.num, int64_t(fr.den)*tb.den, INT_MAX);
 
   if(m_pStreamCtx->duration == AV_NOPTS_VALUE){
     if(m_pFormatCtx->duration == AV_NOPTS_VALUE){
