@@ -33,7 +33,7 @@ bool exportSaveFile(HWND hwnd, wchar_t* path, int max_path) {
   ofn.hwndOwner = hwnd;
 
   wchar_t filter[256];
-  wchar_t* p = wcsrchr(path,'.');
+  const wchar_t* p = wcsrchr(path,'.'); if(!p) p = L".";
   swprintf(filter,256,L"Same as source (*%ls)",p);
   size_t n = wcslen(filter)+1;
   filter[n] = '*'; n++;
@@ -70,10 +70,14 @@ bool VDXAPIENTRY VDFFInputFile::ExecuteExport(int id, VDXHWND parent, IProjectSt
 
     wchar_t* p = wcsrchr(path,'.');
     wchar_t path2[MAX_PATH];
-    wcsncpy(path2,path,p-path);
-    path2[p-path] = 0;
+    if(p){
+      wcsncpy(path2,path,p-path);
+      path2[p-path] = 0;
+    } else {
+      wcscpy(path2,path);
+    }
     wcscat(path2,L"-01");
-    wcscat(path2,p);
+    if(p) wcscat(path2,p);
     if(!exportSaveFile((HWND)parent,path2,MAX_PATH)) return false;
 
     const int ff_path_size = MAX_PATH*4; // utf8, worst case
@@ -81,6 +85,12 @@ bool VDXAPIENTRY VDFFInputFile::ExecuteExport(int id, VDXHWND parent, IProjectSt
     widechar_to_utf8(ff_path, ff_path_size, path);
     char out_ff_path[ff_path_size];
     widechar_to_utf8(out_ff_path, ff_path_size, path2);
+
+    AVOutputFormat* oformat = av_guess_format(0, out_ff_path, 0);
+    if(!oformat){
+      MessageBox((HWND)parent,"Unable to find a suitable output format","Stream copy",MB_ICONSTOP|MB_OK);
+      return false;
+    }
 
     AVFormatContext* fmt = 0;
     AVFormatContext* ofmt = 0;
@@ -100,8 +110,8 @@ bool VDXAPIENTRY VDFFInputFile::ExecuteExport(int id, VDXHWND parent, IProjectSt
     err = avformat_find_stream_info(fmt, 0);
     if(err<0) goto end;
 
-    avformat_alloc_output_context2(&ofmt, 0, 0, out_ff_path);
-    if(!ofmt){ err=AVERROR_UNKNOWN; goto end; }
+    err = avformat_alloc_output_context2(&ofmt, 0, 0, out_ff_path);
+    if(err<0) goto end;
 
     video = video_source->m_streamIndex;
     if(audio_source)
