@@ -141,6 +141,7 @@ public:
   int next_frame;
   int first_frame;
   int last_frame;
+  int last_seek_frame;
   int used_frames;
   int keyframe_gap;
   int fw_seek_threshold;
@@ -152,6 +153,7 @@ public:
 
   bool flip_image;
   bool trust_index;
+  bool sparse_index;
   bool direct_buffer;
   bool is_image_list;
   bool copy_mode;

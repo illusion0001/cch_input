@@ -8,7 +8,7 @@
 
 #include <string>
 
-static const char* vsnstr = "Version 1.10";
+static const char* vsnstr = "Version 1.11";
 
 extern HINSTANCE hInstance;
  
@@ -380,7 +380,7 @@ void VDFFInputFileInfoDialog::print_performance()
     {for(int i=0; i<v1->buffer_count; i++)
       if(v1->buffer[i].refs) buf_count++; }
 
-    if(!v1->trust_index) trust_index = false;
+    if(!v1->trust_index && !v1->sparse_index) trust_index = false;
     if(v1->keyframe_gap!=1) all_key = false;
 
     f1 = f1->next_segment;

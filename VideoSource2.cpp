@@ -30,6 +30,7 @@ VDFFVideoSource::VDFFVideoSource(const VDXInputDriverContext& context)
   m_pixmap_data = 0;
   m_pixmap_frame = -1;
   next_frame = -1;
+  last_seek_frame = -1;
   frame_array = 0;
   frame_type = 0;
   flip_image = false;
@@ -145,21 +146,22 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   if(pSource->is_image){
     is_image_list = true;
     trust_index = false;
+    sparse_index = false;
     keyframe_gap = 1;
     fw_seek_threshold = 0;
 
   } else {
+    if(m_pStreamCtx->nb_index_entries<2){
+      av_seek_frame(m_pFormatCtx,m_streamIndex,m_pStreamCtx->duration,AVSEEK_FLAG_BACKWARD);
+      av_seek_frame(m_pFormatCtx,m_streamIndex,m_pStreamCtx->start_time,AVSEEK_FLAG_BACKWARD);
+    }
     trust_index = false;
+    sparse_index = false;
     if(m_pStreamCtx->nb_index_entries>2 && abs(m_pStreamCtx->nb_index_entries - sample_count)<2){
       // hopefully there is index with useful timestamps
       sample_count = m_pStreamCtx->nb_index_entries;
       trust_index = true;
     }
-    /*
-    if(m_pFormatCtx->iformat->flags & AVFMT_GENERIC_INDEX){
-      // generic index only ever collects keyframes, useless
-      trust_index = false;
-    }*/
 
     keyframe_gap = 0;
     if(trust_index){
@@ -171,6 +173,20 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
         } else d++;
       }}
       if(d>keyframe_gap) keyframe_gap = d;
+    } else if(m_pStreamCtx->nb_index_entries>1){
+      sparse_index = true;
+      int p0 = 0;
+      {for(int i=0; i<m_pStreamCtx->nb_index_entries; i++){
+        if(m_pStreamCtx->index_entries[i].flags & AVINDEX_KEYFRAME){
+          int64_t ts = m_pStreamCtx->index_entries[i].timestamp;
+          ts -= m_pStreamCtx->start_time;
+          int rndd = time_base.den/2;
+          int pos = int((ts*time_base.num + rndd) / time_base.den);
+          int d = pos-p0;
+          p0 = pos;
+          if(d>keyframe_gap) keyframe_gap = d;
+        }
+      }}
     }
   }
 
@@ -387,6 +403,17 @@ bool VDFFVideoSource::IsKey(int64_t sample)
 
   if(trust_index){
     return (m_pStreamCtx->index_entries[sample].flags & AVINDEX_KEYFRAME)!=0;
+  }
+  if(sparse_index){
+    int64_t pos1 = sample*time_base.den / time_base.num + start_time;
+    int x = av_index_search_timestamp(m_pStreamCtx,pos1,AVSEEK_FLAG_BACKWARD);
+    if(x==-1) return false;
+    int64_t ts = m_pStreamCtx->index_entries[x].timestamp;
+    ts -= start_time;
+    int rndd = time_base.den/2;
+    int pos = int((ts*time_base.num + rndd) / time_base.den);
+    if(pos==sample) return true;
+    return false;
   }
 
   return true;
@@ -1151,11 +1178,14 @@ bool VDFFVideoSource::Read(sint64 start, uint32 lCount, void *lpBuffer, uint32 c
       mContext.mpCallbacks->SetError("requested frame not found; next valid frame = %d", next_frame-1);
       return false;
     }
-    int64_t pos = jump*time_base.den / time_base.num + start_time;
-    if(jump==0 && pos>0) pos = 0;
-    avcodec_flush_buffers(m_pCodecCtx);
-    av_seek_frame(m_pFormatCtx,m_streamIndex,pos,AVSEEK_FLAG_BACKWARD);
-    if(is_image_list) next_frame = jump; else next_frame = -1;
+    if(jump!=last_seek_frame){
+      last_seek_frame = jump;
+      int64_t pos = jump*time_base.den / time_base.num + start_time;
+      if(jump==0 && pos>0) pos = 0;
+      avcodec_flush_buffers(m_pCodecCtx);
+      av_seek_frame(m_pFormatCtx,m_streamIndex,pos,AVSEEK_FLAG_BACKWARD);
+      if(is_image_list) next_frame = jump; else next_frame = -1;
+    }
   }
 
   while(1){
@@ -1311,6 +1341,8 @@ int VDFFVideoSource::handle_frame()
       pos = next_frame;
     }
   }
+
+  if(pos>last_seek_frame) last_seek_frame = -1;
 
   if(next_frame!=-1 && pos>next_frame){
     // gap between frames, fill with dups
