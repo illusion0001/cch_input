@@ -3,6 +3,7 @@
 #include "VideoSource2.h"
 #include "AudioSource2.h"
 #include "cineform.h"
+#include <string>
 #include <windows.h>
 #include <commdlg.h>
 
@@ -32,12 +33,15 @@ bool exportSaveFile(HWND hwnd, wchar_t* path, int max_path) {
   ofn.lStructSize = sizeof(ofn);
   ofn.hwndOwner = hwnd;
 
+  std::wstring ext;
+  const wchar_t* p = wcsrchr(path,'.');
+  if(p) ext = p; else ext = L".";
+
   wchar_t filter[256];
-  const wchar_t* p = wcsrchr(path,'.'); if(!p) p = L".";
-  swprintf(filter,256,L"Same as source (*%ls)",p);
+  swprintf(filter,256,L"Same as source (*%ls)",ext.c_str());
   size_t n = wcslen(filter)+1;
   filter[n] = '*'; n++;
-  filter[n] = 0; wcscat(filter+n,p); n+=wcslen(p);
+  filter[n] = 0; wcscat(filter+n,ext.c_str()); n+=ext.length();
   filter[n] = 0; n++;
   const wchar_t filter2[] = L"All files (*.*)\0*.*\0";
   memcpy(filter+n,filter2,sizeof(filter2));
@@ -51,7 +55,7 @@ bool exportSaveFile(HWND hwnd, wchar_t* path, int max_path) {
   if (GetSaveFileNameW(&ofn)){
     wcscpy(path,szFile);
     wchar_t* p1 = wcsrchr(szFile,'.');
-    if(!p1) wcscat(path,p);
+    if(!p1) wcscat(path,ext.c_str());
     return true;
   }
 

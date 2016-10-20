@@ -157,7 +157,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
     }
     trust_index = false;
     sparse_index = false;
-    if(m_pStreamCtx->nb_index_entries>2 && abs(m_pStreamCtx->nb_index_entries - sample_count)<2){
+    if(m_pStreamCtx->nb_index_entries>2 && abs(m_pStreamCtx->nb_index_entries - sample_count)<3){
       // hopefully there is index with useful timestamps
       sample_count = m_pStreamCtx->nb_index_entries;
       trust_index = true;
@@ -1174,6 +1174,9 @@ bool VDFFVideoSource::Read(sint64 start, uint32 lCount, void *lpBuffer, uint32 c
   if(!trust_index && jump>next_frame+fw_seek_threshold || jump<next_frame){
     // required to seek
     if(jump>=dead_range_start && jump<=dead_range_end){
+      // just skip prefetching
+      if(frame_array[start]) return true;
+
       // we already known this does not work so fail fast
       mContext.mpCallbacks->SetError("requested frame not found; next valid frame = %d", next_frame-1);
       return false;
@@ -1344,7 +1347,7 @@ int VDFFVideoSource::handle_frame()
 
   if(pos>last_seek_frame) last_seek_frame = -1;
 
-  if(next_frame!=-1 && pos>next_frame){
+  if(next_frame>0 && pos>next_frame){
     // gap between frames, fill with dups
     // caused by non-constant framerate etc
     BufferPage* page = frame_array[next_frame-1];
