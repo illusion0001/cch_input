@@ -6,6 +6,12 @@
 #include <string>
 #include <windows.h>
 #include <commdlg.h>
+#include <commctrl.h>
+#include "resource.h"
+
+#pragma warning(disable:4996)
+
+extern HINSTANCE hInstance;
 
 void utf8_to_widechar(wchar_t *dst, int max_dst, const char *src);
 void widechar_to_utf8(char *dst, int max_dst, const wchar_t *src);
@@ -62,6 +68,124 @@ bool exportSaveFile(HWND hwnd, wchar_t* path, int max_path) {
   return false;
 }
 
+struct ProgressDialog: public VDXVideoFilterDialog{
+public:
+  bool abort;
+  DWORD dwLastTime;
+  int mSparseCount;
+  int mSparseInterval;
+  int64_t current_bytes;
+  double current_pos;
+  bool changed;
+  HWND parent;
+
+  ProgressDialog(){ 
+    abort=false; mSparseCount=1; mSparseInterval=1; 
+    current_bytes=0;
+    current_pos=0;
+    changed=false;
+  }
+  ~ProgressDialog(){ Close(); }
+  void Show(HWND parent);
+  void Close();
+  virtual INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam);
+  void init_bytes(int64_t bytes);
+  void init_pos(double p);
+  HWND getHwnd(){ return mhdlg; }
+  void check();
+};
+
+void ProgressDialog::Show(HWND parent){
+  this->parent = parent;
+  VDXVideoFilterDialog::ShowModeless(hInstance, MAKEINTRESOURCE(IDD_EXPORT_PROGRESS), parent);
+}
+
+void ProgressDialog::Close(){
+  EnableWindow(parent,true);
+  DestroyWindow(mhdlg);
+}
+
+INT_PTR ProgressDialog::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam){
+  switch(msg){
+  case WM_INITDIALOG:
+    {
+      EnableWindow(parent,false);
+      dwLastTime = GetTickCount();
+      init_bytes(0);
+      SendMessage(GetDlgItem(mhdlg, IDC_EXPORT_PROGRESS), PBM_SETRANGE, 0, MAKELPARAM(0, 16384));
+      SetTimer(mhdlg, 1, 500, NULL);
+      return true;
+    }
+  case WM_COMMAND:
+    switch(LOWORD(wParam)){
+    case IDCANCEL:
+      abort = true;
+      return TRUE;
+    }
+    return TRUE;
+    case WM_TIMER:
+      if(changed){
+        init_bytes(current_bytes);
+        init_pos(current_pos);
+        changed=false;
+      }
+      return TRUE;
+  }
+
+  return FALSE;
+}
+
+void ProgressDialog::init_bytes(int64_t bytes){
+  double n = double(bytes);
+  const char* x = "K";
+  n = n/1024;
+  if(n/1024>8){
+    n = n/1024;
+    x = "M";
+  }
+  if(n/1024>8){
+    n = n/1024;
+    x = "G";
+  }
+  char buf[1024];
+  sprintf(buf,"%5.2f%s bytes copied",n,x);
+  SetDlgItemText(mhdlg,IDC_EXPORT_STATE,buf);
+}
+
+void ProgressDialog::init_pos(double p){
+  if(p<0) p=0;
+  if(p>1) p=1;
+  int v = int(p*16384);
+  SendMessage(GetDlgItem(mhdlg, IDC_EXPORT_PROGRESS), PBM_SETPOS, v, 0);
+}
+
+void ProgressDialog::check(){
+  MSG msg;
+
+  if (--mSparseCount)
+    return;
+
+  DWORD dwTime = GetTickCount();
+
+  mSparseCount = mSparseInterval;
+
+  if (dwTime < dwLastTime + 50) {
+    ++mSparseInterval;
+  } else if (dwTime > dwLastTime + 150) {
+    if (mSparseInterval>1)
+      --mSparseInterval;
+  }
+
+  dwLastTime = dwTime;
+
+  while(PeekMessage(&msg, 0, 0, 0, PM_REMOVE)) {
+    if (!IsDialogMessage(mhdlg, &msg)) {
+      TranslateMessage(&msg);
+      DispatchMessage(&msg);
+    }
+  }
+}
+
 bool VDXAPIENTRY VDFFInputFile::ExecuteExport(int id, VDXHWND parent, IProjectState* state)
 {
   if(id==0){
@@ -96,6 +220,9 @@ bool VDXAPIENTRY VDFFInputFile::ExecuteExport(int id, VDXHWND parent, IProjectSt
       return false;
     }
 
+    ProgressDialog progress;
+    progress.Show((HWND)parent);
+
     AVFormatContext* fmt = 0;
     AVFormatContext* ofmt = 0;
     bool v_end;
@@ -103,6 +230,7 @@ bool VDXAPIENTRY VDFFInputFile::ExecuteExport(int id, VDXHWND parent, IProjectSt
     int64_t vt_end=-1;
     int64_t at_end=-1;
     int64_t pos0,pos1;
+    int64_t a_bias = 0;
     int video = -1;
     int audio = -1;
     AVStream* out_video=0;
@@ -183,11 +311,12 @@ bool VDXAPIENTRY VDFFInputFile::ExecuteExport(int id, VDXHWND parent, IProjectSt
 
     v_end = out_video==0;
     a_end = out_audio==0;
-    int64_t a_bias = 0;
     if(out_audio) a_bias = av_rescale_q(pos0,fmt->streams[video]->time_base,fmt->streams[audio]->time_base);
 
     while(1){
       if(v_end && a_end) break;
+      progress.check();
+      if(progress.abort) break;
 
       AVPacket pkt;
       err = av_read_frame(fmt, &pkt);
@@ -202,6 +331,7 @@ bool VDXAPIENTRY VDFFInputFile::ExecuteExport(int id, VDXHWND parent, IProjectSt
         if(vt_end!=-1 && t>=vt_end) v_end=true; else out_stream = out_video;
         if(pkt.pts!=AV_NOPTS_VALUE) pkt.pts -= pos0;
         if(pkt.dts!=AV_NOPTS_VALUE) pkt.dts -= pos0;
+        progress.current_pos = (double(t)-pos0)/(pos1-pos0);
       }
       if(pkt.stream_index==audio){
         if(at_end!=-1 && t>=at_end) a_end=true; else out_stream = out_audio;
@@ -211,11 +341,17 @@ bool VDXAPIENTRY VDFFInputFile::ExecuteExport(int id, VDXHWND parent, IProjectSt
       }
 
       if(out_stream){
+        int64_t size = pkt.size;
         av_packet_rescale_ts(&pkt,in_stream->time_base,out_stream->time_base);
         pkt.pos = -1;
         pkt.stream_index = out_stream->index;
         err = av_interleaved_write_frame(ofmt, &pkt);
-        if(err<0) break;
+        if(err<0){
+          av_packet_unref(&pkt);
+          break;
+        }
+        progress.current_bytes += size;
+        progress.changed = true;
       }
 
       av_packet_unref(&pkt);
@@ -234,10 +370,10 @@ end:
       av_strerror(err,buf2,1024);
       strcpy(buf,"Operation failed.\nInternal error (FFMPEG): ");
       strcat(buf,buf2);
-      MessageBox((HWND)parent,buf,"Stream copy",MB_ICONSTOP|MB_OK);
+      MessageBox(progress.getHwnd(),buf,"Stream copy",MB_ICONSTOP|MB_OK);
       return false;
-    } else {
-      MessageBox((HWND)parent,"Operation completed successfully.","Stream copy",MB_OK);
+    } else if(!progress.abort){
+      MessageBox(progress.getHwnd(),"Operation completed successfully.","Stream copy",MB_OK);
       return true;
     }
   }
