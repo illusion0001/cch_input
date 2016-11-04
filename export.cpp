@@ -183,6 +183,8 @@ bool VDXAPIENTRY VDFFInputFile::ExecuteExport(int id, VDXHWND parent, IProjectSt
 
     v_end = out_video==0;
     a_end = out_audio==0;
+    int64_t a_bias = 0;
+    if(out_audio) a_bias = av_rescale_q(pos0,fmt->streams[video]->time_base,fmt->streams[audio]->time_base);
 
     while(1){
       if(v_end && a_end) break;
@@ -198,10 +200,14 @@ bool VDXAPIENTRY VDFFInputFile::ExecuteExport(int id, VDXHWND parent, IProjectSt
       AVStream* out_stream = 0;
       if(pkt.stream_index==video){
         if(vt_end!=-1 && t>=vt_end) v_end=true; else out_stream = out_video;
+        if(pkt.pts!=AV_NOPTS_VALUE) pkt.pts -= pos0;
+        if(pkt.dts!=AV_NOPTS_VALUE) pkt.dts -= pos0;
       }
       if(pkt.stream_index==audio){
         if(at_end!=-1 && t>=at_end) a_end=true; else out_stream = out_audio;
         out_stream = out_audio;
+        if(pkt.pts!=AV_NOPTS_VALUE) pkt.pts -= a_bias;
+        if(pkt.dts!=AV_NOPTS_VALUE) pkt.dts -= a_bias;
       }
 
       if(out_stream){

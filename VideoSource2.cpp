@@ -135,7 +135,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
       }
     } else {
       AVRational m;
-      av_reduce(&m.num, &m.den, fr.num, fr.den*AV_TIME_BASE, INT_MAX);
+      av_reduce(&m.num, &m.den, fr.num, int64_t(fr.den)*AV_TIME_BASE, INT_MAX);
       sample_count = (int)(m_pFormatCtx->duration * m.num/m.den);
     }
   } else {
