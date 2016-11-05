@@ -196,17 +196,20 @@ bool VDXAPIENTRY VDFFInputFile::ExecuteExport(int id, VDXHWND parent, IProjectSt
       end = video_source->sample_count;
     }
 
-    wchar_t* p = wcsrchr(path,'.');
+    wchar_t* ext0 = wcsrchr(path,'.');
     wchar_t path2[MAX_PATH];
-    if(p){
-      wcsncpy(path2,path,p-path);
-      path2[p-path] = 0;
+    if(ext0){
+      wcsncpy(path2,path,ext0-path);
+      path2[ext0-path] = 0;
     } else {
       wcscpy(path2,path);
     }
     wcscat(path2,L"-01");
-    if(p) wcscat(path2,p);
+    if(ext0) wcscat(path2,ext0);
     if(!exportSaveFile((HWND)parent,path2,MAX_PATH)) return false;
+
+    wchar_t* ext1 = wcsrchr(path2,'.');
+    bool same_format = wcscmp(ext0,ext1)==0;
 
     const int ff_path_size = MAX_PATH*4; // utf8, worst case
     char ff_path[ff_path_size];
@@ -261,7 +264,9 @@ bool VDXAPIENTRY VDFFInputFile::ExecuteExport(int id, VDXHWND parent, IProjectSt
 
       err = avcodec_copy_context(out_stream->codec, in_stream->codec);
       if(err<0) goto end;
-      out_stream->codec->codec_tag = 0;
+      // wtf! must reset codec_tag for some codecs (h264)
+      // some other tags get lost here (ap4h)
+      if(!same_format) out_stream->codec->codec_tag = 0;
       if(ofmt->oformat->flags & AVFMT_GLOBALHEADER)
         out_stream->codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 
