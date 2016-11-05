@@ -61,7 +61,6 @@ int detect_avi(const void *pHeader, int32_t nHeaderSize)
   if(sh.fccType==streamtypeVIDEO){
     init_av();
     bool have_codec = false;
-    AVCodecTag* tag = (AVCodecTag*)avformat_get_riff_video_tags();
     DWORD h1 = sh.fccHandler;
     DWORD h2 = sh.fccHandler;
     char* ch2 = (char*)(&h2);
@@ -70,13 +69,44 @@ int detect_avi(const void *pHeader, int32_t nHeaderSize)
       if(v>='a' && v<='z') ch2[i] = v+'A'-'a';
     }}
 
-    while(tag->id!=AV_CODEC_ID_NONE){
-      if(tag->tag==h1 || tag->tag==h2){
+    // skip internally supported formats
+    if(h1==MKTAG('U', 'Y', 'V', 'Y')) return -1;
+    if(h1==MKTAG('Y', 'U', 'Y', 'V')) return -1;
+    if(h1==MKTAG('Y', 'U', 'Y', '2')) return -1;
+    if(h1==MKTAG('Y', 'V', '2', '4')) return -1;
+    if(h1==MKTAG('Y', 'V', '1', '6')) return -1;
+    if(h1==MKTAG('Y', 'V', '1', '2')) return -1;
+    if(h1==MKTAG('I', '4', '2', '0')) return -1;
+    if(h1==MKTAG('I', 'Y', 'U', 'V')) return -1;
+    if(h1==MKTAG('Y', 'V', 'U', '9')) return -1;
+    if(h1==MKTAG('Y', '8', ' ', ' ')) return -1;
+    if(h1==MKTAG('Y', '8', '0', '0')) return -1;
+    if(h1==MKTAG('H', 'D', 'Y', 'C')) return -1;
+    if(h1==MKTAG('N', 'V', '1', '2')) return -1;
+
+    if(h1==MKTAG('v', '2', '1', '0')) return -1;
+    if(h1==MKTAG('b', '6', '4', 'a')) return -1;
+    if(h1==MKTAG('B', 'R', 'A', 64)) return -1;
+    if(h1==MKTAG('P', '2', '1', '0')) return -1;
+    if(h1==MKTAG('P', '2', '1', '6')) return -1;
+
+    AVCodecTag* riff_tag = (AVCodecTag*)avformat_get_riff_video_tags();
+    while(riff_tag->id!=AV_CODEC_ID_NONE){
+      if(riff_tag->tag==h1 || riff_tag->tag==h2){
         have_codec = true;
         break;
       }
-      tag++;
+      riff_tag++;
     }
+    AVCodecTag* mov_tag = (AVCodecTag*)avformat_get_mov_video_tags();
+    while(mov_tag->id!=AV_CODEC_ID_NONE){
+      if(mov_tag->tag==h1 || mov_tag->tag==h2){
+        have_codec = true;
+        break;
+      }
+      mov_tag++;
+    }
+
     if(!have_codec) return -1;
   }
 
