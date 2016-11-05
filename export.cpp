@@ -27,6 +27,16 @@ bool VDXAPIENTRY VDFFInputFile::GetExportMenuInfo(int id, char* name, int name_s
   return false;
 }
 
+bool VDXAPIENTRY VDFFInputFile::GetExportCommandName(int id, char* name, int name_size)
+{
+  if(id==0){
+    strncpy(name,"Export.StreamCopy",name_size);
+    return true;
+  }
+
+  return false;
+}
+
 bool exportSaveFile(HWND hwnd, wchar_t* path, int max_path) {
   OPENFILENAMEW ofn = {0};
   wchar_t szFile[MAX_PATH];
@@ -38,6 +48,7 @@ bool exportSaveFile(HWND hwnd, wchar_t* path, int max_path) {
 
   ofn.lStructSize = sizeof(ofn);
   ofn.hwndOwner = hwnd;
+  ofn.lpstrTitle = L"Export Stream Copy";
 
   std::wstring ext;
   const wchar_t* p = wcsrchr(path,'.');

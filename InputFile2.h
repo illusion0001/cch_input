@@ -84,6 +84,7 @@ public:
   bool VDXAPIENTRY GetVideoSource(int index, IVDXVideoSource **);
   bool VDXAPIENTRY GetAudioSource(int index, IVDXAudioSource **);
   bool VDXAPIENTRY GetExportMenuInfo(int id, char* name, int name_size, bool* enabled);
+  bool VDXAPIENTRY GetExportCommandName(int id, char* name, int name_size);
   bool VDXAPIENTRY ExecuteExport(int id, VDXHWND parent, IProjectState* state);
 
 public:
