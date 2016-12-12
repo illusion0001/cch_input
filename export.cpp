@@ -102,6 +102,7 @@ public:
   virtual INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam);
   void init_bytes(int64_t bytes);
   void init_pos(double p);
+  void sync_state();
   HWND getHwnd(){ return mhdlg; }
   void check();
 };
@@ -135,15 +136,19 @@ INT_PTR ProgressDialog::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam){
     }
     return TRUE;
     case WM_TIMER:
-      if(changed){
-        init_bytes(current_bytes);
-        init_pos(current_pos);
-        changed=false;
-      }
+      sync_state();
       return TRUE;
   }
 
   return FALSE;
+}
+
+void ProgressDialog::sync_state(){
+  if(changed){
+    init_bytes(current_bytes);
+    init_pos(current_pos);
+    changed=false;
+  }
 }
 
 void ProgressDialog::init_bytes(int64_t bytes){
@@ -275,13 +280,36 @@ bool VDXAPIENTRY VDFFInputFile::ExecuteExport(int id, VDXHWND parent, IProjectSt
 
       err = avcodec_copy_context(out_stream->codec, in_stream->codec);
       if(err<0) goto end;
-      // wtf! must reset codec_tag for some codecs (h264)
-      // some other tags get lost here (ap4h)
-      if(!same_format) out_stream->codec->codec_tag = 0;
+
+      out_stream->codec->codec_tag = 0;
+      AVCodecID codec_id1 = av_codec_get_id(ofmt->oformat->codec_tag, in_stream->codec->codec_tag);
+      unsigned int codec_tag2;
+      int have_codec_tag2 = av_codec_get_tag2(ofmt->oformat->codec_tag, in_stream->codec->codec_id, &codec_tag2);
+      if(!ofmt->oformat->codec_tag || codec_id1==out_stream->codec->codec_id || !have_codec_tag2)
+        out_stream->codec->codec_tag = in_stream->codec->codec_tag;
+
       if(ofmt->oformat->flags & AVFMT_GLOBALHEADER)
         out_stream->codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 
+      out_stream->codec->bit_rate = in_stream->codec->bit_rate;
+      out_stream->codec->field_order = in_stream->codec->field_order;
+
+      uint64_t extra_size = (uint64_t)in_stream->codec->extradata_size + AV_INPUT_BUFFER_PADDING_SIZE;
+      if (in_stream->codec->extradata_size) {
+        out_stream->codec->extradata = (uint8_t*)av_mallocz(size_t(extra_size));
+        memcpy(out_stream->codec->extradata, in_stream->codec->extradata, in_stream->codec->extradata_size);
+      }
+      out_stream->codec->extradata_size = in_stream->codec->extradata_size;
+
+      out_stream->avg_frame_rate = in_stream->avg_frame_rate;
       out_stream->time_base = in_stream->time_base;
+      err = avformat_transfer_internal_stream_timing_info(ofmt->oformat, out_stream, in_stream, AVFMT_TBCF_AUTO);
+      if(err<0) goto end;
+
+      AVRational r = av_stream_get_r_frame_rate(in_stream);
+      av_stream_set_r_frame_rate(out_stream,r);
+      out_stream->avg_frame_rate = in_stream->avg_frame_rate;
+
       if(i==video) out_video = out_stream;
       if(i==audio) out_audio = out_stream;
     }}
@@ -379,6 +407,8 @@ end:
     avformat_close_input(&fmt);
     if(ofmt && !(ofmt->oformat->flags & AVFMT_NOFILE)) avio_closep(&ofmt->pb);
     avformat_free_context(ofmt);
+
+    progress.sync_state();
 
     if(err<0){
       char buf[1024];
