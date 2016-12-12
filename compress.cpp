@@ -59,16 +59,18 @@ void copy_rgb64(AVFrame* frame, const VDXPixmapLayout* layout, const void* data)
   }}
 }
 
-void copy_yuv8(AVFrame* frame, const VDXPixmapLayout* layout, const void* data)
+void copy_yuv(AVFrame* frame, const VDXPixmapLayout* layout, const void* data, int bpp)
 {
   int w2 = layout->w;
   int h2 = layout->h;
   switch(layout->format){
   case nsVDXPixmap::kPixFormat_YUV420_Planar:
+  case nsVDXPixmap::kPixFormat_YUV420_Planar16:
     w2 = (w2+1)/2;
     h2 = h2/2;
     break;
   case nsVDXPixmap::kPixFormat_YUV422_Planar:
+  case nsVDXPixmap::kPixFormat_YUV422_Planar16:
     w2 = (w2+1)/2;
     break;
   }
@@ -76,17 +78,17 @@ void copy_yuv8(AVFrame* frame, const VDXPixmapLayout* layout, const void* data)
   {for(int y=0; y<layout->h; y++){
     uint8* s = (uint8*)data + layout->data + layout->pitch*y;
     uint8* d = frame->data[0] + frame->linesize[0]*y;
-    memcpy(d,s,layout->w);
+    memcpy(d,s,layout->w*bpp);
   }}
   {for(int y=0; y<h2; y++){
     uint8* s = (uint8*)data + layout->data2 + layout->pitch2*y;
     uint8* d = frame->data[1] + frame->linesize[1]*y;
-    memcpy(d,s,w2);
+    memcpy(d,s,w2*bpp);
   }}
   {for(int y=0; y<h2; y++){
     uint8* s = (uint8*)data + layout->data3 + layout->pitch3*y;
     uint8* d = frame->data[2] + frame->linesize[2]*y;
-    memcpy(d,s,w2);
+    memcpy(d,s,w2*bpp);
   }}
 }
 
@@ -191,15 +193,42 @@ struct CodecBase{
     }
 
     if(config->format==format_yuv420){
-      return nsVDXPixmap::kPixFormat_YUV420_Planar;
+      if(config->bits==8){
+        return nsVDXPixmap::kPixFormat_YUV420_Planar;
+      }
+      if(config->bits>8){
+        int max_value = (1 << config->bits)-1;
+        if(info){
+          info->ref_r = max_value;
+        }
+        return nsVDXPixmap::kPixFormat_YUV420_Planar16;
+      }
     }
 
     if(config->format==format_yuv422){
-      return nsVDXPixmap::kPixFormat_YUV422_Planar;
+      if(config->bits==8){
+        return nsVDXPixmap::kPixFormat_YUV422_Planar;
+      }
+      if(config->bits>8){
+        int max_value = (1 << config->bits)-1;
+        if(info){
+          info->ref_r = max_value;
+        }
+        return nsVDXPixmap::kPixFormat_YUV422_Planar16;
+      }
     }
 
     if(config->format==format_yuv444){
-      return nsVDXPixmap::kPixFormat_YUV444_Planar;
+      if(config->bits==8){
+        return nsVDXPixmap::kPixFormat_YUV444_Planar;
+      }
+      if(config->bits>8){
+        int max_value = (1 << config->bits)-1;
+        if(info){
+          info->ref_r = max_value;
+        }
+        return nsVDXPixmap::kPixFormat_YUV444_Planar16;
+      }
     }
 
     return 0;
@@ -325,6 +354,21 @@ struct CodecBase{
 
     if(config->format==format_yuv420){
       switch(config->bits){
+      case 16:
+        ctx->pix_fmt = AV_PIX_FMT_YUV420P16LE;
+        break;
+      case 14:
+        ctx->pix_fmt = AV_PIX_FMT_YUV420P14LE;
+        break;
+      case 12:
+        ctx->pix_fmt = AV_PIX_FMT_YUV420P12LE;
+        break;
+      case 10:
+        ctx->pix_fmt = AV_PIX_FMT_YUV420P10LE;
+        break;
+      case 9:
+        ctx->pix_fmt = AV_PIX_FMT_YUV420P9LE;
+        break;
       case 8:
         ctx->pix_fmt = AV_PIX_FMT_YUV420P;
         break;
@@ -333,6 +377,21 @@ struct CodecBase{
 
     if(config->format==format_yuv422){
       switch(config->bits){
+      case 16:
+        ctx->pix_fmt = AV_PIX_FMT_YUV422P16LE;
+        break;
+      case 14:
+        ctx->pix_fmt = AV_PIX_FMT_YUV422P14LE;
+        break;
+      case 12:
+        ctx->pix_fmt = AV_PIX_FMT_YUV422P12LE;
+        break;
+      case 10:
+        ctx->pix_fmt = AV_PIX_FMT_YUV422P10LE;
+        break;
+      case 9:
+        ctx->pix_fmt = AV_PIX_FMT_YUV422P9LE;
+        break;
       case 8:
         ctx->pix_fmt = AV_PIX_FMT_YUV422P;
         break;
@@ -341,6 +400,21 @@ struct CodecBase{
 
     if(config->format==format_yuv444){
       switch(config->bits){
+      case 16:
+        ctx->pix_fmt = AV_PIX_FMT_YUV444P16LE;
+        break;
+      case 14:
+        ctx->pix_fmt = AV_PIX_FMT_YUV444P14LE;
+        break;
+      case 12:
+        ctx->pix_fmt = AV_PIX_FMT_YUV444P12LE;
+        break;
+      case 10:
+        ctx->pix_fmt = AV_PIX_FMT_YUV444P10LE;
+        break;
+      case 9:
+        ctx->pix_fmt = AV_PIX_FMT_YUV444P9LE;
+        break;
       case 8:
         ctx->pix_fmt = AV_PIX_FMT_YUV444P;
         break;
@@ -415,7 +489,12 @@ struct CodecBase{
       case nsVDXPixmap::kPixFormat_YUV420_Planar:
       case nsVDXPixmap::kPixFormat_YUV422_Planar:
       case nsVDXPixmap::kPixFormat_YUV444_Planar:
-        copy_yuv8(frame,layout,icc->lpInput);
+        copy_yuv(frame,layout,icc->lpInput,1);
+        break;
+      case nsVDXPixmap::kPixFormat_YUV420_Planar16:
+      case nsVDXPixmap::kPixFormat_YUV422_Planar16:
+      case nsVDXPixmap::kPixFormat_YUV444_Planar16:
+        copy_yuv(frame,layout,icc->lpInput,2);
         break;
       }
 
@@ -535,9 +614,28 @@ void ConfigBase::init_bits()
     enable_16 = codec->test_av_format(AV_PIX_FMT_GBRP16LE);
     break;
   case CodecBase::format_yuv420:
+    enable_8 = true;
+    enable_9 = codec->test_av_format(AV_PIX_FMT_YUV420P9LE);
+    enable_10 = codec->test_av_format(AV_PIX_FMT_YUV420P10LE);
+    enable_12 = codec->test_av_format(AV_PIX_FMT_YUV420P12LE);
+    enable_14 = codec->test_av_format(AV_PIX_FMT_YUV420P14LE);
+    enable_16 = codec->test_av_format(AV_PIX_FMT_YUV420P16LE);
+    break;
   case CodecBase::format_yuv422:
+    enable_8 = true;
+    enable_9 = codec->test_av_format(AV_PIX_FMT_YUV422P9LE);
+    enable_10 = codec->test_av_format(AV_PIX_FMT_YUV422P10LE);
+    enable_12 = codec->test_av_format(AV_PIX_FMT_YUV422P12LE);
+    enable_14 = codec->test_av_format(AV_PIX_FMT_YUV422P14LE);
+    enable_16 = codec->test_av_format(AV_PIX_FMT_YUV422P16LE);
+    break;
   case CodecBase::format_yuv444:
     enable_8 = true;
+    enable_9 = codec->test_av_format(AV_PIX_FMT_YUV444P9LE);
+    enable_10 = codec->test_av_format(AV_PIX_FMT_YUV444P10LE);
+    enable_12 = codec->test_av_format(AV_PIX_FMT_YUV444P12LE);
+    enable_14 = codec->test_av_format(AV_PIX_FMT_YUV444P14LE);
+    enable_16 = codec->test_av_format(AV_PIX_FMT_YUV444P16LE);
     break;
   }
 

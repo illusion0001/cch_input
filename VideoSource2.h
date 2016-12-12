@@ -163,7 +163,7 @@ public:
 
   AVPacket copy_pkt;
 
-  uint64 kPixFormat_XRGB64;
+  //uint64 kPixFormat_XRGB64;
 
   int	 initStream(VDFFInputFile* pSource, int indexStream);
   void set_pixmap_layout(uint8_t* p);

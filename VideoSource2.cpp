@@ -41,11 +41,13 @@ VDFFVideoSource::VDFFVideoSource(const VDXInputDriverContext& context)
   buffer = 0;
   mem = 0;
 
+  /*
   kPixFormat_XRGB64 = 0;
   IFilterModPixmap* fmpixmap = (IFilterModPixmap*)context.mpCallbacks->GetExtendedAPI("IFilterModPixmap");
   if(fmpixmap){
     kPixFormat_XRGB64 = fmpixmap->GetFormat_XRGB64();
   }
+  */
 }
 
 VDFFVideoSource::~VDFFVideoSource() 
@@ -628,8 +630,39 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(frame_fmt);
   convertInfo.in_yuv = !(desc->flags & AV_PIX_FMT_FLAG_RGB) && desc->nb_components >= 3;
   convertInfo.in_subs = convertInfo.in_yuv && (desc->log2_chroma_w+desc->log2_chroma_h)>0;
+  int src_max_value = (1 << desc->comp[0].depth)-1;
 
   switch(frame_fmt){
+  case AV_PIX_FMT_YUV420P9LE:
+  case AV_PIX_FMT_YUV420P10LE:
+  case AV_PIX_FMT_YUV420P12LE:
+  case AV_PIX_FMT_YUV420P14LE:
+  case AV_PIX_FMT_YUV420P16LE:
+    perfect_format = kPixFormat_YUV420_Planar16;
+    trigger = kPixFormat_YUV422_V210;
+    perfect_bitexact = true;
+    break;
+
+  case AV_PIX_FMT_YUV422P9LE:
+  case AV_PIX_FMT_YUV422P10LE:
+  case AV_PIX_FMT_YUV422P12LE:
+  case AV_PIX_FMT_YUV422P14LE:
+  case AV_PIX_FMT_YUV422P16LE:
+    perfect_format = kPixFormat_YUV422_Planar16;
+    trigger = kPixFormat_YUV422_V210;
+    perfect_bitexact = true;
+    break;
+
+  case AV_PIX_FMT_YUV444P9LE:
+  case AV_PIX_FMT_YUV444P10LE:
+  case AV_PIX_FMT_YUV444P12LE:
+  case AV_PIX_FMT_YUV444P14LE:
+  case AV_PIX_FMT_YUV444P16LE:
+    perfect_format = kPixFormat_YUV444_Planar16;
+    trigger = kPixFormat_YUV422_V210;
+    perfect_bitexact = true;
+    break;
+
   case AV_PIX_FMT_YUV420P:
   case AV_PIX_FMT_YUVJ420P:
     src_fmt = AV_PIX_FMT_YUV420P;
@@ -902,11 +935,18 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   m_pixmap.h = h;
 
   m_pixmap_info.clear();
-  if(format==kPixFormat_XRGB64){
+  switch(format){
+  case kPixFormat_XRGB64:
     m_pixmap_info.ref_r = 0xFFFF;
     m_pixmap_info.ref_g = 0xFFFF;
     m_pixmap_info.ref_b = 0xFFFF;
     m_pixmap_info.ref_a = 0xFFFF;
+    break;
+  case kPixFormat_YUV420_Planar16:
+  case kPixFormat_YUV422_Planar16:
+  case kPixFormat_YUV444_Planar16:
+    m_pixmap_info.ref_r = src_max_value;
+    break;
   }
   if((desc->flags & AV_PIX_FMT_FLAG_ALPHA) && (out_desc->flags & AV_PIX_FMT_FLAG_ALPHA)){
     m_pixmap_info.alpha_type = FilterModPixmapInfo::kAlphaMask;
