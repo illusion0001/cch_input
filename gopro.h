@@ -6,6 +6,7 @@
 struct GoproInfo{
   enum CameraEnum{
     NONE=0,
+    HERO5_Black,
     HERO4_Session,
     HERO4_Black,
     HERO4_Silver,
@@ -23,6 +24,7 @@ struct GoproInfo{
     const char Compare[7];
     CameraEnum type;
     const char Name[25];
+    const char ExifModel[25];
   };
 
   CameraType* type;

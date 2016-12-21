@@ -155,6 +155,8 @@ public:
   bool trust_index;
   bool sparse_index;
   bool direct_buffer;
+  bool direct_v210;
+  bool direct_cfhd;
   bool is_image_list;
   bool copy_mode;
   bool decode_mode;
@@ -166,6 +168,7 @@ public:
   //uint64 kPixFormat_XRGB64;
 
   int	 initStream(VDFFInputFile* pSource, int indexStream);
+  void init_format();
   void set_pixmap_layout(uint8_t* p);
   int handle_frame();
   bool check_frame_format();

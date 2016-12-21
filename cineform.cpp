@@ -152,6 +152,7 @@ struct DecoderObjVfw{
   BITMAPINFOHEADER bmin;
   BITMAPINFOHEADER bmout;
   int samples;
+  bool use_v210;
 };
 
 void cfhd_set_buffer(AVCodecContext* avctx, void* buf)
@@ -160,17 +161,64 @@ void cfhd_set_buffer(AVCodecContext* avctx, void* buf)
   obj->buf = buf;
 }
 
+void cfhd_set_rgb(AVCodecContext* avctx)
+{
+  DecoderObjVfw* obj = (DecoderObjVfw*)avctx->priv_data;
+  obj->use_v210 = false;
+
+  avctx->pix_fmt = AV_PIX_FMT_BGR24;
+  BITMAPINFOHEADER& bmout = obj->bmout;
+  memset(&bmout,0,sizeof(bmout));
+  bmout.biSize = sizeof(bmout);
+  bmout.biWidth = avctx->width;
+  bmout.biHeight = avctx->height;
+  bmout.biPlanes = 1;
+  bmout.biBitCount = 24;
+  bmout.biCompression = BI_RGB;
+  bmout.biSizeImage = avctx->width*avctx->height*3;
+  bmout.biXPelsPerMeter = 1;
+  bmout.biYPelsPerMeter = 1;
+
+  if(obj->samples){
+    obj->samples = 0;
+    ICDecompressEnd(obj->codec);
+  }
+}
+
+void cfhd_set_v210(AVCodecContext* avctx)
+{
+  DecoderObjVfw* obj = (DecoderObjVfw*)avctx->priv_data;
+  obj->use_v210 = true;
+
+  avctx->pix_fmt = AV_PIX_FMT_BGR24; // best match
+  BITMAPINFOHEADER& bmout = obj->bmout;
+  memset(&bmout,0,sizeof(bmout));
+  bmout.biSize = sizeof(bmout);
+  bmout.biWidth = avctx->width;
+  bmout.biHeight = avctx->height;
+  bmout.biPlanes = 1;
+  bmout.biBitCount = 30;
+  bmout.biCompression = MAKEFOURCC('v','2','1','0');
+  // 6 px per 16 bytes, 128 byte aligned
+  int row = (avctx->width+47)/48*128;
+  bmout.biSizeImage = row*avctx->height;
+  bmout.biXPelsPerMeter = 1;
+  bmout.biYPelsPerMeter = 1;
+
+  if(obj->samples){
+    obj->samples = 0;
+    ICDecompressEnd(obj->codec);
+  }
+}
+
 av_cold int vfw_cfhd_init_decoder(AVCodecContext* avctx)
 {
   DecoderObjVfw* obj = (DecoderObjVfw*)avctx->priv_data;
   obj->buf = 0;
   obj->samples = 0;
-  avctx->pix_fmt = AV_PIX_FMT_BGR24;
 
   BITMAPINFOHEADER& bmin = obj->bmin;
-  BITMAPINFOHEADER& bmout = obj->bmout;
   memset(&bmin,0,sizeof(bmin));
-  memset(&bmout,0,sizeof(bmout));
 
   bmin.biSize = sizeof(bmin);
   bmin.biWidth = avctx->width;
@@ -182,18 +230,10 @@ av_cold int vfw_cfhd_init_decoder(AVCodecContext* avctx)
   bmin.biXPelsPerMeter = 1;
   bmin.biYPelsPerMeter = 1;
 
-  bmout.biSize = sizeof(bmout);
-  bmout.biWidth = avctx->width;
-  bmout.biHeight = avctx->height;
-  bmout.biPlanes = 1;
-  bmout.biBitCount = 24;
-  bmout.biCompression = BI_RGB;
-  bmout.biSizeImage = avctx->width*avctx->height*3;
-  bmout.biXPelsPerMeter = 1;
-  bmout.biYPelsPerMeter = 1;
-
   obj->codec = ICOpen(ICTYPE_VIDEO, MAKEFOURCC('C','F','H','D'), ICMODE_DECOMPRESS);
   if(!obj->codec) return AVERROR(ENOMEM);
+
+  cfhd_set_rgb(avctx);
 
   return 0;
 }

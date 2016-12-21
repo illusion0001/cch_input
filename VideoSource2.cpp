@@ -35,6 +35,8 @@ VDFFVideoSource::VDFFVideoSource(const VDXInputDriverContext& context)
   frame_type = 0;
   flip_image = false;
   direct_buffer = false;
+  direct_v210 = false;
+  direct_cfhd = false;
   is_image_list = false;
   copy_mode = false;
   decode_mode = true;
@@ -107,8 +109,10 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
 
   if(m_pStreamCtx->codecpar->codec_tag==CFHD_TAG && !pSource->cfg_skip_cfhd){
     // use vfw thunk instead of internal decoder
-    if(avcodec_find_decoder(CFHD_ID))
+    if(avcodec_find_decoder(CFHD_ID)){
       m_pStreamCtx->codecpar->codec_id = CFHD_ID;
+      direct_cfhd = true;
+    }
   }
   AVCodec* pDecoder = avcodec_find_decoder(m_pStreamCtx->codecpar->codec_id);
   if(!pDecoder){
@@ -209,7 +213,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
     return -1;
   }
 
-  if(pDecoder->id==CFHD_ID){
+  if(direct_cfhd){
     flip_image = true;
     if(trust_index) direct_buffer = true;
   }
@@ -220,7 +224,6 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   first_frame = 0;
   last_frame = 0;
   used_frames = 0;
-  next_frame = 0;
   buffer_count = keyframe_gap*2;
   if(buffer_count<pSource->cfg_frame_buffers) buffer_count = pSource->cfg_frame_buffers;
   if(buffer_count>sample_count) buffer_count = sample_count;
@@ -236,10 +239,8 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   frame_type = (char*)malloc(ft_size);
   memset(frame_type,' ',ft_size);
 
-  frame_fmt = m_pCodecCtx->pix_fmt;
-  frame_width = m_pCodecCtx->width;
-  frame_height = m_pCodecCtx->height;
-  frame_size = av_image_get_buffer_size(frame_fmt, frame_width, frame_height, line_align);
+  init_format();
+  next_frame = 0;
 
   #ifndef _WIN64
   uint64_t max_heap = 0x20000000;
@@ -294,6 +295,25 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   pSource->video_start_time = start_time;
 
   return 0;
+}
+
+void VDFFVideoSource::init_format()
+{
+  frame_fmt = m_pCodecCtx->pix_fmt;
+  frame_width = m_pCodecCtx->width;
+  frame_height = m_pCodecCtx->height;
+  frame_size = av_image_get_buffer_size(frame_fmt, frame_width, frame_height, line_align);
+  if(direct_buffer){
+    // 6 px per 16 bytes, 128 byte aligned
+    int row = (frame_width+47)/48*128;
+    int frame_size2 = row*frame_height;
+    if(frame_size2>frame_size) frame_size = frame_size2;
+  }
+  if(direct_cfhd){
+    if(direct_v210) cfhd_set_v210(m_pCodecCtx);
+    else cfhd_set_rgb(m_pCodecCtx);
+  }
+  free_buffers();
 }
 
 void VDXAPIENTRY VDFFVideoSource::GetStreamSourceInfo(VDXStreamSourceInfo& srcInfo)
@@ -856,6 +876,15 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
       }
       break;
 
+    case kPixFormat_YUV422_V210:
+      if(direct_buffer){
+        base_format = kPixFormat_YUV422_V210;
+        convertInfo.av_fmt = AV_PIX_FMT_BGR24;
+        convertInfo.direct_copy = true;
+        break;
+      }
+      return false;
+
     default:
       return false;
     }
@@ -925,6 +954,12 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     convertInfo.av_fmt = head->convertInfo.av_fmt;
     convertInfo.direct_copy = true;
     convertInfo.out_garbage = true;
+  }
+
+  bool v210 = format==kPixFormat_YUV422_V210;
+  if(v210!=this->direct_v210){
+    this->direct_v210 = v210;
+    init_format();
   }
 
   memset(&m_pixmap,0,sizeof(m_pixmap));
@@ -1087,6 +1122,11 @@ void VDFFVideoSource::set_pixmap_layout(uint8_t* p)
 
   AVFrame pic = {0};
   av_image_fill_arrays(pic.data, pic.linesize, p, convertInfo.av_fmt, w, h, line_align);
+
+  if(m_pixmap.format==kPixFormat_YUV422_V210){
+    int row = (w+47)/48*128;
+    pic.linesize[0] = row;
+  }
 
   m_pixmap.palette = 0;
   m_pixmap.data = pic.data[0];
@@ -1434,7 +1474,7 @@ void VDFFVideoSource::alloc_direct_buffer()
   if(!frame_array[pos]) alloc_page(pos);
   BufferPage* page = frame_array[pos];
   open_write(page);
-  cfhd_set_buffer(m_pCodecCtx,align_buf(page->p));
+  if(direct_cfhd) cfhd_set_buffer(m_pCodecCtx,align_buf(page->p));
 }
 
 void VDFFVideoSource::free_buffers()

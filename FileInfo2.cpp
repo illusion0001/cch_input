@@ -181,6 +181,11 @@ void VDFFInputFileInfoDialog::print_video()
     const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(pVideoCtx->pix_fmt);
     bool is_rgb = (desc->flags & AV_PIX_FMT_FLAG_RGB)!=0;
 
+    if(segment->video_source->direct_v210){
+      is_rgb = false;
+      strcpy(buf, "v210");
+    }
+
     if(!is_rgb){
       const char* spc = "?";
       const char* r = 0;

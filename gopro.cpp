@@ -5,17 +5,18 @@
 
 void GoproInfo::get_camera_type(){
   static CameraType types[] = {
-    {"HDX.01", HERO4_Session, "GoPro HERO4 Session"},
-    {"HD4.02", HERO4_Black, "GoPro HERO4 Black"},
-    {"HD4.01", HERO4_Silver, "GoPro HERO4 Silver"},
-    {"HD3.11", HERO3P_Black, "GoPro HERO3+ Black"},
-    {"HD3.10", HERO3P_Silver, "GoPro HERO3+ Silver"},
-    {"HD3.03", HERO3_Black, "GoPro HERO3 Black"},
-    {"HD3.02", HERO3_Silver, "GoPro HERO3 Silver"},
-    {"HD3.01", HERO3_White, "GoPro HERO3 White"},
-    {"HD3.20", HERO, "GoPro HERO"},
-    {"HD3.21", HEROP_LCD, "GoPro HERO+ LCD"},
-    {"HD3.22", HEROP, "GoPro HERO+"}
+    {"HD5.02", HERO5_Black, "GoPro HERO5 Black", "Hero5-Black Edition"},
+    {"HDX.01", HERO4_Session, "GoPro HERO4 Session", "Hero4-Session"},
+    {"HD4.02", HERO4_Black, "GoPro HERO4 Black", "Hero4-Black Edition"},
+    {"HD4.01", HERO4_Silver, "GoPro HERO4 Silver", "Hero4-Silver Edition"},
+    {"HD3.11", HERO3P_Black, "GoPro HERO3+ Black", "Hero3Plus-Black Edition"},
+    {"HD3.10", HERO3P_Silver, "GoPro HERO3+ Silver", "Hero3Plus-Silver Edition"},
+    {"HD3.03", HERO3_Black, "GoPro HERO3 Black", "Hero3-Black Edition"},
+    {"HD3.02", HERO3_Silver, "GoPro HERO3 Silver", "Hero3-Silver Edition"},
+    {"HD3.01", HERO3_White, "GoPro HERO3 White", "Hero3-White Edition"},
+    {"HD3.20", HERO, "GoPro HERO", ""},
+    {"HD3.21", HEROP_LCD, "GoPro HERO+ LCD", ""},
+    {"HD3.22", HEROP, "GoPro HERO+", ""}
   };
 
   int n = sizeof(types)/sizeof(types[0]);
@@ -112,9 +113,8 @@ void GoproInfo::get_settings(unsigned int* sett, int n)
 
 void GoproInfo::find_info(const wchar_t* name)
 {
-  int scan_limit = 65536;
   MovParser parser(name);
-  while(parser.offset<scan_limit){
+  while(1){
     MovAtom a;
     if(!parser.read(a)) return;
     if(a.t=='moov'){
@@ -150,7 +150,6 @@ void GoproInfo::find_info(const wchar_t* name)
                   int b = ((unsigned char*)buf)[i];
                   sprintf(cam_serial+i*2, "%02x", b); 
                 }}
-                int x = strlen(cam_serial);
                 free(buf);
               }
               break;
