@@ -8,7 +8,7 @@
 
 #include <string>
 
-static const char* vsnstr = "Version 1.11";
+static const char* vsnstr = "Version 1.12";
 
 extern HINSTANCE hInstance;
  

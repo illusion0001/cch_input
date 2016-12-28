@@ -659,7 +659,7 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   case AV_PIX_FMT_YUV420P14LE:
   case AV_PIX_FMT_YUV420P16LE:
     perfect_format = kPixFormat_YUV420_Planar16;
-    trigger = kPixFormat_YUV422_V210;
+    trigger = kPixFormat_YUV420_Planar16;
     perfect_bitexact = true;
     break;
 
@@ -669,7 +669,7 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   case AV_PIX_FMT_YUV422P14LE:
   case AV_PIX_FMT_YUV422P16LE:
     perfect_format = kPixFormat_YUV422_Planar16;
-    trigger = kPixFormat_YUV422_V210;
+    trigger = kPixFormat_YUV422_Planar16;
     perfect_bitexact = true;
     break;
 
@@ -679,7 +679,7 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   case AV_PIX_FMT_YUV444P14LE:
   case AV_PIX_FMT_YUV444P16LE:
     perfect_format = kPixFormat_YUV444_Planar16;
-    trigger = kPixFormat_YUV422_V210;
+    trigger = kPixFormat_YUV444_Planar16;
     perfect_bitexact = true;
     break;
 
@@ -752,13 +752,11 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     break;
 
   case AV_PIX_FMT_BGRA64:
-    if(kPixFormat_XRGB64){
-      perfect_format = (VDXPixmapFormat)kPixFormat_XRGB64;
-      perfect_av_fmt = AV_PIX_FMT_BGRA64;
-      trigger = (VDXPixmapFormat)kPixFormat_XRGB64;
-      perfect_bitexact = true;
-      break;
-    }
+    perfect_format = (VDXPixmapFormat)kPixFormat_XRGB64;
+    perfect_av_fmt = AV_PIX_FMT_BGRA64;
+    trigger = (VDXPixmapFormat)kPixFormat_XRGB64;
+    perfect_bitexact = true;
+    break;
 
   default:
     perfect_format = kPixFormat_XRGB8888;
@@ -767,14 +765,12 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     perfect_bitexact = false;
     // examples: utvideo rgb (AV_PIX_FMT_RGB24) 
 
-    if(kPixFormat_XRGB64){
-      if(desc->flags & AV_PIX_FMT_FLAG_RGB && desc->comp[0].depth>8){
-        // examples: sgi - RGB48BE, tiff - RGB48LE/BE, RGBA64LE/BE
-        perfect_format = (VDXPixmapFormat)kPixFormat_XRGB64;
-        perfect_av_fmt = AV_PIX_FMT_BGRA64;
-        trigger = (VDXPixmapFormat)kPixFormat_XRGB64;
-        perfect_bitexact = false;
-      }
+    if(desc->flags & AV_PIX_FMT_FLAG_RGB && desc->comp[0].depth>8){
+      // examples: sgi - RGB48BE, tiff - RGB48LE/BE, RGBA64LE/BE
+      perfect_format = (VDXPixmapFormat)kPixFormat_XRGB64;
+      perfect_av_fmt = AV_PIX_FMT_BGRA64;
+      trigger = (VDXPixmapFormat)kPixFormat_XRGB64;
+      perfect_bitexact = false;
     }
   }
 
@@ -787,17 +783,6 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
       base_format = perfect_format;
       convertInfo.av_fmt = perfect_av_fmt;
       convertInfo.direct_copy = perfect_bitexact;
-    }
-
-  } else if(opt_format==kPixFormat_XRGB64){
-    if(opt_format==perfect_format){
-      base_format = perfect_format;
-      convertInfo.av_fmt = perfect_av_fmt;
-      convertInfo.direct_copy = perfect_bitexact;
-    } else {
-      base_format = (VDXPixmapFormat)kPixFormat_XRGB64;
-      convertInfo.av_fmt = AV_PIX_FMT_BGRA64;
-      convertInfo.direct_copy = false;
     }
 
   } else {
@@ -826,6 +811,31 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
         convertInfo.av_fmt = AV_PIX_FMT_YUV444P;
         skip_colorspace = true;
       } else return false;
+
+    case kPixFormat_YUV444_Planar16:
+      if(opt_format==trigger){
+        base_format = perfect_format;
+        convertInfo.av_fmt = perfect_av_fmt;
+        convertInfo.direct_copy = perfect_bitexact;
+        skip_colorspace = true;
+
+      } else if(convertInfo.in_yuv){
+        base_format = kPixFormat_YUV444_Planar16;
+        convertInfo.av_fmt = AV_PIX_FMT_YUV444P16;
+        skip_colorspace = true;
+      } else return false;
+      break;
+
+    case kPixFormat_XRGB64:
+      if(opt_format==perfect_format){
+        base_format = perfect_format;
+        convertInfo.av_fmt = perfect_av_fmt;
+        convertInfo.direct_copy = perfect_bitexact;
+      } else {
+        base_format = kPixFormat_XRGB64;
+        convertInfo.av_fmt = AV_PIX_FMT_BGRA64;
+        convertInfo.direct_copy = false;
+      }
       break;
 
     case kPixFormat_XRGB1555:
@@ -980,7 +990,8 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   case kPixFormat_YUV420_Planar16:
   case kPixFormat_YUV422_Planar16:
   case kPixFormat_YUV444_Planar16:
-    m_pixmap_info.ref_r = src_max_value;
+    m_pixmap_info.ref_r = 0xFFFF;
+    if(convertInfo.direct_copy) m_pixmap_info.ref_r = src_max_value;
     break;
   }
   if((desc->flags & AV_PIX_FMT_FLAG_ALPHA) && (out_desc->flags & AV_PIX_FMT_FLAG_ALPHA)){
