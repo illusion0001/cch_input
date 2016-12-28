@@ -388,20 +388,31 @@ AVFormatContext* VDFFInputFile::open_file(AVMediaType type, int streamIndex)
   is_anim_image = false;
   if(strcmp(fmt->iformat->name,"image2")==0) is_image=true;
   if(strcmp(fmt->iformat->name,"bmp_pipe")==0) is_image=true;
+  if(strcmp(fmt->iformat->name,"dds_pipe")==0) is_image=true;
   if(strcmp(fmt->iformat->name,"dpx_pipe")==0) is_image=true;
   if(strcmp(fmt->iformat->name,"exr_pipe")==0) is_image=true;
   if(strcmp(fmt->iformat->name,"j2k_pipe")==0) is_image=true;
   if(strcmp(fmt->iformat->name,"jpeg_pipe")==0) is_image=true;
   if(strcmp(fmt->iformat->name,"jpegls_pipe")==0) is_image=true;
+  if(strcmp(fmt->iformat->name,"pam_pipe")==0) is_image=true;
+  if(strcmp(fmt->iformat->name,"pbm_pipe")==0) is_image=true;
+  if(strcmp(fmt->iformat->name,"pcx_pipe")==0) is_image=true;
+  if(strcmp(fmt->iformat->name,"pgmyuv_pipe")==0) is_image=true;
+  if(strcmp(fmt->iformat->name,"pgm_pipe")==0) is_image=true;
   if(strcmp(fmt->iformat->name,"pictor_pipe")==0) is_image=true;
   if(strcmp(fmt->iformat->name,"png_pipe")==0) is_image=true;
+  if(strcmp(fmt->iformat->name,"ppm_pipe")==0) is_image=true;
+  if(strcmp(fmt->iformat->name,"psd_pipe")==0) is_image=true;
+  if(strcmp(fmt->iformat->name,"qdraw_pipe")==0) is_image=true;
   if(strcmp(fmt->iformat->name,"sgi_pipe")==0) is_image=true;
   if(strcmp(fmt->iformat->name,"sunrast_pipe")==0) is_image=true;
   if(strcmp(fmt->iformat->name,"tiff_pipe")==0) is_image=true;
   if(strcmp(fmt->iformat->name,"webp_pipe")==0) is_image=true;
   if(strcmp(fmt->iformat->name,"apng")==0) is_anim_image=true;
 
-  if(is_image){
+  AVInputFormat* fmt_image2 = av_find_input_format("image2");
+
+  if(is_image && fmt_image2){
     wchar_t list_path[MAX_PATH];
     char start_number[MAX_PATH];
     if(detect_image_list(list_path,MAX_PATH,start_number,MAX_PATH)){
@@ -410,7 +421,7 @@ AVFormatContext* VDFFInputFile::open_file(AVMediaType type, int streamIndex)
       widechar_to_utf8(ff_path, ff_path_size, list_path);
       AVDictionary* options = 0;
       av_dict_set(&options, "start_number", start_number, 0);
-      err = avformat_open_input(&fmt, ff_path, 0, &options);
+      err = avformat_open_input(&fmt, ff_path, fmt_image2, &options);
       av_dict_free(&options);
       if(err!=0){
         mContext.mpCallbacks->SetError("FFMPEG: Unable to open image sequence.");
