@@ -15,6 +15,19 @@ typedef struct AVCodecTag {
 
 void init_av();
 
+extern bool config_decode_raw;
+extern bool config_decode_magic;
+extern bool config_decode_cfhd;
+
+bool check_magic_vfw(DWORD fcc)
+{
+  if(config_decode_magic) return false;
+  HIC codec = ICOpen(ICTYPE_VIDEO, fcc, ICMODE_DECOMPRESS);
+  ICClose(codec);
+  if(!codec) return false;
+  return true;
+}
+
 int detect_avi(const void *pHeader, int32_t nHeaderSize)
 {
   if(nHeaderSize<64) return -1;
@@ -70,41 +83,50 @@ int detect_avi(const void *pHeader, int32_t nHeaderSize)
     }}
 
     // skip internally supported formats
-    if(h1==MKTAG('U', 'Y', 'V', 'Y')) return -1;
-    if(h1==MKTAG('Y', 'U', 'Y', 'V')) return -1;
-    if(h1==MKTAG('Y', 'U', 'Y', '2')) return -1;
-    if(h1==MKTAG('Y', 'V', '2', '4')) return -1;
-    if(h1==MKTAG('Y', 'V', '1', '6')) return -1;
-    if(h1==MKTAG('Y', 'V', '1', '2')) return -1;
-    if(h1==MKTAG('I', '4', '2', '0')) return -1;
-    if(h1==MKTAG('I', 'Y', 'U', 'V')) return -1;
-    if(h1==MKTAG('Y', 'V', 'U', '9')) return -1;
-    if(h1==MKTAG('Y', '8', ' ', ' ')) return -1;
-    if(h1==MKTAG('Y', '8', '0', '0')) return -1;
-    if(h1==MKTAG('H', 'D', 'Y', 'C')) return -1;
-    if(h1==MKTAG('N', 'V', '1', '2')) return -1;
+    if(!config_decode_raw){
+      if(h1==MKTAG('U', 'Y', 'V', 'Y')) return -1;
+      if(h1==MKTAG('Y', 'U', 'Y', 'V')) return -1;
+      if(h1==MKTAG('Y', 'U', 'Y', '2')) return -1;
+      if(h1==MKTAG('Y', 'V', '2', '4')) return -1;
+      if(h1==MKTAG('Y', 'V', '1', '6')) return -1;
+      if(h1==MKTAG('Y', 'V', '1', '2')) return -1;
+      if(h1==MKTAG('I', '4', '2', '0')) return -1;
+      if(h1==MKTAG('I', 'Y', 'U', 'V')) return -1;
+      if(h1==MKTAG('Y', 'V', 'U', '9')) return -1;
+      if(h1==MKTAG('Y', '8', ' ', ' ')) return -1;
+      if(h1==MKTAG('Y', '8', '0', '0')) return -1;
+      if(h1==MKTAG('H', 'D', 'Y', 'C')) return -1;
+      if(h1==MKTAG('N', 'V', '1', '2')) return -1;
 
-    if(h1==MKTAG('v', '2', '1', '0')) return -1;
-    if(h1==MKTAG('b', '6', '4', 'a')) return -1;
-    if(h1==MKTAG('B', 'R', 'A', 64)) return -1;
-    if(h1==MKTAG('P', '2', '1', '0')) return -1;
-    if(h1==MKTAG('P', '2', '1', '6')) return -1;
-
-    AVCodecTag* riff_tag = (AVCodecTag*)avformat_get_riff_video_tags();
-    while(riff_tag->id!=AV_CODEC_ID_NONE){
-      if(riff_tag->tag==h1 || riff_tag->tag==h2){
-        have_codec = true;
-        break;
-      }
-      riff_tag++;
+      if(h1==MKTAG('v', '2', '1', '0')) return -1;
+      if(h1==MKTAG('b', '6', '4', 'a')) return -1;
+      if(h1==MKTAG('B', 'R', 'A', 64)) return -1;
+      if(h1==MKTAG('P', '2', '1', '0')) return -1;
+      if(h1==MKTAG('P', '2', '1', '6')) return -1;
     }
-    AVCodecTag* mov_tag = (AVCodecTag*)avformat_get_mov_video_tags();
-    while(mov_tag->id!=AV_CODEC_ID_NONE){
-      if(mov_tag->tag==h1 || mov_tag->tag==h2){
-        have_codec = true;
-        break;
+
+    if(!have_codec){
+      AVCodecTag* riff_tag = (AVCodecTag*)avformat_get_riff_video_tags();
+      while(riff_tag->id!=AV_CODEC_ID_NONE){
+        if(riff_tag->tag==h1 || riff_tag->tag==h2){
+          if(riff_tag->id==AV_CODEC_ID_MAGICYUV && check_magic_vfw(h1)) return -1;
+          have_codec = true;
+          break;
+        }
+        riff_tag++;
       }
-      mov_tag++;
+    }
+
+    if(!have_codec){
+      AVCodecTag* mov_tag = (AVCodecTag*)avformat_get_mov_video_tags();
+      while(mov_tag->id!=AV_CODEC_ID_NONE){
+        if(mov_tag->tag==h1 || mov_tag->tag==h2){
+          if(mov_tag->id==AV_CODEC_ID_MAGICYUV && check_magic_vfw(h1)) return -1;
+          have_codec = true;
+          break;
+        }
+        mov_tag++;
+      }
     }
 
     if(!have_codec) return -1;
@@ -178,7 +200,7 @@ bool VDXAPIENTRY VDFFInputFileDriver::CreateInputFile(uint32_t flags, IVDXInputF
 
   if(flags & kOF_AutoSegmentScan) p->auto_append = true;
   //p->auto_append = true;
-  if(!select_mode) p->cfg_skip_cfhd = true;
+  if(!select_mode || config_decode_cfhd) p->cfg_skip_cfhd = true;
 
   *ppFile = p;
   p->AddRef();

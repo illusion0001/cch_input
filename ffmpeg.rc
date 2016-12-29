@@ -63,6 +63,14 @@ BEGIN
         TOPMARGIN, 7
         BOTTOMMARGIN, 51
     END
+
+    IDD_INPUT_OPTIONS, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 203
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 88
+    END
 END
 #endif    // APSTUDIO_INVOKED
 
@@ -192,6 +200,22 @@ BEGIN
     PUSHBUTTON      "Abort",IDCANCEL,153,37,50,14
     CONTROL         "",IDC_EXPORT_PROGRESS,"msctls_progress32",PBS_SMOOTH,7,20,196,12
     LTEXT           "50K bytes copied",IDC_EXPORT_STATE,7,7,203,10
+END
+
+IDD_INPUT_OPTIONS DIALOGEX 0, 0, 210, 95
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_VISIBLE | WS_CAPTION
+CAPTION "Input Driver Options"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,99,74,50,14
+    PUSHBUTTON      "Cancel",IDCANCEL,153,74,50,14
+    GROUPBOX        "Always handle specific formats with FFMPEG decoders",IDC_STATIC,7,7,196,56
+    CONTROL         "raw (v210, b64a etc) - default off, pass to VD core",IDC_DECODE_RAW,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,20,179,10
+    CONTROL         "MagicYUV - default off, pass to official codec",IDC_DECODE_MAGIC,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,33,159,10
+    CONTROL         "Cineform HD - default off, pass to VFW wrapper",IDC_DECODE_CFHD,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,46,170,10
 END
 
 

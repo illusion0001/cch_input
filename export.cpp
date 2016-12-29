@@ -408,6 +408,7 @@ end:
     if(ofmt && !(ofmt->oformat->flags & AVFMT_NOFILE)) avio_closep(&ofmt->pb);
     avformat_free_context(ofmt);
 
+    progress.current_pos = 1;
     progress.sync_state();
 
     if(err<0){

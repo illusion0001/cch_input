@@ -3,8 +3,10 @@
 
 #include <vd2/plugin/vdplugin.h>
 #include <vd2/plugin/vdinputdriver.h>
+#include <vd2/VDXFrame/VideoFilterDialog.h>
 #include <string>
 #include "InputFile2.h"
+#include "resource.h"
 
 #ifdef _MSC_VER
 #include <delayimp.h>
@@ -17,6 +19,51 @@
 #endif
 
 HINSTANCE hInstance;
+bool config_decode_raw = false;
+bool config_decode_magic = false;
+bool config_decode_cfhd = false;
+void saveConfig();
+
+class ConfigureDialog: public VDXVideoFilterDialog {
+public:
+	virtual INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam);
+  void Show(HWND parent){
+    VDXVideoFilterDialog::Show(hInstance,MAKEINTRESOURCE(IDD_INPUT_OPTIONS),parent);
+  }
+};
+
+INT_PTR ConfigureDialog::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
+{
+  switch( msg ){
+  case WM_INITDIALOG:
+    CheckDlgButton(mhdlg,IDC_DECODE_RAW, config_decode_raw ? BST_CHECKED:BST_UNCHECKED);
+    CheckDlgButton(mhdlg,IDC_DECODE_MAGIC, config_decode_magic ? BST_CHECKED:BST_UNCHECKED);
+    CheckDlgButton(mhdlg,IDC_DECODE_CFHD, config_decode_cfhd ? BST_CHECKED:BST_UNCHECKED);
+    return TRUE;
+  case WM_COMMAND:
+    switch(LOWORD(wParam)){
+    case IDOK:
+      config_decode_raw = IsDlgButtonChecked(mhdlg,IDC_DECODE_RAW)!=0;
+      config_decode_magic = IsDlgButtonChecked(mhdlg,IDC_DECODE_MAGIC)!=0;
+      config_decode_cfhd = IsDlgButtonChecked(mhdlg,IDC_DECODE_CFHD)!=0;
+      saveConfig();
+      EndDialog(mhdlg, TRUE);
+      return TRUE;
+
+    case IDCANCEL:
+      EndDialog(mhdlg, FALSE);
+      return TRUE;
+    }
+  }
+  return false;
+}
+
+bool VDXAPIENTRY StaticConfigureProc(VDXHWND parent)
+{
+  ConfigureDialog dlg;
+  dlg.Show((HWND)parent);
+  return true;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -99,6 +146,27 @@ extern "C" VDPluginInfo** __cdecl VDGetPluginInfo()
   return kPlugins;
 }
 
+void saveConfig()
+{
+  wchar_t buf[MAX_PATH+128];
+  size_t n = GetModuleFileNameW(hInstance, buf, MAX_PATH);
+  if(n<=0) return;
+  buf[n] = 0;
+
+  wchar_t* p1 = wcsrchr(buf,'\\');
+  wchar_t* p2 = wcsrchr(buf,'/');
+  if(p2>p1) p1=p2;
+  if(!p1) return;
+  *p1 = 0;
+
+  wcscat(buf,L"\\cch_input.ini");
+
+  WritePrivateProfileStringW(L"force_ffmpeg",L"raw",config_decode_raw ? L"1":L"0",buf);
+  WritePrivateProfileStringW(L"force_ffmpeg",L"MagicYUV",config_decode_magic ? L"1":L"0",buf);
+  WritePrivateProfileStringW(L"force_ffmpeg",L"CineformHD",config_decode_cfhd ? L"1":L"0",buf);
+  WritePrivateProfileStringW(0,0,0,buf);
+}
+
 void loadConfig()
 {
   wchar_t buf[MAX_PATH+128];
@@ -114,9 +182,14 @@ void loadConfig()
 
   wcscat(buf,L"\\cch_input.ini");
 
+  config_decode_raw = GetPrivateProfileIntW(L"force_ffmpeg",L"raw",0,buf)!=0;
+  config_decode_magic = GetPrivateProfileIntW(L"force_ffmpeg",L"MagicYUV",0,buf)!=0;
+  config_decode_cfhd = GetPrivateProfileIntW(L"force_ffmpeg",L"CineformHD",0,buf)!=0;
+
   ff_plugin_a = ff_plugin_b;
   ff_plugin_a.mpTypeSpecificInfo = &ff_class_a;
   ff_plugin_a.mpName = L"FFMpeg (select formats)"; // name must be unique
+  ff_plugin_a.mpStaticConfigureProc = StaticConfigureProc;
 
   int priority_a = GetPrivateProfileIntW(L"priority",L"select",ff_class_a.mPriority,buf);
   int priority_b = GetPrivateProfileIntW(L"priority",L"default",ff_class_b.mPriority,buf);
