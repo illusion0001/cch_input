@@ -1079,6 +1079,10 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
       proxy_fmt = AV_PIX_FMT_GBRP16BE;
       break;
 
+    case AV_PIX_FMT_GBRAP10LE:
+      proxy_max_value = 0x03FF;
+      proxy_fmt = AV_PIX_FMT_GBRAP16LE;
+      break;
     case AV_PIX_FMT_GBRAP12LE:
       proxy_max_value = 0x0FFF;
       proxy_fmt = AV_PIX_FMT_GBRAP16LE;
@@ -1088,6 +1092,10 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
       proxy_fmt = AV_PIX_FMT_GBRAP16LE;
       break;
 
+    case AV_PIX_FMT_GBRAP10BE:
+      proxy_max_value = 0x03FF;
+      proxy_fmt = AV_PIX_FMT_GBRAP16BE;
+      break;
     case AV_PIX_FMT_GBRAP12BE:
       proxy_max_value = 0x0FFF;
       proxy_fmt = AV_PIX_FMT_GBRAP16BE;
