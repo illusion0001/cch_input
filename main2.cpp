@@ -6,6 +6,7 @@
 #include <vd2/VDXFrame/VideoFilterDialog.h>
 #include <string>
 #include "InputFile2.h"
+#include "export.h"
 #include "resource.h"
 
 #ifdef _MSC_VER
@@ -86,6 +87,39 @@ bool VDXAPIENTRY ff_create_b(const VDXInputDriverContext *pContext, IVDXInputFil
   return true;
 }
 
+bool VDXAPIENTRY ff_create_output(const VDXInputDriverContext *pContext, IVDXOutputFileDriver **ppDriver)
+{
+  VDFFOutputFileDriver *p = new VDFFOutputFileDriver(*pContext);
+  if(!p) return false;
+  *ppDriver = p;
+  p->AddRef();
+  return true;
+}
+
+VDXOutputDriverDefinition ff_output={
+  sizeof(VDXOutputDriverDefinition),
+  0, //flags
+  L"FFMpeg (all formats)",
+  L"ffmpeg",
+  ff_create_output
+};
+
+VDXPluginInfo ff_output_info={
+  sizeof(VDXPluginInfo),
+  L"FFMpeg output",
+  L"Anton Shekhovtsov",
+  L"Save files through ffmpeg libs.",
+  1,
+  kVDXPluginType_Output,
+  0,
+  12, // min api version
+  kVDXPlugin_APIVersion,
+  kVDXPlugin_OutputDriverAPIVersion,  // min output api version
+  kVDXPlugin_OutputDriverAPIVersion,
+  &ff_output
+};
+
+
 #define option_a_init L"FFMpeg (select formats)|*.mov;*.mp4;*.avi"
 std::wstring option_a = option_a_init;
 std::wstring pattern_a; // example "*.mov|*.mp4|*.avi"
@@ -139,7 +173,7 @@ VDXPluginInfo ff_plugin_b={
 };
 
 VDXPluginInfo ff_plugin_a;
-VDPluginInfo* kPlugins[]={0,0,0};
+VDPluginInfo* kPlugins[]={&ff_output_info,0,0,0};
 
 extern "C" VDPluginInfo** __cdecl VDGetPluginInfo()
 {
@@ -259,12 +293,12 @@ void loadConfig()
 
   if(priority_a==priority_b){
     ff_class_b.mPriority = priority_b;
-    kPlugins[0] = &ff_plugin_b;
+    kPlugins[1] = &ff_plugin_b;
   } else {
     ff_class_a.mPriority = priority_a;
     ff_class_b.mPriority = priority_b;
-    kPlugins[0] = &ff_plugin_a;
-    kPlugins[1] = &ff_plugin_b;
+    kPlugins[1] = &ff_plugin_a;
+    kPlugins[2] = &ff_plugin_b;
   }
 }
 

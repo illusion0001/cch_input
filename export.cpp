@@ -2,12 +2,14 @@
 #include "FileInfo2.h"
 #include "VideoSource2.h"
 #include "AudioSource2.h"
+#include "export.h"
 #include "cineform.h"
 #include <string>
 #include <windows.h>
 #include <commdlg.h>
 #include <commctrl.h>
 #include "resource.h"
+#include <vfw.h>
 
 #pragma warning(disable:4996)
 
@@ -426,4 +428,230 @@ end:
   }
 
   return false;
+}
+
+FFOutputFile::FFOutputFile(const VDXInputDriverContext &pContext)
+  :mContext(pContext)
+{
+  ofmt = 0;
+  header = false;
+}
+
+FFOutputFile::~FFOutputFile()
+{
+  Finalize();
+}
+
+void FFOutputFile::av_error(int err)
+{
+  char buf[1024];
+  char buf2[1024];
+  av_strerror(err,buf2,1024);
+  strcpy(buf,"Internal error (FFMPEG): ");
+  strcat(buf,buf2);
+  mContext.mpCallbacks->SetError(buf);
+}
+
+/*
+void av_log_func2(void* obj, int type, const char* msg, va_list arg)
+{
+  char buf[1024];
+  vsprintf(buf,msg,arg);
+  OutputDebugString(buf);
+  switch(type){
+  case AV_LOG_PANIC:
+  case AV_LOG_FATAL:
+  case AV_LOG_ERROR:
+  case AV_LOG_WARNING:
+    ;//DebugBreak();
+  }
+}
+*/
+
+void init_av();
+
+void FFOutputFile::Init(const wchar_t *path, const char* format)
+{
+  /*av_log_set_callback(av_log_func2);
+  av_log_set_level(AV_LOG_INFO);
+  av_log_set_flags(AV_LOG_SKIP_REPEATED);
+  */
+
+  init_av();
+
+  const int ff_path_size = MAX_PATH*4; // utf8, worst case
+  char out_ff_path[ff_path_size];
+  widechar_to_utf8(out_ff_path, ff_path_size, path);
+  this->out_ff_path = out_ff_path;
+
+  int err = 0; 
+  AVOutputFormat* oformat = 0;
+  if(format && format[0]) oformat = av_guess_format(format, 0, 0);
+  if(!oformat) oformat = av_guess_format(0, out_ff_path, 0);
+  if(!oformat){
+    mContext.mpCallbacks->SetError("Unable to find a suitable output format");
+    Finalize();
+    return;
+  }
+
+  err = avformat_alloc_output_context2(&ofmt, oformat, 0, 0);
+  if(err<0){
+    av_error(err);
+    Finalize();
+    return;
+  }
+}
+
+uint32 FFOutputFile::CreateStream(int type)
+{
+  uint32 index = stream.size();
+  stream.resize(index+1);
+  StreamInfo& s = stream[index];
+  return index;
+}
+
+typedef struct AVCodecTag {
+  enum AVCodecID id;
+  unsigned int tag;
+} AVCodecTag;
+
+struct AVIStreamHeader_fixed {
+    uint32		fccType;
+    uint32		fccHandler;
+    uint32		dwFlags;
+    uint16		wPriority;
+    uint16		wLanguage;
+    uint32		dwInitialFrames;
+    uint32		dwScale;	
+    uint32		dwRate;
+    uint32		dwStart;
+    uint32		dwLength;
+    uint32		dwSuggestedBufferSize;
+    uint32		dwQuality;
+    uint32		dwSampleSize;
+	struct {
+		sint16	left;
+		sint16	top;
+		sint16	right;
+		sint16	bottom;
+	} rcFrame;
+};
+
+void FFOutputFile::SetVideo(uint32 index, const AVIStreamHeader_fixed& asi, const void *pFormat, int cbFormat)
+{
+  StreamInfo& s = stream[index];
+
+  BITMAPINFOHEADER* bm = (BITMAPINFOHEADER*)pFormat;
+  DWORD tag = bm->biCompression;
+
+  AVCodecID codec_id = AV_CODEC_ID_NONE;
+
+  if(!codec_id){
+    AVCodecTag* riff_tag = (AVCodecTag*)avformat_get_riff_video_tags();
+    while(riff_tag->id!=AV_CODEC_ID_NONE){
+      if(riff_tag->tag==tag){
+        codec_id = riff_tag->id;
+        break;
+      }
+      riff_tag++;
+    }
+  }
+
+  if(!codec_id){
+    AVCodecTag* mov_tag = (AVCodecTag*)avformat_get_mov_video_tags();
+    while(mov_tag->id!=AV_CODEC_ID_NONE){
+      if(mov_tag->tag==tag){
+        codec_id = mov_tag->id;
+        break;
+      }
+      mov_tag++;
+    }
+  }
+
+  AVStream *st = avformat_new_stream(ofmt, 0);
+
+  st->codec->codec_id = codec_id;
+  st->codec->codec_type = AVMEDIA_TYPE_VIDEO;
+
+  st->codec->codec_tag = 0;
+  AVCodecID codec_id1 = av_codec_get_id(ofmt->oformat->codec_tag, tag);
+  unsigned int codec_tag2;
+  int have_codec_tag2 = av_codec_get_tag2(ofmt->oformat->codec_tag, codec_id, &codec_tag2);
+  if(!ofmt->oformat->codec_tag || codec_id1==codec_id || !have_codec_tag2)
+    st->codec->codec_tag = tag;
+
+  if (cbFormat>sizeof(BITMAPINFOHEADER)) {
+    st->codec->extradata_size = cbFormat-sizeof(BITMAPINFOHEADER);
+    st->codec->extradata = (uint8_t*)av_mallocz(st->codec->extradata_size + AV_INPUT_BUFFER_PADDING_SIZE);
+    memcpy(st->codec->extradata, ((char*)pFormat)+sizeof(BITMAPINFOHEADER), st->codec->extradata_size);
+  }
+
+  st->codec->width = bm->biWidth;
+  st->codec->height = bm->biHeight;
+
+  if(ofmt->oformat->flags & AVFMT_GLOBALHEADER)
+    st->codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+
+  st->avg_frame_rate = av_make_q(asi.dwRate,asi.dwScale);
+  av_stream_set_r_frame_rate(st,st->avg_frame_rate);
+  st->time_base = av_make_q(asi.dwScale,asi.dwRate);
+  st->codec->time_base = st->time_base;
+
+  s.st = st;
+  s.frame = 0;
+}
+
+void FFOutputFile::Write(uint32 index, uint32 flags, const void *pBuffer, uint32 cbBuffer, uint32 samples)
+{
+  if(!ofmt) return;
+
+  if(!header){
+    int err = 0;
+    if(!(ofmt->oformat->flags & AVFMT_NOFILE)){
+      err = avio_open(&ofmt->pb, out_ff_path.c_str(), AVIO_FLAG_WRITE);
+      if(err<0){
+        av_error(err);
+        Finalize();
+        return;
+      }
+    }
+
+    err = avformat_write_header(ofmt, 0);
+    if(err<0){
+      av_error(err);
+      Finalize();
+      return;
+    }
+    header = true;
+  }
+
+  StreamInfo& s = stream[index];
+  if(!s.st) return;
+
+  AVPacket pkt;
+  av_init_packet(&pkt);
+  pkt.data = (uint8*)pBuffer;
+  pkt.size = cbBuffer;
+
+  if(flags & AVIIF_KEYFRAME) pkt.flags = AV_PKT_FLAG_KEY;
+
+  pkt.pos = -1;
+  pkt.stream_index = s.st->index;
+  pkt.pts = s.frame;
+  pkt.duration = 1;
+  av_packet_rescale_ts(&pkt, s.st->codec->time_base, s.st->time_base);
+
+  s.frame++;
+
+  int err = av_interleaved_write_frame(ofmt, &pkt);
+  if(err<0) av_error(err);
+}
+
+void FFOutputFile::Finalize()
+{
+  if(header) av_write_trailer(ofmt);
+
+  if(ofmt && !(ofmt->oformat->flags & AVFMT_NOFILE)) avio_closep(&ofmt->pb);
+  avformat_free_context(ofmt);
+  ofmt = 0;
 }
