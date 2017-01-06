@@ -326,6 +326,7 @@ bool VDFFInputFile::test_append(VDFFInputFile* f0, VDFFInputFile* f1)
 
   s0 = f0->find_stream(f0->m_pFormatCtx,AVMEDIA_TYPE_AUDIO);
   s1 = f1->find_stream(f1->m_pFormatCtx,AVMEDIA_TYPE_AUDIO);
+  if(s0==-1 || s1==-1) return true;
   AVStream* a0 = f0->m_pFormatCtx->streams[s0];
   AVStream* a1 = f1->m_pFormatCtx->streams[s1];
   if(a0->codecpar->sample_rate!=a1->codecpar->sample_rate) return false;
@@ -529,7 +530,9 @@ int VDFFInputFile::find_stream(AVFormatContext* fmt, AVMediaType type)
   int video = av_find_best_stream(fmt,AVMEDIA_TYPE_VIDEO,-1,-1,0,0);
   if(type==AVMEDIA_TYPE_VIDEO) return video;
 
-  return av_find_best_stream(fmt,type,-1,video,0,0);
+  int r = av_find_best_stream(fmt,type,-1,video,0,0);
+  if(r>=0) return r;
+  return -1;
 }
 
 bool VDFFInputFile::GetVideoSource(int index, IVDXVideoSource **ppVS) 
