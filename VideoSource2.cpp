@@ -653,6 +653,21 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   int src_max_value = (1 << desc->comp[0].depth)-1;
 
   switch(frame_fmt){
+  case AV_PIX_FMT_AYUV64LE:
+    perfect_format = kPixFormat_XYUV64;
+    perfect_av_fmt = AV_PIX_FMT_AYUV64LE;
+    trigger = kPixFormat_XYUV64;
+    perfect_bitexact = true;
+    break;
+
+  case AV_PIX_FMT_YUVA444P9LE:
+  case AV_PIX_FMT_YUVA444P10LE:
+  case AV_PIX_FMT_YUVA444P16LE:
+    perfect_format = kPixFormat_XYUV64;
+    perfect_av_fmt = AV_PIX_FMT_AYUV64LE;
+    trigger = kPixFormat_XYUV64;
+    break;
+
   case AV_PIX_FMT_YUV420P9LE:
   case AV_PIX_FMT_YUV420P10LE:
   case AV_PIX_FMT_YUV420P12LE:
@@ -990,6 +1005,7 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   case kPixFormat_YUV420_Planar16:
   case kPixFormat_YUV422_Planar16:
   case kPixFormat_YUV444_Planar16:
+  case kPixFormat_XYUV64:
     m_pixmap_info.ref_r = 0xFFFF;
     if(convertInfo.direct_copy) m_pixmap_info.ref_r = src_max_value;
     break;
