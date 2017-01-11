@@ -489,6 +489,7 @@ int VDFFVideoSource::GetRequiredCount()
 const void* VDFFVideoSource::DecodeFrame(const void* inputBuffer, uint32_t data_len, bool is_preroll, int64_t streamFrame, int64_t targetFrame)
 {
   m_pixmap_frame = int(targetFrame);
+  m_pixmap_info.frame_num = -1;
 
   if(targetFrame>=sample_count){
     VDFFVideoSource* v1 = 0;
@@ -513,6 +514,8 @@ const void* VDFFVideoSource::DecodeFrame(const void* inputBuffer, uint32_t data_
     mContext.mpCallbacks->SetError("Frame format is incompatible");
     return 0;
   }
+
+  m_pixmap_info.frame_num = targetFrame;
 
   open_read(page);
   uint8_t* src = align_buf(page->p);
@@ -826,6 +829,7 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
         convertInfo.av_fmt = AV_PIX_FMT_YUV444P;
         skip_colorspace = true;
       } else return false;
+      break;
 
     case kPixFormat_YUV444_Planar16:
       if(opt_format==trigger){
