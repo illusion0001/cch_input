@@ -1056,7 +1056,7 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
 
     int proxy_max_value = 0;
     AVPixelFormat proxy_fmt = AV_PIX_FMT_NONE;
-    switch(src_fmt){
+    if(format==kPixFormat_XRGB64) switch(src_fmt){
     case AV_PIX_FMT_GBRP9LE:
       proxy_max_value = 0x01FF;
       proxy_fmt = AV_PIX_FMT_GBRP16LE;
