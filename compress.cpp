@@ -3,6 +3,7 @@
 #include <memory.h>
 #include <windows.h>
 #include <vfw.h>
+#include <commctrl.h>
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavutil/imgutils.h>
@@ -121,6 +122,7 @@ struct CodecBase{
   AVColorSpace colorspace;
 
   AVCodecID codec_id;
+  const char* codec_name;
   int codec_tag;
   AVCodec* codec;
   AVCodecContext* ctx;
@@ -132,6 +134,7 @@ struct CodecBase{
     color_range=AVCOL_RANGE_UNSPECIFIED;
     colorspace=AVCOL_SPC_UNSPECIFIED;
     codec_id = AV_CODEC_ID_NONE;
+    codec_name = 0;
     codec_tag = 0;
     config = 0;
   }
@@ -141,7 +144,8 @@ struct CodecBase{
   }
 
   bool init(){
-    codec = avcodec_find_encoder(codec_id);
+    if(codec_id!=AV_CODEC_ID_NONE) codec = avcodec_find_encoder(codec_id);
+    else codec = avcodec_find_encoder_by_name(codec_name);
     return codec!=0;
   }
 
@@ -256,6 +260,7 @@ struct CodecBase{
     outhdr->biBitCount    = 32;
     if(layout->format==nsVDXPixmap::kPixFormat_XRGB64) outhdr->biBitCount = 48;
     outhdr->biCompression = codec_tag;
+    if(ctx && ctx->codec_tag) outhdr->biCompression = ctx->codec_tag;
     outhdr->biSizeImage   = iWidth*iHeight*6;
     if(ctx){
       uint8* p = ((uint8*)outhdr)+sizeof(BITMAPINFOHEADER);
@@ -556,9 +561,9 @@ public:
   }
 
   virtual INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam);
-  void init_format();
+  virtual void init_format();
+  virtual void change_format(int sel);
   void init_bits();
-  void change_format();
 };
 
 void ConfigBase::init_format()
@@ -577,8 +582,10 @@ void ConfigBase::init_format()
   SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_SETCURSEL, codec->config->format-1, 0);
 }
 
-void ConfigBase::change_format()
+void ConfigBase::change_format(int sel)
 {
+  codec->config->format = sel+1;
+
   switch(codec->config->format){
   case CodecBase::format_rgba:
     codec->config->bits = 8;
@@ -676,8 +683,8 @@ INT_PTR ConfigBase::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam){
 
     case IDC_COLORSPACE:
       if(HIWORD(wParam)==LBN_SELCHANGE){
-        codec->config->format = (int)SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_GETCURSEL, 0, 0)+1;
-        change_format();
+        int sel = (int)SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_GETCURSEL, 0, 0);
+        change_format(sel);
         return TRUE;
       }
       break;
@@ -830,6 +837,144 @@ INT_PTR ConfigHUFF::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
 
 //---------------------------------------------------------------------------
 
+class ConfigProres: public ConfigBase{
+public:
+  ConfigProres(){ dialog_id = IDD_ENC_PRORES; }
+  INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam);
+  virtual void init_format();
+  virtual void change_format(int sel);
+};
+
+enum {
+    PRORES_PROFILE_AUTO  = -1,
+    PRORES_PROFILE_PROXY = 0,
+    PRORES_PROFILE_LT,
+    PRORES_PROFILE_STANDARD,
+    PRORES_PROFILE_HQ,
+    PRORES_PROFILE_4444,
+};
+
+struct CodecProres: public CodecBase{
+  enum{ tag=MKTAG('a', 'p', 'c', 'h') };
+  struct Config: public CodecBase::Config{
+    int profile;
+    int qscale; // 2-31
+
+    Config(){ set_default(); }
+    void clear(){ CodecBase::Config::clear(); set_default(); }
+    void set_default(){
+      profile = PRORES_PROFILE_HQ;
+      qscale = 4;
+      format = format_yuv422;
+      bits = 10;
+    }
+  } codec_config;
+
+  CodecProres(){
+    config = &codec_config;
+    codec_name = "prores_ks";
+    codec_tag = tag;
+  }
+
+  int config_size(){ return sizeof(Config); }
+  void reset_config(){ codec_config.clear(); }
+
+  void getinfo(ICINFO& info){
+    info.fccHandler = codec_tag;
+    info.dwFlags = VIDCF_COMPRESSFRAMES | VIDCF_FASTTEMPORALC;
+    wcscpy(info.szName, L"prores_ks");
+    wcscpy(info.szDescription, L"FFMPEG / Apple ProRes (iCodec Pro)");
+  }
+
+  bool init_ctx(VDXPixmapLayout* layout)
+  {
+    ctx->thread_count = 0;
+    av_opt_set_int(ctx->priv_data, "profile", codec_config.profile, 0);
+    ctx->flags |= AV_CODEC_FLAG_QSCALE;
+    ctx->global_quality = FF_QP2LAMBDA * codec_config.qscale;
+    return true;
+  }
+
+  LRESULT configure(HWND parent)
+  {
+    ConfigProres dlg;
+    dlg.Show(parent,this);
+    return ICERR_OK;
+  }
+};
+
+INT_PTR ConfigProres::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
+{
+  switch(msg){
+  case WM_INITDIALOG:
+    {
+      const char* profile_names[] = {
+        "proxy", 
+        "lt",
+        "standard",
+        "hq",
+        "4444",
+      };
+
+      SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_RESETCONTENT, 0, 0);
+      for(int i=0; i<5; i++)
+        SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_ADDSTRING, 0, (LPARAM)profile_names[i]);
+      CodecProres::Config* config = (CodecProres::Config*)codec->config;
+      SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_SETCURSEL, config->profile, 0);
+      SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMIN, FALSE, 2);
+      SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMAX, TRUE, 31);
+      SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETPOS, TRUE, config->qscale);
+      SetDlgItemInt(mhdlg, IDC_QUALITY_VALUE, config->qscale, false);
+      break;
+    }
+
+  case WM_HSCROLL:
+    if((HWND)lParam==GetDlgItem(mhdlg,IDC_QUALITY)){
+      CodecProres::Config* config = (CodecProres::Config*)codec->config;
+      config->qscale = SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_GETPOS, 0, 0);
+      SetDlgItemInt(mhdlg, IDC_QUALITY_VALUE, config->qscale, false);
+      break;
+    }
+    return false;
+
+  case WM_COMMAND:
+    switch(LOWORD(wParam)){
+    case IDC_PROFILE:
+      if(HIWORD(wParam)==LBN_SELCHANGE){
+        CodecProres::Config* config = (CodecProres::Config*)codec->config;
+        config->profile = (int)SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_GETCURSEL, 0, 0);
+        return TRUE;
+      }
+      break;
+    }
+  }
+  return ConfigBase::DlgProc(msg,wParam,lParam);
+}
+
+void ConfigProres::init_format()
+{
+  const char* color_names[] = {
+    "YUV 4:2:2",
+    "YUV 4:4:4",
+  };
+
+  SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_RESETCONTENT, 0, 0);
+  for(int i=0; i<2; i++)
+    SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_ADDSTRING, 0, (LPARAM)color_names[i]);
+  int sel = 0;
+  if(codec->config->format==CodecBase::format_yuv444) sel = 1;
+  SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_SETCURSEL, sel, 0);
+}
+
+void ConfigProres::change_format(int sel)
+{
+  int format = CodecBase::format_yuv422;
+  if(sel==1) format = CodecBase::format_yuv444;
+  codec->config->format = format;
+}
+
+//---------------------------------------------------------------------------
+
 extern "C" LRESULT WINAPI DriverProc(DWORD_PTR dwDriverId, HDRVR hDriver, UINT uMsg, LPARAM lParam1, LPARAM lParam2)
 {
   CodecBase* codec = (CodecBase*)dwDriverId;
@@ -851,6 +996,7 @@ extern "C" LRESULT WINAPI DriverProc(DWORD_PTR dwDriverId, HDRVR hDriver, UINT u
       if(icopen->fccHandler==0) codec = new CodecFFV1;
       if(icopen->fccHandler==CodecFFV1::tag) codec = new CodecFFV1;
       if(icopen->fccHandler==CodecHUFF::tag) codec = new CodecHUFF;
+      if(icopen->fccHandler==CodecProres::tag) codec = new CodecProres;
       if(codec){
         if(!codec->init()){
           delete codec;
@@ -925,6 +1071,7 @@ extern "C" LRESULT WINAPI VDDriverProc(DWORD_PTR dwDriverId, HDRVR hDriver, UINT
   case VDICM_ENUMFORMATS:
     if(lParam1==0) return CodecFFV1::tag;
     if(lParam1==CodecFFV1::tag) return CodecHUFF::tag;
+    if(lParam1==CodecHUFF::tag) return CodecProres::tag;
     return 0;
 
   case VDICM_COMPRESS_INPUT_FORMAT:
