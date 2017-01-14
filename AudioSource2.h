@@ -110,10 +110,18 @@ public:
   bool trust_sample_pos;
   bool use_keys;
 
+  struct ReadInfo{
+    int64_t first_sample;
+    int64_t last_sample;
+
+    ReadInfo(){ first_sample=-1; last_sample=-1; }
+  };
+
   int initStream( VDFFInputFile* pSource, int streamIndex );
   void init_start_time();
-  int read_packet(AVPacket& pkt);
+  int read_packet(AVPacket& pkt, ReadInfo& ri);
   void insert_silence(int64_t start, uint32_t count);
+  void write_silence(void* dst, uint32_t count);
   void invalidate(int64_t start, uint32_t count);
   void alloc_page(int i);
   int64_t frame_to_pts(sint64 start, AVStream* video);

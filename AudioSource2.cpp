@@ -255,7 +255,7 @@ bool VDFFAudioSource::Read(int64_t start, uint32_t count, void *lpBuffer, uint32
 
   if(start>next_sample+m_pCodecCtx->sample_rate || start<next_sample){
     // required to seek
-    discard_samples = start>=1024 ? 1024 : 0;
+    discard_samples = start>=4096 ? 4096 : 0;
     int64_t pos = (start-discard_samples) * time_base.den / time_base.num - time_adjust;
     if(start==0 && pos>0) pos = 0;
     avcodec_flush_buffers(m_pCodecCtx);
@@ -268,6 +268,8 @@ bool VDFFAudioSource::Read(int64_t start, uint32_t count, void *lpBuffer, uint32
   pkt.data = 0;
   pkt.size = 0;
 
+  ReadInfo ri;
+
   while(1){
     int rf = av_read_frame(m_pFormatCtx, &pkt);
     if(rf<0){
@@ -279,7 +281,7 @@ bool VDFFAudioSource::Read(int64_t start, uint32_t count, void *lpBuffer, uint32
       do {
         int s = pkt.size;
         if(pkt.stream_index == m_streamIndex){
-          s = read_packet(pkt);
+          s = read_packet(pkt,ri);
           if(s<0) break;
         }
 
@@ -294,12 +296,27 @@ bool VDFFAudioSource::Read(int64_t start, uint32_t count, void *lpBuffer, uint32
       *lBytesRead = n*mRawFormat.mBlockAlign;
       *lSamplesRead = n;
       return true;
+    } else if(ri.first_sample>start){
+      // seek/decode missed required sample
+      int64_t n1 = ri.first_sample-start;
+      uint32 n = count;
+      if(n1<n) n = uint32(n1);
+      write_silence(lpBuffer,n);
+      *lBytesRead = n*mRawFormat.mBlockAlign;
+      *lSamplesRead = n;
+      return true;
     }
   }
 
   *lBytesRead = 0;
   *lSamplesRead = 0;
   return false;
+}
+
+void VDFFAudioSource::write_silence(void* dst, uint32_t count)
+{
+  int src = mRawFormat.mBitsPerSample==8 ? 0x80 : 0;
+  memset(dst, src, count*mRawFormat.mBlockAlign);
 }
 
 void VDFFAudioSource::insert_silence(int64_t start, uint32_t count)
@@ -315,8 +332,7 @@ void VDFFAudioSource::insert_silence(int64_t start, uint32_t count)
     int n = bp.alloc(s0,count,changed);
     if(changed){
       uint8_t* dst = bp.p + s0*mRawFormat.mBlockAlign;
-      int src = mRawFormat.mBitsPerSample==8 ? 0x80 : 0;
-      memset(dst, src, n*mRawFormat.mBlockAlign);
+      write_silence(dst,n);
     }
 
     start += n;
@@ -353,7 +369,7 @@ void VDFFAudioSource::invalidate(int64_t start, uint32_t count)
   }
 }
 
-int VDFFAudioSource::read_packet(AVPacket& pkt)
+int VDFFAudioSource::read_packet(AVPacket& pkt, ReadInfo& ri)
 {
   int got_frame;
   int ret = avcodec_decode_audio4(m_pCodecCtx, frame, &got_frame, &pkt);
@@ -415,6 +431,11 @@ int VDFFAudioSource::read_packet(AVPacket& pkt)
       insert_silence(next_sample,int(start-next_sample));
     }
     */
+
+    if(count){
+      if(ri.first_sample==-1) ri.first_sample = start;
+      if(ri.last_sample<start+count-1) ri.last_sample = start+count-1;
+    }
 
     while(count){
       int px = (int)(start / BufferPage::size);
