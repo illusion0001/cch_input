@@ -1,5 +1,7 @@
 #include "AudioSource2.h"
 #include "InputFile2.h"
+#include <Ks.h>
+#include <KsMedia.h>
 
 VDFFAudioSource::VDFFAudioSource(const VDXInputDriverContext& context)
   :mContext( context )
@@ -12,6 +14,8 @@ VDFFAudioSource::VDFFAudioSource(const VDXInputDriverContext& context)
   buffer = 0;
   next_sample = 0;
   discard_samples = 0;
+  out_layout = 0;
+  out_fmt = AV_SAMPLE_FMT_NONE;
 }
 
 VDFFAudioSource::~VDFFAudioSource()
@@ -113,58 +117,6 @@ int	VDFFAudioSource::initStream(VDFFInputFile* pSource, int streamIndex)
     return -1;
   }
 
-  switch(in_layout){
-  case AV_CH_LAYOUT_MONO:
-  case AV_CH_LAYOUT_STEREO:
-    out_layout = in_layout;
-    break;
-  default:
-    out_layout = AV_CH_LAYOUT_STEREO;
-  }
-
-  switch(m_pCodecCtx->sample_fmt){
-  case AV_SAMPLE_FMT_U8:
-  case AV_SAMPLE_FMT_U8P:
-    out_fmt = AV_SAMPLE_FMT_U8;
-    break;
-  case AV_SAMPLE_FMT_S16:
-  case AV_SAMPLE_FMT_S16P:
-    out_fmt = AV_SAMPLE_FMT_S16;
-    break;
-  default:
-    out_fmt = AV_SAMPLE_FMT_S16;
-  }
-
-  if(m_pSource->head_segment){
-    VDFFAudioSource* a0 = m_pSource->head_segment->audio_source;
-    out_layout = a0->out_layout;
-    out_fmt = a0->out_fmt;
-  }
-
-  av_samples_get_buffer_size(&src_linesize,m_pCodecCtx->channels,1,m_pCodecCtx->sample_fmt,1);
-
-  mRawFormat.mFormatTag		= VDXWAVEFORMATEX::kFormatPCM;
-  mRawFormat.mChannels		= av_get_channel_layout_nb_channels(out_layout);
-  mRawFormat.mSamplesPerSec	= m_pCodecCtx->sample_rate;
-  mRawFormat.mBitsPerSample	= av_get_bytes_per_sample(out_fmt)*8;
-  mRawFormat.mAvgBytesPerSec	= mRawFormat.mSamplesPerSec*mRawFormat.mChannels*mRawFormat.mBitsPerSample/8;
-  mRawFormat.mBlockAlign		= mRawFormat.mChannels*mRawFormat.mBitsPerSample/8;
-  mRawFormat.mExtraSize			= 0;
-
-  swr = swr_alloc();
-  av_opt_set_int(swr, "in_channel_layout",     in_layout, 0);
-  av_opt_set_int(swr, "in_sample_rate",        m_pCodecCtx->sample_rate, 0);
-  av_opt_set_sample_fmt(swr, "in_sample_fmt",  m_pCodecCtx->sample_fmt, 0);
-
-  av_opt_set_int(swr, "out_channel_layout",    out_layout, 0);
-  av_opt_set_int(swr, "out_sample_rate",       m_pCodecCtx->sample_rate, 0);
-  av_opt_set_sample_fmt(swr, "out_sample_fmt", out_fmt,  0);
-  int rr = swr_init(swr);
-  if(rr<0){
-    mContext.mpCallbacks->SetError("FFMPEG: Audio resampler error.");
-    return -1;
-  }
-
   frame = av_frame_alloc();
 
   first_page = 0;
@@ -176,8 +128,90 @@ int	VDFFAudioSource::initStream(VDFFInputFile* pSource, int streamIndex)
   memset(buffer,0,buffer_size*sizeof(BufferPage));
 
   next_sample = -1;
+  SetTargetFormat(0);
 
   return 0;
+}
+
+void VDFFAudioSource::SetTargetFormat(const VDXWAVEFORMATEX* target)
+{
+  uint64_t in_layout = m_pCodecCtx->channel_layout;
+  
+  uint64 layout = in_layout;
+  AVSampleFormat fmt; 
+  switch(m_pCodecCtx->sample_fmt){
+  case AV_SAMPLE_FMT_U8:
+  case AV_SAMPLE_FMT_U8P:
+    fmt = AV_SAMPLE_FMT_U8;
+    break;
+  case AV_SAMPLE_FMT_S16:
+  case AV_SAMPLE_FMT_S16P:
+    fmt = AV_SAMPLE_FMT_S16;
+    break;
+  default:
+    fmt = AV_SAMPLE_FMT_FLT;
+  }
+
+  if(target){
+    if(target->mChannels==1) layout = AV_CH_LAYOUT_MONO;
+    if(target->mChannels==2){
+      switch(layout){
+      case AV_CH_LAYOUT_MONO:
+      case AV_CH_LAYOUT_STEREO:
+        break;
+      default:
+        layout = AV_CH_LAYOUT_STEREO_DOWNMIX;
+      }
+    }
+    if(target->mBitsPerSample==8) fmt = AV_SAMPLE_FMT_U8;
+    if(target->mBitsPerSample==16 && fmt!=AV_SAMPLE_FMT_U8) fmt = AV_SAMPLE_FMT_S16;
+  }
+
+  if(layout==out_layout && fmt==out_fmt) return;
+
+  out_layout = layout;
+  out_fmt = fmt;
+
+  if(m_pSource->head_segment){
+    VDFFAudioSource* a0 = m_pSource->head_segment->audio_source;
+    out_layout = a0->out_layout;
+    out_fmt = a0->out_fmt;
+  }
+
+  av_samples_get_buffer_size(&src_linesize,m_pCodecCtx->channels,1,m_pCodecCtx->sample_fmt,1);
+
+  mRawFormat.Format.wFormatTag = WAVE_FORMAT_PCM;
+  mRawFormat.Format.nChannels = av_get_channel_layout_nb_channels(out_layout);
+  mRawFormat.Format.nSamplesPerSec = m_pCodecCtx->sample_rate;
+  mRawFormat.Format.wBitsPerSample = av_get_bytes_per_sample(out_fmt)*8;
+  mRawFormat.Format.nAvgBytesPerSec = mRawFormat.Format.nSamplesPerSec*mRawFormat.Format.nChannels*mRawFormat.Format.wBitsPerSample/8;
+  mRawFormat.Format.nBlockAlign = mRawFormat.Format.nChannels*mRawFormat.Format.wBitsPerSample/8;
+  mRawFormat.Format.cbSize = 0;
+
+  if(mRawFormat.Format.wBitsPerSample>16 || mRawFormat.Format.nChannels>2){
+    mRawFormat.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
+    if(out_fmt==AV_SAMPLE_FMT_FLT)
+      mRawFormat.SubFormat = KSDATAFORMAT_SUBTYPE_IEEE_FLOAT;
+    else
+      mRawFormat.SubFormat = KSDATAFORMAT_SUBTYPE_PCM;
+    mRawFormat.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE)-sizeof(WAVEFORMATEX);
+    mRawFormat.Samples.wValidBitsPerSample = mRawFormat.Format.wBitsPerSample;
+    mRawFormat.dwChannelMask = uint32_t(out_layout) & 0x3ffff;
+  }
+
+  if(swr) swr_free(&swr);
+  swr = swr_alloc();
+  av_opt_set_int(swr, "in_channel_layout",     in_layout, 0);
+  av_opt_set_int(swr, "in_sample_rate",        m_pCodecCtx->sample_rate, 0);
+  av_opt_set_sample_fmt(swr, "in_sample_fmt",  m_pCodecCtx->sample_fmt, 0);
+
+  av_opt_set_int(swr, "out_channel_layout",    out_layout, 0);
+  av_opt_set_int(swr, "out_sample_rate",       m_pCodecCtx->sample_rate, 0);
+  av_opt_set_sample_fmt(swr, "out_sample_fmt", out_fmt,  0);
+  int rr = swr_init(swr);
+  if(rr<0) mContext.mpCallbacks->SetError("FFMPEG: Audio resampler error.");
+
+  reset_cache();
 }
 
 void VDFFAudioSource::init_start_time()
@@ -246,9 +280,9 @@ bool VDFFAudioSource::Read(int64_t start, uint32_t count, void *lpBuffer, uint32
     }
   }
 
-  int n = buffer[px].copy(s0,count,lpBuffer,mRawFormat.mBlockAlign);
+  int n = buffer[px].copy(s0,count,lpBuffer,mRawFormat.Format.nBlockAlign);
   if(n>0){
-    *lBytesRead = n*mRawFormat.mBlockAlign;
+    *lBytesRead = n*mRawFormat.Format.nBlockAlign;
     *lSamplesRead = n;
     return true;
   }
@@ -291,9 +325,9 @@ bool VDFFAudioSource::Read(int64_t start, uint32_t count, void *lpBuffer, uint32
       av_packet_unref(&orig_pkt);
     }
 
-    int n = buffer[px].copy(s0,count,lpBuffer,mRawFormat.mBlockAlign);
+    int n = buffer[px].copy(s0,count,lpBuffer,mRawFormat.Format.nBlockAlign);
     if(n>0){
-      *lBytesRead = n*mRawFormat.mBlockAlign;
+      *lBytesRead = n*mRawFormat.Format.nBlockAlign;
       *lSamplesRead = n;
       return true;
     } else if(ri.first_sample>start){
@@ -302,7 +336,7 @@ bool VDFFAudioSource::Read(int64_t start, uint32_t count, void *lpBuffer, uint32
       uint32 n = count;
       if(n1<n) n = uint32(n1);
       write_silence(lpBuffer,n);
-      *lBytesRead = n*mRawFormat.mBlockAlign;
+      *lBytesRead = n*mRawFormat.Format.nBlockAlign;
       *lSamplesRead = n;
       return true;
     }
@@ -315,8 +349,8 @@ bool VDFFAudioSource::Read(int64_t start, uint32_t count, void *lpBuffer, uint32
 
 void VDFFAudioSource::write_silence(void* dst, uint32_t count)
 {
-  int src = mRawFormat.mBitsPerSample==8 ? 0x80 : 0;
-  memset(dst, src, count*mRawFormat.mBlockAlign);
+  int src = mRawFormat.Format.wBitsPerSample==8 ? 0x80 : 0;
+  memset(dst, src, count*mRawFormat.Format.nBlockAlign);
 }
 
 void VDFFAudioSource::insert_silence(int64_t start, uint32_t count)
@@ -331,7 +365,7 @@ void VDFFAudioSource::insert_silence(int64_t start, uint32_t count)
     int changed = 0;
     int n = bp.alloc(s0,count,changed);
     if(changed){
-      uint8_t* dst = bp.p + s0*mRawFormat.mBlockAlign;
+      uint8_t* dst = bp.p + s0*mRawFormat.Format.nBlockAlign;
       write_silence(dst,n);
     }
 
@@ -447,7 +481,7 @@ int VDFFAudioSource::read_packet(AVPacket& pkt, ReadInfo& ri)
       int changed = 0;
       int n = bp.alloc(s0,count,changed);
       if(changed){
-        uint8_t* dst = bp.p + s0*mRawFormat.mBlockAlign;
+        uint8_t* dst = bp.p + s0*mRawFormat.Format.nBlockAlign;
         const uint8_t* src[32];
         {for(int i=0; i<frame->channels; i++) src[i] = frame->extended_data[i] + src_pos*src_linesize; }
         swr_convert(swr, &dst, n, src, n);
@@ -465,6 +499,19 @@ int VDFFAudioSource::read_packet(AVPacket& pkt, ReadInfo& ri)
     if(!trust_sample_pos) invalidate(next_sample,1);
   }
   return FFMIN(ret, pkt.size);
+}
+
+void VDFFAudioSource::reset_cache()
+{
+  {for(int i=0; i<buffer_size; i++){
+    free(buffer[i].p);
+    buffer[i].reset();
+  }}
+
+  first_page = 0;
+  last_page = 0;
+  used_pages = 0;
+  next_sample = -1;
 }
 
 void VDFFAudioSource::alloc_page(int i)
@@ -495,7 +542,7 @@ void VDFFAudioSource::alloc_page(int i)
     }
   }
 
-  if(!buf) buf = (uint8_t*)malloc(BufferPage::size*mRawFormat.mBlockAlign);
+  if(!buf) buf = (uint8_t*)malloc(BufferPage::size*mRawFormat.Format.nBlockAlign);
 
   bp.p = buf;
   if(i<first_page) first_page = i;

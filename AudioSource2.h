@@ -2,6 +2,8 @@
 
 #include <vd2/plugin/vdinputdriver.h>
 #include <vd2/VDXFrame/Unknown.h>
+#include <windows.h>
+#include <mmreg.h>
 #include "stdint.h"
 
 extern "C"
@@ -13,32 +15,6 @@ extern "C"
 }
 
 class VDFFInputFile;
-
-/*
- * Note: This is an extension of VDXWAVEFORMATEX,
- *   but since vdinputdriver.h marks VDXWAVEFORMATEX
- *   as pack(8) instead of pack(1) as it is in the original
- *   Windows definition, it cannot be extended directly.
- */
-#pragma pack(push, 1)
-struct VDXWAVEFORMATEXTENSIBLE
-{
-  uint16_t mFormatTag;
-  uint16_t mChannels;
-  uint32_t mSamplesPerSec;
-  uint32_t mAvgBytesPerSec;
-  uint16_t mBlockAlign;
-  uint16_t mBitsPerSample;
-  uint16_t mExtraSize;
-  /*
-  uint16_t mValidBitsPerSample;
-  uint32_t mChannelMask;
-  uint32_t mSubFormat[4];	// A GUID
-  */
-};
-#pragma pack(pop)
-#define SIZEOF_VDXWAVEFORMATEX (sizeof(VDXWAVEFORMATEXTENSIBLE))
-//#define SIZEOF_VDXWAVEFORMATEX (offsetof(VDXWAVEFORMATEXTENSIBLE, mValidBitsPerSample))
 
 class VDFFAudioSource : public vdxunknown<IVDXStreamSource>, public IVDXAudioSource {
 public:
@@ -53,7 +29,8 @@ public:
   bool		VDXAPIENTRY Read(int64_t lStart, uint32_t lCount, void *lpBuffer, uint32_t cbBuffer, uint32_t *lBytesRead, uint32_t *lSamplesRead);
 
   const void *VDXAPIENTRY GetDirectFormat() { return &mRawFormat; }
-  int			VDXAPIENTRY GetDirectFormatLen() { return SIZEOF_VDXWAVEFORMATEX/* + mRawFormat.mExtraSize*/; }
+  int			VDXAPIENTRY GetDirectFormatLen() { return sizeof(WAVEFORMATEXTENSIBLE); }
+  void VDXAPIENTRY SetTargetFormat(const VDXWAVEFORMATEX* format);
 
   ErrorMode VDXAPIENTRY GetDecodeErrorMode() { return  IVDXStreamSource::kErrorModeReportAll; }
   void VDXAPIENTRY SetDecodeErrorMode(ErrorMode mode) {}
@@ -67,7 +44,7 @@ public:
 
 public:
   const VDXInputDriverContext& mContext;
-  VDXWAVEFORMATEXTENSIBLE mRawFormat;
+  WAVEFORMATEXTENSIBLE mRawFormat;
   VDXStreamSourceInfo	m_streamInfo;
 
   VDFFInputFile* m_pSource;
@@ -124,5 +101,6 @@ public:
   void write_silence(void* dst, uint32_t count);
   void invalidate(int64_t start, uint32_t count);
   void alloc_page(int i);
+  void reset_cache();
   int64_t frame_to_pts(sint64 start, AVStream* video);
 };
