@@ -12,6 +12,11 @@ public:
   struct StreamInfo{
     AVStream* st;
     int frame;
+
+    StreamInfo(){
+      st = 0;
+      frame = 0;
+    }
   };
 
   std::string out_ff_path;
@@ -21,12 +26,16 @@ public:
 
   FFOutputFile(const VDXInputDriverContext &pContext);
   ~FFOutputFile();
-	void VDXAPIENTRY Init(const wchar_t *path, const char* format);
-	uint32 VDXAPIENTRY CreateStream(int type);
-	void VDXAPIENTRY SetVideo(uint32 index, const AVIStreamHeader_fixed& asi, const void *pFormat, int cbFormat);
-	void VDXAPIENTRY Write(uint32 index, uint32 flags, const void *pBuffer, uint32 cbBuffer, uint32 samples);
-	void Finalize();
+  void VDXAPIENTRY Init(const wchar_t *path, const char* format);
+  uint32 VDXAPIENTRY CreateStream(int type);
+  void VDXAPIENTRY SetVideo(uint32 index, const AVIStreamHeader_fixed& asi, const void *pFormat, int cbFormat);
+  void VDXAPIENTRY SetAudio(uint32 index, const AVIStreamHeader_fixed& asi, const void *pFormat, int cbFormat);
+  void VDXAPIENTRY Write(uint32 index, uint32 flags, const void *pBuffer, uint32 cbBuffer, uint32 samples);
+  void Finalize();
   void av_error(int err);
+  void adjust_codec_tag(AVStream *st);
+  void import_bmp(AVStream *st, const void *pFormat, int cbFormat);
+  void import_wav(AVStream *st, const void *pFormat, int cbFormat);
 };
 
 class VDFFOutputFileDriver: public vdxunknown<IVDXOutputFileDriver>{
@@ -71,6 +80,11 @@ public:
       strcpy(name,"mp4");
       return true;
     case 5:
+      wcscpy(filter,L"NUT (*.nut)");
+      wcscpy(ext,L"*.nut");
+      strcpy(name,"nut");
+      return true;
+    case 6:
       wcscpy(filter,L"any format by FFMPEG (*.*)");
       wcscpy(ext,L"*.*");
       strcpy(name,"");

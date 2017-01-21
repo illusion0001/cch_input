@@ -18,6 +18,48 @@ extern HINSTANCE hInstance;
 void utf8_to_widechar(wchar_t *dst, int max_dst, const char *src);
 void widechar_to_utf8(char *dst, int max_dst, const wchar_t *src);
 
+struct IOBuffer{
+  uint8_t* data;
+  int64_t size;
+  int64_t pos;
+
+  IOBuffer(){
+    data=0; size=0; pos=0; 
+  }
+
+  ~IOBuffer(){
+    av_free(data);
+  }
+
+  void copy(void* data, int size){
+    alloc(size);
+    memcpy(this->data,data,size);
+  }
+
+  void alloc(int n){
+    data = (uint8_t*)av_malloc(n+AVPROBE_PADDING_SIZE);
+    memset(data,0,n+AVPROBE_PADDING_SIZE);
+    size = n;
+  }
+
+  static int Read(void* obj, uint8_t* buf, int buf_size){
+    IOBuffer* t = (IOBuffer*)obj;
+    int64_t n = t->pos+buf_size<t->size ? buf_size : t->size-t->pos;
+    memcpy(buf,t->data+t->pos,int(n));
+    t->pos += n;
+    return int(n);
+  }
+
+  static int64_t Seek(void* obj, int64_t offset, int whence){
+    IOBuffer* t = (IOBuffer*)obj;
+    if(whence==AVSEEK_SIZE) return t->size;
+    if(whence==SEEK_CUR){ t->pos+=offset; return t->pos; }
+    if(whence==SEEK_SET){ t->pos=offset; return t->pos; }
+    if(whence==SEEK_END){ t->pos=t->size+offset; return t->pos; }
+    return -1;
+  }
+};
+
 bool VDXAPIENTRY VDFFInputFile::GetExportMenuInfo(int id, char* name, int name_size, bool* enabled)
 {
   if(id==0){
@@ -541,6 +583,39 @@ void FFOutputFile::SetVideo(uint32 index, const AVIStreamHeader_fixed& asi, cons
 {
   StreamInfo& s = stream[index];
 
+  AVStream *st = avformat_new_stream(ofmt, 0);
+  st->codec->codec_type = AVMEDIA_TYPE_VIDEO;
+
+  import_bmp(st,pFormat,cbFormat);
+  adjust_codec_tag(st);
+
+  st->avg_frame_rate = av_make_q(asi.dwRate,asi.dwScale);
+  av_stream_set_r_frame_rate(st,st->avg_frame_rate);
+
+  st->time_base = av_make_q(asi.dwScale,asi.dwRate);
+  st->codec->time_base = st->time_base;
+
+  s.st = st;
+}
+
+void FFOutputFile::SetAudio(uint32 index, const AVIStreamHeader_fixed& asi, const void *pFormat, int cbFormat)
+{
+  StreamInfo& s = stream[index];
+
+  AVStream *st = avformat_new_stream(ofmt, 0);
+  st->codec->codec_type = AVMEDIA_TYPE_AUDIO;
+
+  import_wav(st,pFormat,cbFormat);
+  adjust_codec_tag(st);
+
+  st->time_base = av_make_q(asi.dwScale,asi.dwRate);
+  st->codec->time_base = st->time_base;
+
+  s.st = st;
+}
+
+void FFOutputFile::import_bmp(AVStream *st, const void *pFormat, int cbFormat)
+{
   BITMAPINFOHEADER* bm = (BITMAPINFOHEADER*)pFormat;
   DWORD tag = bm->biCompression;
 
@@ -568,11 +643,72 @@ void FFOutputFile::SetVideo(uint32 index, const AVIStreamHeader_fixed& asi, cons
     }
   }
 
-  AVStream *st = avformat_new_stream(ofmt, 0);
-
   st->codec->codec_id = codec_id;
-  st->codec->codec_type = AVMEDIA_TYPE_VIDEO;
+  st->codec->codec_tag = tag;
+  st->codec->width = bm->biWidth;
+  st->codec->height = bm->biHeight;
 
+  if(cbFormat>sizeof(BITMAPINFOHEADER)){
+    st->codec->extradata_size = cbFormat-sizeof(BITMAPINFOHEADER);
+    st->codec->extradata = (uint8_t*)av_mallocz(st->codec->extradata_size + AV_INPUT_BUFFER_PADDING_SIZE);
+    memcpy(st->codec->extradata, ((char*)pFormat)+sizeof(BITMAPINFOHEADER), st->codec->extradata_size);
+  }
+}
+
+void FFOutputFile::import_wav(AVStream *st, const void *pFormat, int cbFormat)
+{
+  uint32 dwHeader[20];
+  dwHeader[0]	= FOURCC_RIFF;
+  dwHeader[1] = 20 - 8 + cbFormat;
+  dwHeader[2] = mmioFOURCC('W', 'A', 'V', 'E');
+  dwHeader[3] = mmioFOURCC('f', 'm', 't', ' ');
+  dwHeader[4] = cbFormat;
+
+  std::vector<char> wav;
+  wav.resize(20+cbFormat);
+  memcpy(&wav[0], dwHeader, 20);
+  memcpy(&wav[20], pFormat, cbFormat);
+  if(cbFormat & 1) wav.push_back(0);
+
+  dwHeader[0] = mmioFOURCC('d', 'a', 't', 'a');
+  dwHeader[1] = 0;
+
+  int p = wav.size();
+  wav.resize(p+8);
+  memcpy(&wav[p], dwHeader, 8);
+
+  IOBuffer buf;
+  buf.copy(&wav[0],wav.size());
+  AVIOContext* avio_ctx = avio_alloc_context(0,0,0,&buf,&IOBuffer::Read,0,0);
+
+  AVFormatContext* fmt_ctx = avformat_alloc_context();
+  fmt_ctx->pb = avio_ctx;
+  int err = avformat_open_input(&fmt_ctx, 0, 0, 0);
+  if(err<0) av_error(err);
+  err = avformat_find_stream_info(fmt_ctx, 0);
+  if(err<0) av_error(err);
+
+  AVStream *fs = fmt_ctx->streams[0];
+
+  st->codec->codec_id = fs->codec->codec_id;
+  st->codec->codec_tag = fs->codec->codec_tag;
+  st->codec->channels = fs->codec->channels;
+  st->codec->channel_layout = fs->codec->channel_layout;
+  st->codec->sample_rate = fs->codec->sample_rate;
+  st->codec->block_align = fs->codec->block_align;
+  st->codec->sample_fmt = fs->codec->sample_fmt;
+  st->codec->bits_per_coded_sample = fs->codec->bits_per_coded_sample;
+  st->codec->bit_rate = fs->codec->bit_rate;
+
+  avformat_free_context(fmt_ctx);
+  av_free(avio_ctx->buffer);
+  av_free(avio_ctx);
+}
+
+void FFOutputFile::adjust_codec_tag(AVStream *st)
+{
+  AVCodecID codec_id = st->codec->codec_id;
+  unsigned int tag = st->codec->codec_tag;
   st->codec->codec_tag = 0;
   AVCodecID codec_id1 = av_codec_get_id(ofmt->oformat->codec_tag, tag);
   unsigned int codec_tag2;
@@ -580,25 +716,8 @@ void FFOutputFile::SetVideo(uint32 index, const AVIStreamHeader_fixed& asi, cons
   if(!ofmt->oformat->codec_tag || codec_id1==codec_id || !have_codec_tag2)
     st->codec->codec_tag = tag;
 
-  if (cbFormat>sizeof(BITMAPINFOHEADER)) {
-    st->codec->extradata_size = cbFormat-sizeof(BITMAPINFOHEADER);
-    st->codec->extradata = (uint8_t*)av_mallocz(st->codec->extradata_size + AV_INPUT_BUFFER_PADDING_SIZE);
-    memcpy(st->codec->extradata, ((char*)pFormat)+sizeof(BITMAPINFOHEADER), st->codec->extradata_size);
-  }
-
-  st->codec->width = bm->biWidth;
-  st->codec->height = bm->biHeight;
-
   if(ofmt->oformat->flags & AVFMT_GLOBALHEADER)
     st->codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-
-  st->avg_frame_rate = av_make_q(asi.dwRate,asi.dwScale);
-  av_stream_set_r_frame_rate(st,st->avg_frame_rate);
-  st->time_base = av_make_q(asi.dwScale,asi.dwRate);
-  st->codec->time_base = st->time_base;
-
-  s.st = st;
-  s.frame = 0;
 }
 
 void FFOutputFile::Write(uint32 index, uint32 flags, const void *pBuffer, uint32 cbBuffer, uint32 samples)
@@ -638,10 +757,10 @@ void FFOutputFile::Write(uint32 index, uint32 flags, const void *pBuffer, uint32
   pkt.pos = -1;
   pkt.stream_index = s.st->index;
   pkt.pts = s.frame;
-  pkt.duration = 1;
+  pkt.duration = samples;
   av_packet_rescale_ts(&pkt, s.st->codec->time_base, s.st->time_base);
 
-  s.frame++;
+  s.frame += samples;
 
   int err = av_interleaved_write_frame(ofmt, &pkt);
   if(err<0) av_error(err);
