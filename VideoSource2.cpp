@@ -129,6 +129,8 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
 
   AVRational tb = m_pStreamCtx->time_base;
   AVRational fr = av_stream_get_r_frame_rate(m_pStreamCtx);
+  AVRational codec_fr = m_pStreamCtx->codec->framerate;
+  if(codec_fr.num) fr = codec_fr;
   av_reduce(&time_base.num, &time_base.den, int64_t(fr.num)*tb.num, int64_t(fr.den)*tb.den, INT_MAX);
 
   if(m_pStreamCtx->duration == AV_NOPTS_VALUE){
@@ -927,9 +929,21 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   // tweak output yuv formats for VD here
   VDXPixmapFormat format = base_format;
 
+  /*if(format==kPixFormat_YUV420_Planar && convertInfo.av_fmt==AV_PIX_FMT_YUV420P && opt_format!=kPixFormat_YUV420_Planar){
+    AVFieldOrder fo = m_pCodecCtx->field_order;
+    if(fo==AV_FIELD_TT) format = kPixFormat_YUV420it_Planar;
+    if(fo==AV_FIELD_BB) format = kPixFormat_YUV420ib_Planar;
+  }*/
+
   if(!skip_colorspace && m_pCodecCtx->color_range==AVCOL_RANGE_JPEG) switch(format){
   case kPixFormat_YUV420_Planar:
     format = kPixFormat_YUV420_Planar_FR;
+    break;
+  case kPixFormat_YUV420it_Planar:
+    format = kPixFormat_YUV420it_Planar_FR;
+    break;
+  case kPixFormat_YUV420ib_Planar:
+    format = kPixFormat_YUV420ib_Planar_FR;
     break;
   case kPixFormat_YUV422_Planar:
     format = kPixFormat_YUV422_Planar_FR;
@@ -951,6 +965,18 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     break;
   case kPixFormat_YUV420_Planar_FR:
     format = kPixFormat_YUV420_Planar_709_FR;
+    break;
+  case kPixFormat_YUV420it_Planar:
+    format = kPixFormat_YUV420it_Planar_709;
+    break;
+  case kPixFormat_YUV420it_Planar_FR:
+    format = kPixFormat_YUV420it_Planar_709_FR;
+    break;
+  case kPixFormat_YUV420ib_Planar:
+    format = kPixFormat_YUV420ib_Planar_709;
+    break;
+  case kPixFormat_YUV420ib_Planar_FR:
+    format = kPixFormat_YUV420ib_Planar_709_FR;
     break;
   case kPixFormat_YUV422_Planar:
     format = kPixFormat_YUV422_Planar_709;
