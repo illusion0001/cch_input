@@ -1406,6 +1406,8 @@ bool VDFFVideoSource::read_frame(sint64 desired_frame, bool init)
   while(1){
     int rf = av_read_frame(m_pFormatCtx, &pkt);
     if(rf<0){
+      pkt.data = 0;
+      pkt.size = 0;
       // end of stream, grab buffered images
       pkt.stream_index = m_streamIndex;
       while(1){
@@ -1436,8 +1438,9 @@ bool VDFFVideoSource::read_frame(sint64 desired_frame, bool init)
           //avcodec_send_packet(m_pCodecCtx, &pkt);
           //int f = avcodec_receive_frame(m_pCodecCtx, frame);
           int got_frame = 0;
-          s = avcodec_decode_video2(m_pCodecCtx, frame, &got_frame, &pkt);
-          if(s<0) break;
+          int used = avcodec_decode_video2(m_pCodecCtx, frame, &got_frame, &pkt);
+          if(used<0) break;
+          s = used;
           if(got_frame){
             if(init){
               init = false;
