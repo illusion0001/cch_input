@@ -136,6 +136,7 @@ int	VDFFAudioSource::initStream(VDFFInputFile* pSource, int streamIndex)
 void VDFFAudioSource::SetTargetFormat(const VDXWAVEFORMATEX* target)
 {
   uint64_t in_layout = m_pCodecCtx->channel_layout;
+  if(!in_layout) in_layout = av_get_default_channel_layout(m_pCodecCtx->channels);
   
   uint64 layout = in_layout;
   AVSampleFormat fmt; 
