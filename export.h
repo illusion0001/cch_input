@@ -2,6 +2,7 @@
 #define export_header
 
 #include <vd2/plugin/vdinputdriver.h>
+#include <vd2/VDXFrame/Unknown.h>
 #include <string>
 #include <vector>
 
@@ -11,11 +12,14 @@ public:
 
   struct StreamInfo{
     AVStream* st;
-    int frame;
+    int64_t frame;
+    AVRational time_base;
 
     StreamInfo(){
       st = 0;
       frame = 0;
+      time_base.den = 0;
+      time_base.num = 0;
     }
   };
 
@@ -30,7 +34,7 @@ public:
   uint32 VDXAPIENTRY CreateStream(int type);
   void VDXAPIENTRY SetVideo(uint32 index, const AVIStreamHeader_fixed& asi, const void *pFormat, int cbFormat);
   void VDXAPIENTRY SetAudio(uint32 index, const AVIStreamHeader_fixed& asi, const void *pFormat, int cbFormat);
-  void VDXAPIENTRY Write(uint32 index, uint32 flags, const void *pBuffer, uint32 cbBuffer, uint32 samples);
+  void VDXAPIENTRY Write(uint32 index, const void *pBuffer, uint32 cbBuffer, PacketInfo& info);
   void Finalize();
   void av_error(int err);
   void adjust_codec_tag(AVStream *st);
@@ -93,5 +97,7 @@ public:
     return false;
   }
 };
+
+extern VDXPluginInfo ff_output_info;
 
 #endif

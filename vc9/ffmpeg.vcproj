@@ -432,6 +432,14 @@
 			</File>
 		</Filter>
 		<File
+			RelativePath="..\a_compress.cpp"
+			>
+		</File>
+		<File
+			RelativePath="..\a_compress.h"
+			>
+		</File>
+		<File
 			RelativePath="..\AudioSource2.cpp"
 			>
 		</File>

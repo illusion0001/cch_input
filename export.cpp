@@ -593,9 +593,9 @@ void FFOutputFile::SetVideo(uint32 index, const AVIStreamHeader_fixed& asi, cons
   av_stream_set_r_frame_rate(st,st->avg_frame_rate);
 
   st->time_base = av_make_q(asi.dwScale,asi.dwRate);
-  st->codec->time_base = st->time_base;
 
   s.st = st;
+  s.time_base = st->time_base;
 }
 
 void FFOutputFile::SetAudio(uint32 index, const AVIStreamHeader_fixed& asi, const void *pFormat, int cbFormat)
@@ -609,9 +609,9 @@ void FFOutputFile::SetAudio(uint32 index, const AVIStreamHeader_fixed& asi, cons
   adjust_codec_tag(st);
 
   st->time_base = av_make_q(asi.dwScale,asi.dwRate);
-  st->codec->time_base = st->time_base;
 
   s.st = st;
+  s.time_base = st->time_base;
 }
 
 void FFOutputFile::import_bmp(AVStream *st, const void *pFormat, int cbFormat)
@@ -700,6 +700,12 @@ void FFOutputFile::import_wav(AVStream *st, const void *pFormat, int cbFormat)
   st->codec->bits_per_coded_sample = fs->codec->bits_per_coded_sample;
   st->codec->bit_rate = fs->codec->bit_rate;
 
+  if(fs->codec->extradata_size){
+    st->codec->extradata_size = fs->codec->extradata_size;
+    st->codec->extradata = (uint8_t*)av_mallocz(st->codec->extradata_size + AV_INPUT_BUFFER_PADDING_SIZE);
+    memcpy(st->codec->extradata, fs->codec->extradata, st->codec->extradata_size);
+  }
+
   avformat_free_context(fmt_ctx);
   av_free(avio_ctx->buffer);
   av_free(avio_ctx);
@@ -720,7 +726,7 @@ void FFOutputFile::adjust_codec_tag(AVStream *st)
     st->codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 }
 
-void FFOutputFile::Write(uint32 index, uint32 flags, const void *pBuffer, uint32 cbBuffer, uint32 samples)
+void FFOutputFile::Write(uint32 index, const void *pBuffer, uint32 cbBuffer, PacketInfo& info)
 {
   if(!ofmt) return;
 
@@ -752,13 +758,18 @@ void FFOutputFile::Write(uint32 index, uint32 flags, const void *pBuffer, uint32
   pkt.data = (uint8*)pBuffer;
   pkt.size = cbBuffer;
 
-  if(flags & AVIIF_KEYFRAME) pkt.flags = AV_PKT_FLAG_KEY;
+  if(info.flags & AVIIF_KEYFRAME) pkt.flags = AV_PKT_FLAG_KEY;
 
   pkt.pos = -1;
   pkt.stream_index = s.st->index;
   pkt.pts = s.frame;
+  int64_t samples = info.samples;
+  if(info.pcm_samples!=-1){
+    samples = info.pcm_samples;
+    s.time_base = av_make_q(1,s.st->codec->sample_rate);
+  }
   pkt.duration = samples;
-  av_packet_rescale_ts(&pkt, s.st->codec->time_base, s.st->time_base);
+  av_packet_rescale_ts(&pkt, s.time_base, s.st->time_base);
 
   s.frame += samples;
 
@@ -774,3 +785,35 @@ void FFOutputFile::Finalize()
   avformat_free_context(ofmt);
   ofmt = 0;
 }
+
+bool VDXAPIENTRY ff_create_output(const VDXInputDriverContext *pContext, IVDXOutputFileDriver **ppDriver)
+{
+  VDFFOutputFileDriver *p = new VDFFOutputFileDriver(*pContext);
+  if(!p) return false;
+  *ppDriver = p;
+  p->AddRef();
+  return true;
+}
+
+VDXOutputDriverDefinition ff_output={
+  sizeof(VDXOutputDriverDefinition),
+  0, //flags
+  L"FFMpeg (all formats)",
+  L"ffmpeg",
+  ff_create_output
+};
+
+VDXPluginInfo ff_output_info={
+  sizeof(VDXPluginInfo),
+  L"FFMpeg output",
+  L"Anton Shekhovtsov",
+  L"Save files through ffmpeg libs.",
+  1,
+  kVDXPluginType_Output,
+  0,
+  12, // min api version
+  kVDXPlugin_APIVersion,
+  kVDXPlugin_OutputDriverAPIVersion,  // min output api version
+  kVDXPlugin_OutputDriverAPIVersion,
+  &ff_output
+};
