@@ -527,11 +527,13 @@ bool VDFFInputFile::detect_image_list(wchar_t* dst, int dst_count, char* start, 
 
 int VDFFInputFile::find_stream(AVFormatContext* fmt, AVMediaType type)
 {
-  int video = av_find_best_stream(fmt,AVMEDIA_TYPE_VIDEO,-1,-1,0,0);
+  int video = -1;
+  int r0 = av_find_best_stream(fmt,AVMEDIA_TYPE_VIDEO,-1,-1,0,0);
+  if(r0>=0) video = r0;
   if(type==AVMEDIA_TYPE_VIDEO) return video;
 
-  int r = av_find_best_stream(fmt,type,-1,video,0,0);
-  if(r>=0) return r;
+  int r1 = av_find_best_stream(fmt,type,-1,video,0,0);
+  if(r1>=0) return r1;
   return -1;
 }
 
