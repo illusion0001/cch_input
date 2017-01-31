@@ -2,8 +2,12 @@
 #include <string>
 #include <Ks.h>
 #include <KsMedia.h>
+#include <vd2/VDXFrame/VideoFilterDialog.h>
+#include "resource.h"
+#include <commctrl.h>
 
 void init_av();
+extern HINSTANCE hInstance;
 
 struct IOWBuffer{
   uint8_t* data;
@@ -26,6 +30,7 @@ struct IOWBuffer{
       t->size = pos+buf_size;
     }
     memcpy(t->data+pos,buf,buf_size);
+    t->pos += buf_size;
     return buf_size;
   }
 
@@ -42,6 +47,7 @@ struct IOWBuffer{
 VDFFAudio::VDFFAudio(const VDXInputDriverContext &pContext)
   :mContext(pContext)
 {
+  config = 0;
   codec = 0;
   ctx = 0;
   frame = 0;
@@ -62,39 +68,90 @@ VDFFAudio::VDFFAudio(const VDXInputDriverContext &pContext)
 
 VDFFAudio::~VDFFAudio()
 {
+  cleanup();
+}
+
+void VDFFAudio::cleanup()
+{
   if(ctx){
     avcodec_close(ctx);
     av_free(ctx);
     ctx = 0;
   }
   if(frame){
-    av_freep(&frame->data[0]);
     av_frame_free(&frame);
     frame = 0;
   }
+  av_packet_unref(&pkt);
   if(swr) swr_free(&swr);
   if(sample_buf){
     av_freep(&sample_buf[0]);
     free(sample_buf);
     free(in_buf);
+    sample_buf = 0;
+    in_buf = 0;
   }
-  free(out_format);
+  if(out_format){
+    free(out_format);
+    out_format = 0;
+    out_format_size = 0;
+  }
 }
 
 void VDFFAudio::SetConfig(void* data, size_t size){
-  if(size!=sizeof(config)){
-    config.clear();
+  size_t rsize = GetConfigSize();
+  if(size!=rsize) return;
+  int src_version = *(int*)data;
+  if(src_version!=config->version){
+    reset_config();
     return;
   }
-  Config* a = (Config*)data;
-  if(a->version!=config.version){
-    config.clear();
-    return;
+  memcpy(config, data, rsize);
+  return;
+}
+
+void VDFFAudio::InitContext()
+{
+  if(config->flags & flag_constant_rate){
+    ctx->bit_rate = config->bitrate*1024;
+  } else {
+    ctx->flags |= AV_CODEC_FLAG_QSCALE;
+    ctx->global_quality = FF_QP2LAMBDA * config->quality;
   }
-  memcpy(&config,a,size);
+}
+
+void VDFFAudio::export_wav()
+{
+  IOWBuffer io;
+  int buf_size = 4096;
+  void* buf = av_malloc(buf_size);
+  AVIOContext* avio_ctx = avio_alloc_context((unsigned char*)buf,buf_size,1,&io,0,&IOWBuffer::Write,&IOWBuffer::Seek);
+  AVFormatContext* ofmt = avformat_alloc_context();
+  ofmt->pb = avio_ctx;
+  ofmt->oformat = av_guess_format("wav", 0, 0);
+  AVStream* st = avformat_new_stream(ofmt, 0);
+  st->time_base = av_make_q(1,ctx->sample_rate);
+  avcodec_parameters_from_context(st->codecpar, ctx);
+  if(avformat_write_header(ofmt, 0)<0) goto cleanup;
+  if(av_write_trailer(ofmt)<0) goto cleanup;
+
+  {
+    out_format_size = *(int*)(io.data+16);
+    WAVEFORMATEXTENSIBLE* ff = (WAVEFORMATEXTENSIBLE*)(io.data+20);
+    out_format = (WAVEFORMATEXTENSIBLE*)malloc(out_format_size);
+    memcpy(out_format,ff,out_format_size);
+  }
+
+cleanup:
+  av_free(avio_ctx->buffer);
+  av_free(avio_ctx);
+  avformat_free_context(ofmt);
 }
 
 void VDFFAudio::SetInputFormat(VDXWAVEFORMATEX* format){
+  cleanup();
+  if(!format) return;
+
   init_av();
   CreateCodec();
 
@@ -104,7 +161,6 @@ void VDFFAudio::SetInputFormat(VDXWAVEFORMATEX* format){
   ctx->channel_layout = av_get_default_channel_layout(format->mChannels);
   ctx->sample_rate    = format->mSamplesPerSec;
   ctx->sample_fmt     = codec->sample_fmts[0];
-  ctx->bit_rate       = 128*1024;
 
   AVSampleFormat in_fmt = AV_SAMPLE_FMT_S16;
   if(format->mBitsPerSample==8) in_fmt = AV_SAMPLE_FMT_U8;
@@ -120,38 +176,21 @@ void VDFFAudio::SetInputFormat(VDXWAVEFORMATEX* format){
   //  ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
   ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 
+  InitContext();
+
   if(avcodec_open2(ctx, codec, NULL)<0){ 
     mContext.mpCallbacks->SetError("FFMPEG: Cannot open codec.");
+    cleanup();
     return;
   }
 
-  IOWBuffer io;
-  int buf_size = 4096;
-  void* buf = av_malloc(buf_size);
-  AVIOContext* avio_ctx = avio_alloc_context((unsigned char*)buf,buf_size,1,&io,0,&IOWBuffer::Write,&IOWBuffer::Seek);
-  AVFormatContext* ofmt = avformat_alloc_context();
-  ofmt->pb = avio_ctx;
-  ofmt->oformat = av_guess_format("wav", 0, 0);
-  AVStream* st = avformat_new_stream(ofmt, 0);
-  st->time_base.den = ctx->sample_rate;
-  st->time_base.num = 1;
-  avcodec_parameters_from_context(st->codecpar, ctx);
-  if(avformat_write_header(ofmt, 0)<0){
+  export_wav();
+  if(!out_format){
     mContext.mpCallbacks->SetError("FFMPEG: Audio format is not compatible.");
+    cleanup();
     return;
   }
-  av_write_trailer(ofmt);
 
-  out_format_size = *(int*)(io.data+16);
-  WAVEFORMATEXTENSIBLE* ff = (WAVEFORMATEXTENSIBLE*)(io.data+20);
-  out_format = (WAVEFORMATEXTENSIBLE*)malloc(out_format_size);
-  memcpy(out_format,ff,out_format_size);
-
-  av_free(avio_ctx->buffer);
-  av_free(avio_ctx);
-  avformat_free_context(ofmt);
-
-  if(swr) swr_free(&swr);
   swr = swr_alloc();
   av_opt_set_int(swr, "in_channel_layout",     ctx->channel_layout, 0);
   av_opt_set_int(swr, "in_sample_rate",        ctx->sample_rate, 0);
@@ -161,7 +200,11 @@ void VDFFAudio::SetInputFormat(VDXWAVEFORMATEX* format){
   av_opt_set_int(swr, "out_sample_rate",       ctx->sample_rate, 0);
   av_opt_set_sample_fmt(swr, "out_sample_fmt", ctx->sample_fmt, 0);
   int rr = swr_init(swr);
-  if(rr<0) mContext.mpCallbacks->SetError("FFMPEG: Audio resampler error.");
+  if(rr<0){
+    mContext.mpCallbacks->SetError("FFMPEG: Audio resampler error.");
+    cleanup();
+    return;
+  }
 
   frame = av_frame_alloc();
   frame->channel_layout = ctx->channel_layout;
@@ -194,9 +237,6 @@ bool VDFFAudio::Convert(bool flush, bool requireOutput){
   }
 
   av_packet_unref(&pkt);
-  pkt.data = 0;
-  pkt.size = 0;
-  av_init_packet(&pkt);
   avcodec_receive_packet(ctx,&pkt);
   if(pkt.size) return true;
 
@@ -243,23 +283,136 @@ unsigned VDFFAudio::CopyOutput(void *dst, unsigned bytes, sint64& duration){
   if(bytes>unsigned(pkt.size)) bytes = pkt.size;
   memcpy(dst,pkt.data,bytes);
   av_packet_unref(&pkt);
-  pkt.data = 0;
-  pkt.size = 0;
-  av_init_packet(&pkt);
   return bytes;
 }
 
 //-----------------------------------------------------------------------------------
+
+class AConfigBase: public VDXVideoFilterDialog{
+public:
+  VDFFAudio* codec;
+  void* old_param;
+  int dialog_id;
+
+  AConfigBase()
+  {
+    codec = 0;
+    old_param = 0;
+  }
+
+  virtual ~AConfigBase()
+  {
+    free(old_param);
+  }
+
+  void Show(HWND parent, VDFFAudio* codec)
+  {
+    this->codec = codec;
+    int rsize = codec->GetConfigSize();
+    old_param = malloc(rsize);
+    memcpy(old_param,codec->config,rsize);
+    VDXVideoFilterDialog::Show(hInstance, MAKEINTRESOURCE(dialog_id), parent);
+  }
+
+  virtual INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam);
+};
+
+INT_PTR AConfigBase::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam){
+  switch(msg){
+  case WM_INITDIALOG:
+    {
+      SetDlgItemText(mhdlg,IDC_ENCODER_LABEL,LIBAVCODEC_IDENT);
+      return true;
+    }
+
+  case WM_COMMAND:
+    switch(LOWORD(wParam)){
+    case IDOK:
+      EndDialog(mhdlg, true);
+      return TRUE;
+
+    case IDCANCEL:
+      memcpy(codec->config, old_param, codec->GetConfigSize());
+      EndDialog(mhdlg, false);
+      return TRUE;
+    }
+  }
+
+  return FALSE;
+}
+
+//-----------------------------------------------------------------------------------
+
+void VDFFAudio_aac::reset_config()
+{
+  codec_config.clear();
+  codec_config.version = 2;
+  codec_config.flags = VDFFAudio::flag_constant_rate;
+  codec_config.bitrate = 128;
+}
 
 void VDFFAudio_aac::CreateCodec()
 {
   codec = avcodec_find_encoder(AV_CODEC_ID_AAC);
 }
 
-void VDFFAudio_mp3::CreateCodec()
+class AConfigAAC: public AConfigBase{
+public:
+  VDFFAudio_aac::Config* codec_config;
+
+  AConfigAAC(){ dialog_id = IDD_ENC_AAC; }
+  INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam);
+  void init_quality();
+  void change_quality();
+};
+
+void AConfigAAC::init_quality()
 {
-  codec = avcodec_find_encoder(AV_CODEC_ID_MP3);
+  SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMIN, FALSE, 32);
+  SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMAX, TRUE, 2000);
+  SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETPOS, TRUE, codec_config->bitrate);
+  char buf[80];
+  sprintf(buf,"%d k",codec_config->bitrate);
+  SetDlgItemText(mhdlg, IDC_QUALITY_VALUE, buf);
+  SetDlgItemText(mhdlg, IDC_QUALITY_LABEL, "Bitrate (low-high)");
 }
+
+void AConfigAAC::change_quality()
+{
+  int x = SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_GETPOS, 0, 0);
+  codec_config->bitrate = x & ~15;
+  char buf[80];
+  sprintf(buf,"%d k",codec_config->bitrate);
+  SetDlgItemText(mhdlg, IDC_QUALITY_VALUE, buf);
+}
+
+INT_PTR AConfigAAC::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
+{
+  switch(msg){
+  case WM_INITDIALOG:
+    {
+      codec_config = (VDFFAudio_aac::Config*)codec->config;
+      init_quality();
+      break;
+    }
+
+  case WM_HSCROLL:
+    if((HWND)lParam==GetDlgItem(mhdlg,IDC_QUALITY)){
+      change_quality();
+      break;
+    }
+    return false;
+  }
+  return AConfigBase::DlgProc(msg,wParam,lParam);
+}
+
+void VDFFAudio_aac::ShowConfig(VDXHWND parent)
+{
+  AConfigAAC cfg;
+  cfg.Show((HWND)parent,this);
+}
+
+//-----------------------------------------------------------------------------------
 
 bool VDXAPIENTRY ff_create_aacenc(const VDXInputDriverContext *pContext, IVDXAudioEnc **ppDriver)
 {
@@ -292,6 +445,117 @@ VDXPluginInfo ff_aacenc_info={
   kVDXPlugin_AudioEncAPIVersion,
   &ff_aacenc
 };
+
+//-----------------------------------------------------------------------------------
+
+int mp3_bitrate[] = {8, 16, 24, 32, 40, 48, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320};
+
+void VDFFAudio_mp3::reset_config()
+{
+  codec_config.clear();
+  codec_config.bitrate = 320;
+}
+
+void VDFFAudio_mp3::CreateCodec()
+{
+  codec = avcodec_find_encoder(AV_CODEC_ID_MP3);
+}
+
+void VDFFAudio_mp3::InitContext()
+{
+  VDFFAudio::InitContext();
+  av_opt_set_int(ctx->priv_data, "joint_stereo", codec_config.flags & flag_jointstereo, 0);
+}
+
+class AConfigMp3: public AConfigBase{
+public:
+  VDFFAudio_mp3::Config* codec_config;
+
+  AConfigMp3(){ dialog_id = IDD_ENC_MP3; }
+  INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam);
+  void init_quality();
+  void change_quality();
+};
+
+void AConfigMp3::init_quality()
+{
+  if(codec_config->flags & VDFFAudio::flag_constant_rate){
+    int rate_count = sizeof(mp3_bitrate)/sizeof(int);
+    int x = 0;
+    for(; x<rate_count; x++) if(mp3_bitrate[x]==codec_config->bitrate) break;
+
+    SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMIN, FALSE, 0);
+    SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMAX, TRUE, rate_count-1);
+    SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETPOS, TRUE, x);
+    char buf[80];
+    sprintf(buf,"%d k",codec_config->bitrate);
+    SetDlgItemText(mhdlg, IDC_QUALITY_VALUE, buf);
+    SetDlgItemText(mhdlg, IDC_QUALITY_LABEL, "Bitrate (low-high)");
+  } else {
+    SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMIN, FALSE, 0);
+    SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMAX, TRUE, 9);
+    SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETPOS, TRUE, codec_config->quality);
+    SetDlgItemInt(mhdlg, IDC_QUALITY_VALUE, codec_config->quality, false);
+    SetDlgItemText(mhdlg, IDC_QUALITY_LABEL, "Quality (high-low)");
+  }
+}
+
+void AConfigMp3::change_quality()
+{
+  int x = SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_GETPOS, 0, 0);
+  if(codec_config->flags & VDFFAudio::flag_constant_rate){
+    codec_config->bitrate = mp3_bitrate[x];
+    char buf[80];
+    sprintf(buf,"%d k",codec_config->bitrate);
+    SetDlgItemText(mhdlg, IDC_QUALITY_VALUE, buf);
+  } else {
+    codec_config->quality = x;
+    SetDlgItemInt(mhdlg, IDC_QUALITY_VALUE, codec_config->quality, false);
+  }
+}
+
+INT_PTR AConfigMp3::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
+{
+  switch(msg){
+  case WM_INITDIALOG:
+    {
+      codec_config = (VDFFAudio_mp3::Config*)codec->config;
+      init_quality();
+      CheckDlgButton(mhdlg, IDC_STEREO, codec_config->flags & VDFFAudio_mp3::flag_jointstereo);
+      CheckDlgButton(mhdlg, IDC_CBR, codec_config->flags & VDFFAudio::flag_constant_rate);
+      break;
+    }
+
+  case WM_HSCROLL:
+    if((HWND)lParam==GetDlgItem(mhdlg,IDC_QUALITY)){
+      change_quality();
+      break;
+    }
+    return false;
+
+  case WM_COMMAND:
+    switch(LOWORD(wParam)){
+    case IDC_STEREO:
+      codec_config->flags &= ~VDFFAudio_mp3::flag_jointstereo;
+      if(IsDlgButtonChecked(mhdlg,IDC_STEREO))
+        codec_config->flags |= VDFFAudio_mp3::flag_jointstereo;
+      break;
+    case IDC_CBR:
+      codec_config->flags &= ~VDFFAudio::flag_constant_rate;
+      if(IsDlgButtonChecked(mhdlg,IDC_CBR))
+        codec_config->flags |= VDFFAudio::flag_constant_rate;
+      init_quality();
+      break;
+    }
+  }
+  return AConfigBase::DlgProc(msg,wParam,lParam);
+}
+
+void VDFFAudio_mp3::ShowConfig(VDXHWND parent)
+{
+  AConfigMp3 cfg;
+  cfg.Show((HWND)parent,this);
+}
 
 //-----------------------------------------------------------------------------------
 

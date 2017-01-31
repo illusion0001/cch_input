@@ -12,6 +12,8 @@
 #define IDD_EXPORT_PROGRESS             106
 #define IDD_INPUT_OPTIONS               107
 #define IDD_ENC_PRORES                  108
+#define IDD_ENC_MP3                     109
+#define IDD_ENC_AAC                     110
 #define IDC_FORMATNAME                  1004
 #define IDC_VIDEO_PIXFMT                1006
 #define IDC_VIDEO_WXH                   1007
@@ -76,6 +78,9 @@
 #define IDC_PROFILE                     1046
 #define IDC_QUALITY                     1047
 #define IDC_QUALITY_VALUE               1048
+#define IDC_STEREO                      1049
+#define IDC_CBR                         1050
+#define IDC_QUALITY_LABEL               1051
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -84,7 +89,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        107
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1049
+#define _APS_NEXT_CONTROL_VALUE         1052
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

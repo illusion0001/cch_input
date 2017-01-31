@@ -17,14 +17,17 @@ class VDFFAudio: public vdxunknown<IVDXAudioEnc>{
 public:
   const VDXInputDriverContext &mContext;
 
+  enum {flag_constant_rate=1};
+
   struct Config{
     int version;
     int quality;
     int bitrate;
+    int flags;
 
     Config(){ clear(); }
-    void clear(){ version=0; quality=0; bitrate=0; }
-  } config;
+    void clear(){ version=0; quality=0; bitrate=0; flags=0; }
+  }* config;
 
   AVCodec* codec;
   AVCodecContext* ctx;
@@ -45,15 +48,20 @@ public:
 
   VDFFAudio(const VDXInputDriverContext &pContext);
   ~VDFFAudio();
+  void cleanup();
+
+  void export_wav();
 
   virtual void CreateCodec() = 0;
+  virtual void InitContext();
+  virtual void reset_config(){ config->clear(); }
 
   virtual bool HasAbout(){ return false; }
   virtual bool HasConfig(){ return false; }
   virtual void ShowAbout(VDXHWND parent){}
   virtual void ShowConfig(VDXHWND parent){}
-  virtual size_t GetConfigSize(){ return sizeof(config); }
-  virtual void* GetConfig(){ return &config; }
+  virtual size_t GetConfigSize(){ return sizeof(Config); }
+  virtual void* GetConfig(){ return config; }
   virtual void SetConfig(void* data, size_t size);
 
   virtual void SetInputFormat(VDXWAVEFORMATEX* format);
@@ -79,14 +87,36 @@ public:
 
 class VDFFAudio_aac: public VDFFAudio{
 public:
-  VDFFAudio_aac(const VDXInputDriverContext &pContext):VDFFAudio(pContext){}
+  struct Config:public VDFFAudio::Config{
+  } codec_config;
+
+  VDFFAudio_aac(const VDXInputDriverContext &pContext):VDFFAudio(pContext){
+    config = &codec_config;
+    reset_config();
+  }
   virtual void CreateCodec();
+  virtual size_t GetConfigSize(){ return sizeof(Config); }
+  virtual void reset_config();
+  virtual bool HasConfig(){ return true; }
+  virtual void ShowConfig(VDXHWND parent);
 };
 
 class VDFFAudio_mp3: public VDFFAudio{
 public:
-  VDFFAudio_mp3(const VDXInputDriverContext &pContext):VDFFAudio(pContext){}
+  enum {flag_jointstereo=2};
+  struct Config:public VDFFAudio::Config{
+  } codec_config;
+
+  VDFFAudio_mp3(const VDXInputDriverContext &pContext):VDFFAudio(pContext){
+    config = &codec_config;
+    reset_config();
+  }
   virtual void CreateCodec();
+  virtual void InitContext();
+  virtual size_t GetConfigSize(){ return sizeof(Config); }
+  virtual void reset_config();
+  virtual bool HasConfig(){ return true; }
+  virtual void ShowConfig(VDXHWND parent);
 };
 
 extern VDXPluginInfo ff_aacenc_info;
