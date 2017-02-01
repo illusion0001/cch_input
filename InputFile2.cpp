@@ -209,45 +209,9 @@ bool VDXAPIENTRY VDFFInputFileDriver::CreateInputFile(uint32_t flags, IVDXInputF
 
 //----------------------------------------------------------------------------------------------
 
-int av_initialized;
-
-void init_av()
-{
-  if(!av_initialized){
-    av_initialized = 1;
-    av_register_all();
-    avcodec_register_all();
-    //av_register_cfhd();
-    av_register_vfw_cfhd();
-  }
-}
-
-void av_log_func(void* obj, int type, const char* msg, va_list arg)
-{
-  char buf[1024];
-  vsprintf(buf,msg,arg);
-  OutputDebugString(buf);
-  switch(type){
-  case AV_LOG_PANIC:
-  case AV_LOG_FATAL:
-  case AV_LOG_ERROR:
-  case AV_LOG_WARNING:
-    ;//DebugBreak();
-  }
-}
-
 VDFFInputFile::VDFFInputFile(const VDXInputDriverContext& context)
   :mContext(context)
 {
-  //! I wonder what happens if any other piece of system uses shared ffmpeg too
-  #ifdef FFDEBUG
-  //av_log_set_callback(av_log_func);
-  //av_log_set_level(AV_LOG_INFO);
-  //av_log_set_flags(AV_LOG_SKIP_REPEATED);
-  #endif
-
-  init_av();
-
   m_pFormatCtx = 0;
   video_start_time = 0;
   video_source = 0;
@@ -286,6 +250,7 @@ void VDFFInputFile::Init(const wchar_t *szFile, IVDXInputOptions *opts)
 
   wcscpy(path,szFile);
 
+  init_av();
   //! this context instance is granted to video stream: wasted in audio-only mode
   // audio will manage its own
   m_pFormatCtx = open_file(AVMEDIA_TYPE_VIDEO);

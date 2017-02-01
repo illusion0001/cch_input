@@ -95,6 +95,7 @@ public:
     reset_config();
   }
   virtual void CreateCodec();
+  virtual void InitContext();
   virtual size_t GetConfigSize(){ return sizeof(Config); }
   virtual void reset_config();
   virtual bool HasConfig(){ return true; }

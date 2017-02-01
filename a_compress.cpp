@@ -113,7 +113,7 @@ void VDFFAudio::SetConfig(void* data, size_t size){
 void VDFFAudio::InitContext()
 {
   if(config->flags & flag_constant_rate){
-    ctx->bit_rate = config->bitrate*1024;
+    ctx->bit_rate = config->bitrate*1000;
   } else {
     ctx->flags |= AV_CODEC_FLAG_QSCALE;
     ctx->global_quality = FF_QP2LAMBDA * config->quality;
@@ -356,6 +356,14 @@ void VDFFAudio_aac::CreateCodec()
   codec = avcodec_find_encoder(AV_CODEC_ID_AAC);
 }
 
+void VDFFAudio_aac::InitContext()
+{
+  VDFFAudio::InitContext();
+  if(config->flags & flag_constant_rate){
+    ctx->bit_rate = config->bitrate*1000*ctx->channels;
+  }
+}
+
 class AConfigAAC: public AConfigBase{
 public:
   VDFFAudio_aac::Config* codec_config;
@@ -369,12 +377,12 @@ public:
 void AConfigAAC::init_quality()
 {
   SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMIN, FALSE, 32);
-  SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMAX, TRUE, 2000);
+  SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMAX, TRUE, 288);
   SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETPOS, TRUE, codec_config->bitrate);
   char buf[80];
   sprintf(buf,"%d k",codec_config->bitrate);
   SetDlgItemText(mhdlg, IDC_QUALITY_VALUE, buf);
-  SetDlgItemText(mhdlg, IDC_QUALITY_LABEL, "Bitrate (low-high)");
+  SetDlgItemText(mhdlg, IDC_QUALITY_LABEL, "Bitrate/channel");
 }
 
 void AConfigAAC::change_quality()
@@ -490,7 +498,7 @@ void AConfigMp3::init_quality()
     char buf[80];
     sprintf(buf,"%d k",codec_config->bitrate);
     SetDlgItemText(mhdlg, IDC_QUALITY_VALUE, buf);
-    SetDlgItemText(mhdlg, IDC_QUALITY_LABEL, "Bitrate (low-high)");
+    SetDlgItemText(mhdlg, IDC_QUALITY_LABEL, "Bitrate");
   } else {
     SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMIN, FALSE, 0);
     SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMAX, TRUE, 9);
