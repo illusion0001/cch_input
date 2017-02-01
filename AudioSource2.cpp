@@ -360,6 +360,7 @@ void VDFFAudioSource::insert_silence(int64_t start, uint32_t count)
     int px = (int)(start / BufferPage::size);
     int s0 = start % BufferPage::size;
 
+    if(px>=buffer_size) break;
     alloc_page(px);
     BufferPage& bp = buffer[px];
 
@@ -381,6 +382,7 @@ void VDFFAudioSource::invalidate(int64_t start, uint32_t count)
     int px = (int)(start / BufferPage::size);
     int s0 = start % BufferPage::size;
 
+    if(px>=buffer_size) break;
     BufferPage& bp = buffer[px];
     int n = s0+count<BufferPage::size ? count : BufferPage::size-s0;
     if(bp.a0 && s0<=bp.a0){
