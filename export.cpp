@@ -557,31 +557,10 @@ typedef struct AVCodecTag {
   unsigned int tag;
 } AVCodecTag;
 
-struct AVIStreamHeader_fixed {
-    uint32		fccType;
-    uint32		fccHandler;
-    uint32		dwFlags;
-    uint16		wPriority;
-    uint16		wLanguage;
-    uint32		dwInitialFrames;
-    uint32		dwScale;	
-    uint32		dwRate;
-    uint32		dwStart;
-    uint32		dwLength;
-    uint32		dwSuggestedBufferSize;
-    uint32		dwQuality;
-    uint32		dwSampleSize;
-	struct {
-		sint16	left;
-		sint16	top;
-		sint16	right;
-		sint16	bottom;
-	} rcFrame;
-};
-
-void FFOutputFile::SetVideo(uint32 index, const AVIStreamHeader_fixed& asi, const void *pFormat, int cbFormat)
+void FFOutputFile::SetVideo(uint32 index, const VDXStreamInfo& si, const void *pFormat, int cbFormat)
 {
   StreamInfo& s = stream[index];
+  const VDXAVIStreamHeader& asi = si.aviHeader;
 
   AVStream *st = avformat_new_stream(ofmt, 0);
   st->codec->codec_type = AVMEDIA_TYPE_VIDEO;
@@ -598,9 +577,10 @@ void FFOutputFile::SetVideo(uint32 index, const AVIStreamHeader_fixed& asi, cons
   s.time_base = st->time_base;
 }
 
-void FFOutputFile::SetAudio(uint32 index, const AVIStreamHeader_fixed& asi, const void *pFormat, int cbFormat)
+void FFOutputFile::SetAudio(uint32 index, const VDXStreamInfo& si, const void *pFormat, int cbFormat)
 {
   StreamInfo& s = stream[index];
+  const VDXAVIStreamHeader& asi = si.aviHeader;
 
   AVStream *st = avformat_new_stream(ofmt, 0);
   st->codec->codec_type = AVMEDIA_TYPE_AUDIO;
@@ -609,6 +589,13 @@ void FFOutputFile::SetAudio(uint32 index, const AVIStreamHeader_fixed& asi, cons
   adjust_codec_tag(st);
 
   st->time_base = av_make_q(asi.dwScale,asi.dwRate);
+
+  if(si.avcodec_version){
+    st->codec->block_align = si.block_align;
+    st->codec->frame_size = si.frame_size;
+    st->codec->initial_padding = si.initial_padding;
+    st->codec->trailing_padding = si.trailing_padding;
+  }
 
   s.st = st;
   s.time_base = st->time_base;
@@ -696,6 +683,7 @@ void FFOutputFile::import_wav(AVStream *st, const void *pFormat, int cbFormat)
   st->codec->channel_layout = fs->codec->channel_layout;
   st->codec->sample_rate = fs->codec->sample_rate;
   st->codec->block_align = fs->codec->block_align;
+  st->codec->frame_size = fs->codec->frame_size;
   st->codec->sample_fmt = fs->codec->sample_fmt;
   st->codec->bits_per_coded_sample = fs->codec->bits_per_coded_sample;
   st->codec->bit_rate = fs->codec->bit_rate;

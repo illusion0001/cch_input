@@ -219,6 +219,23 @@ void VDFFAudio::SetInputFormat(VDXWAVEFORMATEX* format){
   in_buf = (uint8*)malloc(src_linesize*frame_size);
 }
 
+void VDFFAudio::GetStreamInfo(VDXStreamInfo& si) const {
+  si.avcodec_version = LIBAVCODEC_VERSION_INT;
+  si.block_align = ctx->block_align;
+  si.frame_size = ctx->frame_size;
+  si.initial_padding = ctx->initial_padding;
+  si.trailing_padding = ctx->trailing_padding;
+
+  // proof: ff_parse_specific_params
+  // au_rate = par->sample_rate
+  // au_scale = par->frame_size (depends on codec but here it must be known)
+  // au_ssize = par->block_align
+
+  si.aviHeader.dwSampleSize = ctx->block_align;
+  si.aviHeader.dwScale = ctx->frame_size;
+  si.aviHeader.dwRate = ctx->sample_rate;
+}
+
 bool VDFFAudio::Convert(bool flush, bool requireOutput){
   if(pkt.size) return true;
 
@@ -277,6 +294,13 @@ unsigned VDFFAudio::CopyOutput(void *dst, unsigned bytes, sint64& duration){
     duration = -1;
     return 0;
   }
+  /*
+  //! not supported by host
+  if(int(bytes)<pkt.size){
+    duration = pkt.duration;
+    return 0;
+  }
+  */
 
   total_out += pkt.duration;
   duration = pkt.duration;

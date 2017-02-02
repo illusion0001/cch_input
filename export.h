@@ -32,8 +32,8 @@ public:
   ~FFOutputFile();
   void VDXAPIENTRY Init(const wchar_t *path, const char* format);
   uint32 VDXAPIENTRY CreateStream(int type);
-  void VDXAPIENTRY SetVideo(uint32 index, const AVIStreamHeader_fixed& asi, const void *pFormat, int cbFormat);
-  void VDXAPIENTRY SetAudio(uint32 index, const AVIStreamHeader_fixed& asi, const void *pFormat, int cbFormat);
+  void VDXAPIENTRY SetVideo(uint32 index, const VDXStreamInfo& si, const void *pFormat, int cbFormat);
+  void VDXAPIENTRY SetAudio(uint32 index, const VDXStreamInfo& si, const void *pFormat, int cbFormat);
   void VDXAPIENTRY Write(uint32 index, const void *pBuffer, uint32 cbBuffer, PacketInfo& info);
   void Finalize();
   void av_error(int err);

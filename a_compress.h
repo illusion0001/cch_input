@@ -74,6 +74,7 @@ public:
   virtual unsigned	GetOutputLevel() const;
   virtual const VDXWAVEFORMATEX *GetOutputFormat() const { return (VDXWAVEFORMATEX*)out_format; }
   virtual unsigned	GetOutputFormatSize() const { return out_format_size; }
+  virtual void	GetStreamInfo(VDXStreamInfo& si) const;
 
   virtual void		Restart(){}
   virtual bool		Convert(bool flush, bool requireOutput);
