@@ -133,6 +133,8 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   if(codec_fr.num) fr = codec_fr;
   av_reduce(&time_base.num, &time_base.den, int64_t(fr.num)*tb.num, int64_t(fr.den)*tb.den, INT_MAX);
 
+  int sample_count_error = 2;
+
   if(m_pStreamCtx->duration == AV_NOPTS_VALUE){
     if(m_pFormatCtx->duration == AV_NOPTS_VALUE){
       if(pSource->is_image){
@@ -148,7 +150,13 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
     }
   } else {
     int rndd = time_base.den/2;
-    sample_count = (int)((m_pStreamCtx->duration * time_base.num + rndd) / time_base.den);
+    //! stream duration really means last timestamp
+    // found on "10 bit.mp4"
+    int64_t duration = m_pStreamCtx->duration;//-m_pStreamCtx->start_time;
+    sample_count = (int)((duration * time_base.num + rndd) / time_base.den);
+    int e = (int)((m_pStreamCtx->start_time * time_base.num + rndd) / time_base.den);
+    e = abs(e);
+    if(e>sample_count_error) sample_count_error = e;
   }
 
   if(pSource->is_image){
@@ -165,7 +173,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
     }
     trust_index = false;
     sparse_index = false;
-    if(m_pStreamCtx->nb_index_entries>2 && abs(m_pStreamCtx->nb_index_entries - sample_count)<3){
+    if(m_pStreamCtx->nb_index_entries>2 && abs(m_pStreamCtx->nb_index_entries - sample_count)<=sample_count_error){
       // hopefully there is index with useful timestamps
       sample_count = m_pStreamCtx->nb_index_entries;
       trust_index = true;
@@ -430,6 +438,7 @@ bool VDFFVideoSource::IsKey(int64_t sample)
     return (m_pStreamCtx->index_entries[sample].flags & AVINDEX_KEYFRAME)!=0;
   }
   if(sparse_index){
+    //! start_time is not applied to index, found on "10 bit.mp4"
     int64_t pos1 = sample*time_base.den / time_base.num + start_time;
     int x = av_index_search_timestamp(m_pStreamCtx,pos1,AVSEEK_FLAG_BACKWARD);
     if(x==-1) return false;
@@ -1330,6 +1339,13 @@ bool VDFFVideoSource::Read(sint64 start, uint32 lCount, void *lpBuffer, uint32 c
     if(jump!=last_seek_frame){
       last_seek_frame = jump;
       int64_t pos = jump*time_base.den / time_base.num + start_time;
+
+      if(!(m_pFormatCtx->iformat->flags & AVFMT_SEEK_TO_PTS)){
+        // because seeking works on DTS it needs some unknown offset to work
+        pos -= 8; // better than nothing
+        //pos -= keyframe_gap*time_base.den / 2 / time_base.num;
+      }
+
       if(jump==0 && pos>0) pos = 0;
       avcodec_flush_buffers(m_pCodecCtx);
       av_seek_frame(m_pFormatCtx,m_streamIndex,pos,AVSEEK_FLAG_BACKWARD);

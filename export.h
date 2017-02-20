@@ -68,27 +68,29 @@ public:
       wcscpy(ext,L"*.mkv");
       strcpy(name,"matroska");
       return true;
+      /*
     case 2:
       wcscpy(filter,L"WebM (*.webm)");
       wcscpy(ext,L"*.webm");
       strcpy(name,"webm");
       return true;
-    case 3:
+      */
+    case 2:
       wcscpy(filter,L"QuickTime / MOV (*.mov)");
       wcscpy(ext,L"*.mov");
       strcpy(name,"mov");
       return true;
-    case 4:
+    case 3:
       wcscpy(filter,L"MP4 (MPEG-4 Part 14) (*.mp4)");
       wcscpy(ext,L"*.mp4");
       strcpy(name,"mp4");
       return true;
-    case 5:
+    case 4:
       wcscpy(filter,L"NUT (*.nut)");
       wcscpy(ext,L"*.nut");
       strcpy(name,"nut");
       return true;
-    case 6:
+    case 5:
       wcscpy(filter,L"any format by FFMPEG (*.*)");
       wcscpy(ext,L"*.*");
       strcpy(name,"");

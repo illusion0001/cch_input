@@ -8,7 +8,7 @@
 
 #include <string>
 
-static const char* vsnstr = "Version 1.12";
+static const char* vsnstr = "Version 1.13";
 
 extern HINSTANCE hInstance;
  
@@ -375,7 +375,7 @@ void VDFFInputFileInfoDialog::print_performance()
 
   int buf_count = 0;
   int buf_max = 0;
-  bool trust_index = true;
+  int index_quality = 2;
   bool all_key = true;
 
   while(f1){
@@ -384,7 +384,12 @@ void VDFFInputFileInfoDialog::print_performance()
     {for(int i=0; i<v1->buffer_count; i++)
       if(v1->buffer[i].refs) buf_count++; }
 
-    if(!v1->trust_index && !v1->sparse_index) trust_index = false;
+    if(!v1->trust_index){
+      if(index_quality>1) index_quality = 1;
+      if(!v1->sparse_index){
+        if(index_quality>0) index_quality = 0;
+      }
+    }
     if(v1->keyframe_gap!=1) all_key = false;
 
     f1 = f1->next_segment;
@@ -403,9 +408,11 @@ void VDFFInputFileInfoDialog::print_performance()
   if(segment->is_image){
     SetDlgItemText(mhdlg, IDC_INDEX_INFO, "Seeking: image list (random access)");
   } else {
-    if(trust_index){
+    if(index_quality>0){
       if(all_key){
         SetDlgItemText(mhdlg, IDC_INDEX_INFO, "Seeking: index present, optimal random access");
+      } else if(index_quality==2){
+        SetDlgItemText(mhdlg, IDC_INDEX_INFO, "Seeking: index present, all frames");
       } else {
         SetDlgItemText(mhdlg, IDC_INDEX_INFO, "Seeking: index present");
       }
