@@ -60,6 +60,30 @@ struct IOBuffer{
   }
 };
 
+void adjust_codec_tag(AVOutputFormat* format, AVStream* st)
+{
+  AVCodecID codec_id = st->codec->codec_id;
+  unsigned int tag = st->codec->codec_tag;
+  st->codec->codec_tag = 0;
+  AVCodecID codec_id1 = av_codec_get_id(format->codec_tag, tag);
+  unsigned int codec_tag2;
+  int have_codec_tag2 = av_codec_get_tag2(format->codec_tag, codec_id, &codec_tag2);
+  if(!format->codec_tag || codec_id1==codec_id || !have_codec_tag2)
+    st->codec->codec_tag = tag;
+}
+
+uint32 export_avi_fcc(AVStream* src)
+{
+  AVFormatContext* ctx = avformat_alloc_context();
+  AVStream* st = avformat_new_stream(ctx,0);
+  avcodec_copy_context(st->codec, src->codec);
+  AVOutputFormat* format = av_guess_format("avi", 0, 0);
+  adjust_codec_tag(format,st);
+  uint32 r = st->codec->codec_tag;
+  avformat_free_context(ctx);
+  return r;
+}
+
 bool VDXAPIENTRY VDFFInputFile::GetExportMenuInfo(int id, char* name, int name_size, bool* enabled)
 {
   if(id==0){
@@ -325,12 +349,7 @@ bool VDXAPIENTRY VDFFInputFile::ExecuteExport(int id, VDXHWND parent, IProjectSt
       err = avcodec_copy_context(out_stream->codec, in_stream->codec);
       if(err<0) goto end;
 
-      out_stream->codec->codec_tag = 0;
-      AVCodecID codec_id1 = av_codec_get_id(ofmt->oformat->codec_tag, in_stream->codec->codec_tag);
-      unsigned int codec_tag2;
-      int have_codec_tag2 = av_codec_get_tag2(ofmt->oformat->codec_tag, in_stream->codec->codec_id, &codec_tag2);
-      if(!ofmt->oformat->codec_tag || codec_id1==out_stream->codec->codec_id || !have_codec_tag2)
-        out_stream->codec->codec_tag = in_stream->codec->codec_tag;
+      adjust_codec_tag(ofmt->oformat,out_stream);
 
       if(ofmt->oformat->flags & AVFMT_GLOBALHEADER)
         out_stream->codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
@@ -701,14 +720,7 @@ void FFOutputFile::import_wav(AVStream *st, const void *pFormat, int cbFormat)
 
 void FFOutputFile::adjust_codec_tag(AVStream *st)
 {
-  AVCodecID codec_id = st->codec->codec_id;
-  unsigned int tag = st->codec->codec_tag;
-  st->codec->codec_tag = 0;
-  AVCodecID codec_id1 = av_codec_get_id(ofmt->oformat->codec_tag, tag);
-  unsigned int codec_tag2;
-  int have_codec_tag2 = av_codec_get_tag2(ofmt->oformat->codec_tag, codec_id, &codec_tag2);
-  if(!ofmt->oformat->codec_tag || codec_id1==codec_id || !have_codec_tag2)
-    st->codec->codec_tag = tag;
+  ::adjust_codec_tag(ofmt->oformat,st);
 
   if(ofmt->oformat->flags & AVFMT_GLOBALHEADER)
     st->codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;

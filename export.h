@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+uint32 export_avi_fcc(AVStream* src);
+
 class FFOutputFile: public  vdxunknown<IVDXOutputFile>{
 public:
   const VDXInputDriverContext &mContext;

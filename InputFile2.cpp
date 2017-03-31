@@ -326,7 +326,7 @@ bool VDXAPIENTRY VDFFInputFile::Append(const wchar_t* szFile)
       f->video_source->SetTargetFormat(convertInfo.req_format,convertInfo.req_dib,f->head_segment->video_source);
       VDFFInputFile* f1 = f->head_segment;
       while(1){
-        f1->video_source->m_streamInfo.mSampleCount += f->video_source->sample_count;
+        f1->video_source->m_streamInfo.mInfo.mSampleCount += f->video_source->sample_count;
         f1 = f1->next_segment;
         if(!f1) break;
         if(f1==f) break;
@@ -531,7 +531,7 @@ bool VDFFInputFile::GetVideoSource(int index, IVDXVideoSource **ppVS)
   }
 
   if(next_segment && next_segment->GetVideoSource(0,0)){
-    video_source->m_streamInfo.mSampleCount += next_segment->video_source->sample_count;
+    video_source->m_streamInfo.mInfo.mSampleCount += next_segment->video_source->sample_count;
   }
 
   return true;

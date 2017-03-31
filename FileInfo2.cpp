@@ -8,7 +8,7 @@
 
 #include <string>
 
-static const char* vsnstr = "Version 1.13";
+static const char* vsnstr = "Version 1.14";
 
 extern HINSTANCE hInstance;
  
@@ -135,7 +135,7 @@ void VDFFInputFileInfoDialog::print_format()
   } else {
     double seconds = 0;
     if(segment->is_anim_image){
-      VDXFraction fr = segment->video_source->m_streamInfo.mSampleRate;
+      VDXFraction fr = segment->video_source->m_streamInfo.mInfo.mSampleRate;
       seconds = double(segment->video_source->sample_count)*fr.mDenominator/fr.mNumerator;
     } else {
       seconds = pFormatCtx->duration/(double)AV_TIME_BASE;
@@ -219,7 +219,7 @@ void VDFFInputFileInfoDialog::print_video()
     sprintf(buf, "%u x %u", pVideoCtx->width, pVideoCtx->height);
     SetDlgItemText(mhdlg, IDC_VIDEO_WXH, buf);
   } else {
-    VDXFraction fr = segment->video_source->m_streamInfo.mSampleRate;
+    VDXFraction fr = segment->video_source->m_streamInfo.mInfo.mSampleRate;
     sprintf(buf, "%u x %u, %.2f fps", pVideoCtx->width, pVideoCtx->height, fr.mNumerator/double(fr.mDenominator));
     SetDlgItemText(mhdlg, IDC_VIDEO_WXH, buf);
   }

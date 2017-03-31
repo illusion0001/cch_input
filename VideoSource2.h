@@ -17,6 +17,7 @@ class VDFFInputFile;
 
 class VDFFVideoSource : public vdxunknown<IVDXStreamSource>, 
   public IVDXStreamSourceV5, 
+  public IVDXStreamSourceV3, 
   public IVDXVideoSource, 
   public IVDXVideoDecoder, 
   public IVDXVideoDecoderModel, 
@@ -32,6 +33,7 @@ public:
 
   //Stream Interface
   void		VDXAPIENTRY GetStreamSourceInfo(VDXStreamSourceInfo&);
+  void		VDXAPIENTRY GetStreamSourceInfoV3(VDXStreamSourceInfoV3&);
   bool		VDXAPIENTRY Read(int64_t lStart, uint32_t lCount, void *lpBuffer, uint32_t cbBuffer, uint32_t *lBytesRead, uint32_t *lSamplesRead);
 
   void VDXAPIENTRY ApplyStreamMode(uint32 flags);
@@ -88,7 +90,7 @@ public:
   AVFormatContext* m_pFormatCtx;
   AVStream*	m_pStreamCtx;
   AVCodecContext* m_pCodecCtx;
-  VDXStreamSourceInfo	m_streamInfo;
+  VDXStreamSourceInfoV3	m_streamInfo;
   void* direct_format;
   int direct_format_len;
   AVRational time_base;

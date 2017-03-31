@@ -1,6 +1,7 @@
 #include "VideoSource2.h"
 #include "InputFile2.h"
 #include "cineform.h"
+#include "export.h"
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -92,6 +93,9 @@ void *VDXAPIENTRY VDFFVideoSource::AsInterface(uint32_t iid)
 
   if (iid == IFilterModVideoDecoder::kIID)
     return static_cast<IFilterModVideoDecoder *>(this);
+
+  if (iid == IVDXStreamSourceV3::kIID)
+    return static_cast<IVDXStreamSourceV3 *>(this);
 
   if (iid == IVDXStreamSourceV5::kIID)
     return static_cast<IVDXStreamSourceV5 *>(this);
@@ -272,18 +276,21 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   }
   #endif
 
-  m_streamInfo.mSampleCount = sample_count;
+  m_streamInfo.mFlags = 0;
+  m_streamInfo.mfccHandler = export_avi_fcc(m_pStreamCtx);
 
-  m_streamInfo.mSampleRate.mNumerator = fr.num;
-  m_streamInfo.mSampleRate.mDenominator = fr.den;
+  m_streamInfo.mInfo.mSampleCount = sample_count;
+
+  m_streamInfo.mInfo.mSampleRate.mNumerator = fr.num;
+  m_streamInfo.mInfo.mSampleRate.mDenominator = fr.den;
 
   AVRational ar = av_make_q(1,1);
   if(m_pCodecCtx->sample_aspect_ratio.num) ar = m_pCodecCtx->sample_aspect_ratio;
   if(m_pStreamCtx->sample_aspect_ratio.num) ar = m_pStreamCtx->sample_aspect_ratio;
   AVRational ar1;
   av_reduce(&ar1.num, &ar1.den, ar.num, ar.den, INT_MAX);
-  m_streamInfo.mPixelAspectRatio.mNumerator = ar1.num;
-  m_streamInfo.mPixelAspectRatio.mDenominator = ar1.den;
+  m_streamInfo.mInfo.mPixelAspectRatio.mNumerator = ar1.num;
+  m_streamInfo.mInfo.mPixelAspectRatio.mDenominator = ar1.den;
 
   if(!is_image_list && trust_index && keyframe_gap==1){
     direct_format_len = sizeof(BITMAPINFOHEADER);
@@ -328,6 +335,11 @@ void VDFFVideoSource::init_format()
 }
 
 void VDXAPIENTRY VDFFVideoSource::GetStreamSourceInfo(VDXStreamSourceInfo& srcInfo)
+{
+  srcInfo = m_streamInfo.mInfo;
+}
+
+void VDXAPIENTRY VDFFVideoSource::GetStreamSourceInfoV3(VDXStreamSourceInfoV3& srcInfo)
 {
   srcInfo = m_streamInfo;
 }
