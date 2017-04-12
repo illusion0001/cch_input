@@ -683,6 +683,7 @@ public:
   virtual INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam);
   virtual void init_format();
   virtual void change_format(int sel);
+  virtual void change_bits(){}
   void init_bits();
   void adjust_bits();
   void notify_bits_change(int bits_new, int bits_old);
@@ -736,6 +737,7 @@ void ConfigBase::change_format(int sel)
   codec->config->format = sel+1;
   adjust_bits();
   init_bits();
+  change_bits();
 }
 
 void ConfigBase::init_bits()
@@ -810,6 +812,7 @@ INT_PTR ConfigBase::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam){
       if(IsDlgButtonChecked(mhdlg,IDC_12_BIT)) codec->config->bits = 12;
       if(IsDlgButtonChecked(mhdlg,IDC_14_BIT)) codec->config->bits = 14;
       if(IsDlgButtonChecked(mhdlg,IDC_16_BIT)) codec->config->bits = 16;
+      change_bits();
       break;
     }
   }
@@ -819,14 +822,39 @@ INT_PTR ConfigBase::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam){
 
 //---------------------------------------------------------------------------
 
+int ffv1_slice_tab[] = {0,4,6,9,12,16,24,30,36,42};
+
 class ConfigFFV1: public ConfigBase{
 public:
   ConfigFFV1(){ dialog_id = IDD_ENC_FFV1; }
+  INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam);
+  void apply_level();
+  void init_slices();
+  void init_coder();
+  virtual void change_bits();
 };
 
 struct CodecFFV1: public CodecBase{
   enum{ tag=MKTAG('F', 'F', 'V', '1') };
   struct Config: public CodecBase::Config{
+    int level;
+    int slice;
+    int coder;
+    int context;
+    int slicecrc;
+
+    Config(){ init(); }
+    void clear(){ CodecBase::Config::clear(); init(); }
+    void init(){
+      version = 1;
+      level = 3;
+      slice = 0;
+      coder = 1;
+      context = 0;
+      slicecrc = 1;
+      format = format_yuv422;
+      bits = 10;
+    }
   } codec_config;
 
   CodecFFV1(){
@@ -836,6 +864,23 @@ struct CodecFFV1: public CodecBase{
   }
 
   int config_size(){ return sizeof(Config); }
+  void reset_config(){ codec_config.clear(); }
+
+  virtual bool test_av_format(AVPixelFormat format){
+    switch(format){
+    case AV_PIX_FMT_GRAY16:
+    case AV_PIX_FMT_YUV444P16:
+    case AV_PIX_FMT_YUV422P16:
+    case AV_PIX_FMT_YUV420P16:
+    case AV_PIX_FMT_YUVA444P16:
+    case AV_PIX_FMT_YUVA422P16:
+    case AV_PIX_FMT_YUVA420P16:
+    case AV_PIX_FMT_RGB48:
+    case AV_PIX_FMT_GBRP16:
+      if(codec_config.level<1) return false;
+    }
+    return CodecBase::test_av_format(format);
+  }
 
   void getinfo(ICINFO& info){
     info.fccHandler = codec_tag;
@@ -847,9 +892,12 @@ struct CodecFFV1: public CodecBase{
   bool init_ctx(VDXPixmapLayout* layout)
   {
     ctx->strict_std_compliance = -2;
-    ctx->level = 3;
+    ctx->level = codec_config.level;
     ctx->thread_count = 0;
-    ctx->slices = 4;
+    ctx->slices = codec_config.slice;
+    av_opt_set_int(ctx->priv_data, "slicecrc", codec_config.slicecrc, 0);
+    av_opt_set_int(ctx->priv_data, "context", codec_config.context, 0);
+    av_opt_set_int(ctx->priv_data, "coder", codec_config.coder, 0);
     return true;
   }
 
@@ -860,6 +908,114 @@ struct CodecFFV1: public CodecBase{
     return ICERR_OK;
   }
 };
+
+void ConfigFFV1::apply_level()
+{
+  CodecFFV1::Config* config = (CodecFFV1::Config*)codec->config;
+
+  EnableWindow(GetDlgItem(mhdlg,IDC_SLICES), config->level>=3);
+  EnableWindow(GetDlgItem(mhdlg,IDC_SLICECRC), config->level>=3);
+  if(config->level<3){
+    config->slice = 0;
+    config->slicecrc = 0;
+  }
+  init_slices();
+  if(config->level<1 && config->bits==16) config->bits = 12;
+  init_bits();
+  change_bits();
+}
+
+void ConfigFFV1::init_slices()
+{
+  CodecFFV1::Config* config = (CodecFFV1::Config*)codec->config;
+  int x = 0;
+  {for(int i=1; i<sizeof(ffv1_slice_tab)/sizeof(int); i++)
+    if(ffv1_slice_tab[i]==config->slice) x = i; }
+  SendDlgItemMessage(mhdlg, IDC_SLICES, CB_SETCURSEL, x, 0);
+  CheckDlgButton(mhdlg, IDC_SLICECRC, config->slicecrc==1 ? BST_CHECKED:BST_UNCHECKED);
+}
+
+void ConfigFFV1::init_coder()
+{
+  CodecFFV1::Config* config = (CodecFFV1::Config*)codec->config;
+  CheckDlgButton(mhdlg, IDC_CODER0, config->coder==0 ? BST_CHECKED:BST_UNCHECKED);
+  CheckDlgButton(mhdlg, IDC_CODER1, config->coder==1 ? BST_CHECKED:BST_UNCHECKED);
+}
+
+void ConfigFFV1::change_bits()
+{
+  CodecFFV1::Config* config = (CodecFFV1::Config*)codec->config;
+  EnableWindow(GetDlgItem(mhdlg,IDC_CODER0), config->bits==8);
+  if(config->bits>8) config->coder=1;
+  init_coder();
+  ConfigBase::change_bits();
+}
+
+INT_PTR ConfigFFV1::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
+{
+  CodecFFV1::Config* config = (CodecFFV1::Config*)codec->config;
+
+  switch(msg){
+  case WM_INITDIALOG:
+    {
+      const char* v_names[] = {
+        "FFV1.0", 
+        "FFV1.1",
+        "FFV1.3",
+      };
+      SendDlgItemMessage(mhdlg, IDC_LEVEL, CB_RESETCONTENT, 0, 0);
+      for(int i=0; i<3; i++)
+        SendDlgItemMessage(mhdlg, IDC_LEVEL, CB_ADDSTRING, 0, (LPARAM)v_names[i]);
+      int x = 0;
+      if(config->level==1) x = 1;
+      if(config->level==3) x = 2;
+      SendDlgItemMessage(mhdlg, IDC_LEVEL, CB_SETCURSEL, x, 0);
+
+      SendDlgItemMessage(mhdlg, IDC_SLICES, CB_RESETCONTENT, 0, 0);
+      SendDlgItemMessage(mhdlg, IDC_SLICES, CB_ADDSTRING, 0, (LPARAM)"default");
+      {for(int i=1; i<sizeof(ffv1_slice_tab)/sizeof(int); i++){
+        char buf[10];
+        sprintf(buf,"%d",ffv1_slice_tab[i]);
+        SendDlgItemMessage(mhdlg, IDC_SLICES, CB_ADDSTRING, 0, (LPARAM)buf);
+      }}
+      CheckDlgButton(mhdlg, IDC_CONTEXT, config->context==1 ? BST_CHECKED:BST_UNCHECKED);
+      apply_level();
+      break;
+    }
+
+  case WM_COMMAND:
+    switch(LOWORD(wParam)){
+    case IDC_LEVEL:
+      if(HIWORD(wParam)==LBN_SELCHANGE){
+        int x = (int)SendDlgItemMessage(mhdlg, IDC_LEVEL, CB_GETCURSEL, 0, 0);
+        config->level = 0;
+        if(x==1) config->level = 1;
+        if(x==2) config->level = 3;
+        apply_level();
+        return TRUE;
+      }
+      break;
+    case IDC_SLICES:
+      if(HIWORD(wParam)==LBN_SELCHANGE){
+        int x = (int)SendDlgItemMessage(mhdlg, IDC_SLICES, CB_GETCURSEL, 0, 0);
+        config->slice = ffv1_slice_tab[x];
+        return TRUE;
+      }
+      break;
+    case IDC_SLICECRC:
+      config->slicecrc = IsDlgButtonChecked(mhdlg,IDC_SLICECRC) ? 1:0;
+      break;
+    case IDC_CONTEXT:
+      config->context = IsDlgButtonChecked(mhdlg,IDC_CONTEXT) ? 1:0;
+      break;
+    case IDC_CODER0:
+    case IDC_CODER1:
+      config->coder = IsDlgButtonChecked(mhdlg,IDC_CODER0) ? 0:1;
+      break;
+    }
+  }
+  return ConfigBase::DlgProc(msg,wParam,lParam);
+}
 
 //---------------------------------------------------------------------------
 

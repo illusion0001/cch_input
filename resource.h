@@ -42,6 +42,8 @@
 #define IDC_STATICVerNumber             1023
 #define IDC_COMBODEFAULTVIDEO2          1023
 #define IDC_PREDICTION                  1023
+#define IDC_LEVEL                       1023
+#define IDC_SLICES                      1024
 #define IDC_INDEX_INFO                  1025
 #define IDC_MEMORY_INFO                 1026
 #define IDC_SEGMENT                     1027
@@ -89,6 +91,10 @@
 #define IDC_STEREO                      1049
 #define IDC_CBR                         1050
 #define IDC_QUALITY_LABEL               1051
+#define IDC_CODER0                      1052
+#define IDC_CODER1                      1053
+#define IDC_CONTEXT                     1054
+#define IDC_SLICECRC                    1055
 #define IDC_SYS_OPTIONS                 1057
 #define IDC_DECODE_FFMPEG               1058
 #define IDC_CACHE_SIZE                  1059
