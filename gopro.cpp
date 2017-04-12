@@ -5,6 +5,7 @@
 
 void GoproInfo::get_camera_type(){
   static CameraType types[] = {
+    {"HD5.03", HERO5_Session, "GoPro HERO5 Session", "HERO5 Session"},
     {"HD5.02", HERO5_Black, "GoPro HERO5 Black", "Hero5-Black Edition"},
     {"HDX.01", HERO4_Session, "GoPro HERO4 Session", "Hero4-Session"},
     {"HD4.02", HERO4_Black, "GoPro HERO4 Black", "Hero4-Black Edition"},
