@@ -41,6 +41,7 @@ VDFFVideoSource::VDFFVideoSource(const VDXInputDriverContext& context)
   is_image_list = false;
   copy_mode = false;
   decode_mode = true;
+  decoded_count = 0;
   buffer = 0;
   mem = 0;
 
@@ -103,6 +104,43 @@ void *VDXAPIENTRY VDFFVideoSource::AsInterface(uint32_t iid)
   return vdxunknown<IVDXStreamSource>::AsInterface(iid);
 }
 
+int VDFFVideoSource::init_duration(const AVRational fr)
+{
+  AVRational tb = m_pStreamCtx->time_base;
+  av_reduce(&time_base.num, &time_base.den, int64_t(fr.num)*tb.num, int64_t(fr.den)*tb.den, INT_MAX);
+
+  int sample_count_error = 2;
+
+  if(m_pStreamCtx->duration == AV_NOPTS_VALUE){
+    if(m_pFormatCtx->duration == AV_NOPTS_VALUE){
+      if(m_pSource->is_image){
+        sample_count = 1;
+      } else {
+        mContext.mpCallbacks->SetError("FFMPEG: Cannot figure stream duration. Unsupported.");
+        return -1;
+      }
+    } else {
+      AVRational m;
+      av_reduce(&m.num, &m.den, fr.num, int64_t(fr.den)*AV_TIME_BASE, INT_MAX);
+      sample_count = (int)(m_pFormatCtx->duration * m.num/m.den);
+    }
+  } else {
+    int rndd = time_base.den/2;
+    //! stream duration really means last timestamp
+    // found on "10 bit.mp4"
+    int64_t duration = m_pStreamCtx->duration - m_pStreamCtx->start_time;
+    sample_count = (int)((duration * time_base.num + rndd) / time_base.den);
+    int e = (int)((m_pStreamCtx->start_time * time_base.num + rndd) / time_base.den);
+    e = abs(e);
+    if(e>sample_count_error) sample_count_error = e;
+  }
+
+  m_streamInfo.mInfo.mSampleRate.mNumerator = fr.num;
+  m_streamInfo.mInfo.mSampleRate.mDenominator = fr.den;
+
+  return sample_count_error;
+}
+
 int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
 {
   m_pSource = pSource;
@@ -110,6 +148,9 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
 
   m_pFormatCtx = pSource->getContext();  
   m_pStreamCtx = m_pFormatCtx->streams[m_streamIndex];
+
+  has_vfr = false;
+  average_fr = false;
 
   if(m_pStreamCtx->codecpar->codec_tag==CFHD_TAG && !pSource->cfg_skip_cfhd){
     // use vfw thunk instead of internal decoder
@@ -131,37 +172,8 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   }
   avcodec_parameters_to_context(m_pCodecCtx,m_pStreamCtx->codecpar);
 
-  AVRational tb = m_pStreamCtx->time_base;
-  AVRational fr = av_stream_get_r_frame_rate(m_pStreamCtx);
-  AVRational codec_fr = m_pStreamCtx->codec->framerate;
-  if(codec_fr.num) fr = codec_fr;
-  av_reduce(&time_base.num, &time_base.den, int64_t(fr.num)*tb.num, int64_t(fr.den)*tb.den, INT_MAX);
-
-  int sample_count_error = 2;
-
-  if(m_pStreamCtx->duration == AV_NOPTS_VALUE){
-    if(m_pFormatCtx->duration == AV_NOPTS_VALUE){
-      if(pSource->is_image){
-        sample_count = 1;
-      } else {
-        mContext.mpCallbacks->SetError("FFMPEG: Cannot figure stream duration. Unsupported.");
-        return -1;
-      }
-    } else {
-      AVRational m;
-      av_reduce(&m.num, &m.den, fr.num, int64_t(fr.den)*AV_TIME_BASE, INT_MAX);
-      sample_count = (int)(m_pFormatCtx->duration * m.num/m.den);
-    }
-  } else {
-    int rndd = time_base.den/2;
-    //! stream duration really means last timestamp
-    // found on "10 bit.mp4"
-    int64_t duration = m_pStreamCtx->duration;//-m_pStreamCtx->start_time;
-    sample_count = (int)((duration * time_base.num + rndd) / time_base.den);
-    int e = (int)((m_pStreamCtx->start_time * time_base.num + rndd) / time_base.den);
-    e = abs(e);
-    if(e>sample_count_error) sample_count_error = e;
-  }
+  AVRational r_fr = av_stream_get_r_frame_rate(m_pStreamCtx);
+  int sample_count_error = init_duration(r_fr);
 
   if(pSource->is_image){
     is_image_list = true;
@@ -172,15 +184,61 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
 
   } else {
     if(m_pStreamCtx->nb_index_entries<2){
-      av_seek_frame(m_pFormatCtx,m_streamIndex,m_pStreamCtx->duration,AVSEEK_FLAG_BACKWARD);
+      // try to force loading index
+      // works for 2017-04-07 08-53-48.flv
+      int64_t pos = m_pStreamCtx->duration;
+      if(pos==AV_NOPTS_VALUE) pos = sample_count*time_base.den / time_base.num;
+      av_seek_frame(m_pFormatCtx,m_streamIndex,pos,AVSEEK_FLAG_BACKWARD);
       av_seek_frame(m_pFormatCtx,m_streamIndex,m_pStreamCtx->start_time,AVSEEK_FLAG_BACKWARD);
     }
     trust_index = false;
     sparse_index = false;
-    if(m_pStreamCtx->nb_index_entries>2 && abs(m_pStreamCtx->nb_index_entries - sample_count)<=sample_count_error){
-      // hopefully there is index with useful timestamps
-      sample_count = m_pStreamCtx->nb_index_entries;
-      trust_index = true;
+
+    if(m_pStreamCtx->nb_index_entries>2){
+      if(abs(m_pStreamCtx->nb_index_entries - sample_count)<=sample_count_error){
+        sample_count = m_pStreamCtx->nb_index_entries;
+        trust_index = true;
+      } else {
+        // maybe vfr
+        // works for 30.mov
+        // works for device-2017-02-13-115329.mp4
+        AVRational avg_fr = m_pStreamCtx->avg_frame_rate;
+        sample_count_error = init_duration(avg_fr);
+        if(abs(m_pStreamCtx->nb_index_entries - sample_count)<=sample_count_error){
+          sample_count = m_pStreamCtx->nb_index_entries;
+          trust_index = true;
+          average_fr = true;
+        } else {
+          // becomes worse, step back (guess, no sample)
+          sample_count_error = init_duration(r_fr);
+        }
+      }
+    }
+
+    if(trust_index){
+      int64_t exp_dt = time_base.den/time_base.num;
+      int64_t min_dt = exp_dt;
+      {for(int i=1; i<m_pStreamCtx->nb_index_entries; i++){
+        int64_t dt = m_pStreamCtx->index_entries[i].timestamp - m_pStreamCtx->index_entries[i-1].timestamp;
+        if(dt<(exp_dt-1) || dt>(exp_dt+1)){
+          has_vfr = true;
+        }
+        if(dt<min_dt){
+          min_dt = dt;
+        }
+      }}
+
+      /*
+      increasing framerate could work but has huge memory impact
+      if(has_vfr){
+        trust_index = false;
+        AVRational tb = m_pStreamCtx->time_base;
+        AVRational fr;
+        av_reduce(&fr.num, &fr.den, tb.den, int64_t(tb.num)*min_dt, INT_MAX);
+
+        init_duration(fr);
+      }
+      */
     }
 
     keyframe_gap = 0;
@@ -280,9 +338,6 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   m_streamInfo.mfccHandler = export_avi_fcc(m_pStreamCtx);
 
   m_streamInfo.mInfo.mSampleCount = sample_count;
-
-  m_streamInfo.mInfo.mSampleRate.mNumerator = fr.num;
-  m_streamInfo.mInfo.mSampleRate.mDenominator = fr.den;
 
   AVRational ar = av_make_q(1,1);
   if(m_pCodecCtx->sample_aspect_ratio.num) ar = m_pCodecCtx->sample_aspect_ratio;
@@ -432,6 +487,8 @@ void VDFFVideoSource::GetSampleInfo(sint64 sample, VDXVideoFrameInfo& frameInfo)
   frameInfo.mFrameType = kVDXVFT_Independent;
   if(keyframe_gap==1)
     frameInfo.mTypeChar = 'K';
+  else if(IsKey(sample))
+    frameInfo.mTypeChar = 'K';
   else
     frameInfo.mTypeChar = frame_type[sample];
 }
@@ -450,19 +507,27 @@ bool VDFFVideoSource::IsKey(int64_t sample)
     return (m_pStreamCtx->index_entries[sample].flags & AVINDEX_KEYFRAME)!=0;
   }
   if(sparse_index){
-    //! start_time is not applied to index, found on "10 bit.mp4"
-    int64_t pos1 = sample*time_base.den / time_base.num + start_time;
-    int x = av_index_search_timestamp(m_pStreamCtx,pos1,AVSEEK_FLAG_BACKWARD);
-    if(x==-1) return false;
-    int64_t ts = m_pStreamCtx->index_entries[x].timestamp;
-    ts -= start_time;
-    int rndd = time_base.den/2;
-    int pos = int((ts*time_base.num + rndd) / time_base.den);
-    if(pos==sample) return true;
-    return false;
+    int x = match_sparse_key(sample);
+    return x!=-1;
   }
 
   return true;
+}
+
+int VDFFVideoSource::match_sparse_key(int64_t sample)
+{
+  // somehow start_time is not included in the index timestamps
+  // works with 10 bit.mp4: sample*den/num = exactly key timestamp
+  // half-frame bias helps with some rounding noise
+  // works with 2017-04-07 08-53-48.flv
+  int rd = time_base.den/2;
+  int64_t pos1 = (sample*time_base.den + rd) / time_base.num;
+  int x = av_index_search_timestamp(m_pStreamCtx,pos1,AVSEEK_FLAG_BACKWARD);
+  if(x==-1) return -1;
+  int64_t ts = m_pStreamCtx->index_entries[x].timestamp;
+  int pos = int((ts*time_base.num + rd) / time_base.den);
+  if(pos==sample) return x;
+  return -1;
 }
 
 int64_t VDFFVideoSource::GetFrameNumberForSample(int64_t sample_num)
@@ -1354,8 +1419,14 @@ bool VDFFVideoSource::Read(sint64 start, uint32 lCount, void *lpBuffer, uint32 c
 
       if(!(m_pFormatCtx->iformat->flags & AVFMT_SEEK_TO_PTS)){
         // because seeking works on DTS it needs some unknown offset to work
-        pos -= 8; // better than nothing
+        pos -= 8*time_base.den / time_base.num; // better than nothing
         //pos -= keyframe_gap*time_base.den / 2 / time_base.num;
+      }
+      if(sparse_index){
+        // when jumping to keys and we can guess key locations, use that
+        // works with 2017-04-07 08-53-48.flv
+        int x = match_sparse_key(jump);
+        if(x!=-1) pos = m_pStreamCtx->index_entries[x].timestamp;
       }
 
       if(jump==0 && pos>0) pos = 0;
@@ -1504,6 +1575,7 @@ void VDFFVideoSource::set_start_time()
 
 int VDFFVideoSource::handle_frame()
 {
+  decoded_count++;
   dead_range_start = -1;
   dead_range_end = -1;
   int64_t ts = frame->pkt_pts;

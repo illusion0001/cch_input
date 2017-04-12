@@ -8,7 +8,7 @@
 
 #include <string>
 
-static const char* vsnstr = "Version 1.14";
+static const char* vsnstr = "Version 1.15";
 
 extern HINSTANCE hInstance;
  
@@ -221,6 +221,7 @@ void VDFFInputFileInfoDialog::print_video()
   } else {
     VDXFraction fr = segment->video_source->m_streamInfo.mInfo.mSampleRate;
     sprintf(buf, "%u x %u, %.2f fps", pVideoCtx->width, pVideoCtx->height, fr.mNumerator/double(fr.mDenominator));
+    if(segment->video_source->average_fr) strcat(buf," (average)");
     SetDlgItemText(mhdlg, IDC_VIDEO_WXH, buf);
   }
 
@@ -376,7 +377,9 @@ void VDFFInputFileInfoDialog::print_performance()
   int buf_count = 0;
   int buf_max = 0;
   int index_quality = 2;
+  int decoded_count = 0;
   bool all_key = true;
+  bool has_vfr = false;
 
   while(f1){
     VDFFVideoSource* v1 = f1->video_source;
@@ -391,6 +394,8 @@ void VDFFInputFileInfoDialog::print_performance()
       }
     }
     if(v1->keyframe_gap!=1) all_key = false;
+    if(v1->has_vfr) has_vfr = true;
+    decoded_count += v1->decoded_count;
 
     f1 = f1->next_segment;
   }
@@ -405,19 +410,26 @@ void VDFFInputFileInfoDialog::print_performance()
   sprintf(buf,"Memory cache: %d frames / %dM reserved, %d%% used", buf_max, int(mem_max), buf_used);
   SetDlgItemText(mhdlg, IDC_MEMORY_INFO, buf);
 
+  sprintf(buf,"Frames decoded: %d", decoded_count);
+  SetDlgItemText(mhdlg, IDC_STATS, buf);
+
   if(segment->is_image){
     SetDlgItemText(mhdlg, IDC_INDEX_INFO, "Seeking: image list (random access)");
   } else {
+    std::string msg;
     if(index_quality>0){
       if(all_key){
-        SetDlgItemText(mhdlg, IDC_INDEX_INFO, "Seeking: index present, optimal random access");
+        msg = "Seeking: index present, optimal random access";
       } else if(index_quality==2){
-        SetDlgItemText(mhdlg, IDC_INDEX_INFO, "Seeking: index present, all frames");
+        msg = "Seeking: index present, all frames";
       } else {
-        SetDlgItemText(mhdlg, IDC_INDEX_INFO, "Seeking: index present");
+        msg = "Seeking: index present";
       }
+      if(has_vfr) msg += " (vfr)";
     } else {
-      SetDlgItemText(mhdlg, IDC_INDEX_INFO, "Seeking: index missing, reverse scan may be slow");
+      msg = "Seeking: index missing, reverse scan may be slow";
     }
+
+    SetDlgItemText(mhdlg, IDC_INDEX_INFO, msg.c_str());
   }
 }

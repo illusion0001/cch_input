@@ -48,6 +48,7 @@
 #define IDC_SEGMENT2                    1030
 #define IDC_SEGMENT_TIMELINE            1030
 #define IDC_LOGOFILE_BROWSE             1031
+#define IDC_STATS                       1031
 #define IDC_ALPHABLEND                  1032
 #define IDC_PREMULTALPHA                1033
 #define IDC_PREVIEW                     1034

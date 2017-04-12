@@ -147,6 +147,7 @@ public:
   int used_frames;
   int keyframe_gap;
   int fw_seek_threshold;
+  int decoded_count;
 
   AVPixelFormat frame_fmt;
   int frame_width;
@@ -156,6 +157,8 @@ public:
   bool flip_image;
   bool trust_index;
   bool sparse_index;
+  bool has_vfr;
+  bool average_fr;
   bool direct_buffer;
   bool direct_v210;
   bool direct_cfhd;
@@ -170,6 +173,7 @@ public:
   //uint64 kPixFormat_XRGB64;
 
   int	 initStream(VDFFInputFile* pSource, int indexStream);
+  int	 init_duration(const AVRational fr);
   void init_format();
   void set_pixmap_layout(uint8_t* p);
   int handle_frame();
@@ -185,4 +189,5 @@ public:
   void copy(int start, int end, BufferPage* p);
   int64_t frame_to_pts_next(sint64 start);
   void setCopyMode(bool v);
+  int match_sparse_key(int64_t sample);
 };
