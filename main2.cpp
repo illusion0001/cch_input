@@ -25,6 +25,7 @@ HINSTANCE hInstance;
 bool config_decode_raw = false;
 bool config_decode_magic = false;
 bool config_decode_cfhd = false;
+bool config_force_thread = false;
 void saveConfig();
 
 int av_initialized;
@@ -75,6 +76,7 @@ INT_PTR ConfigureDialog::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
     CheckDlgButton(mhdlg,IDC_DECODE_RAW, config_decode_raw ? BST_CHECKED:BST_UNCHECKED);
     CheckDlgButton(mhdlg,IDC_DECODE_MAGIC, config_decode_magic ? BST_CHECKED:BST_UNCHECKED);
     CheckDlgButton(mhdlg,IDC_DECODE_CFHD, config_decode_cfhd ? BST_CHECKED:BST_UNCHECKED);
+    CheckDlgButton(mhdlg,IDC_FORCE_THREAD, config_force_thread ? BST_CHECKED:BST_UNCHECKED);
     return TRUE;
   case WM_COMMAND:
     switch(LOWORD(wParam)){
@@ -82,6 +84,7 @@ INT_PTR ConfigureDialog::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
       config_decode_raw = IsDlgButtonChecked(mhdlg,IDC_DECODE_RAW)!=0;
       config_decode_magic = IsDlgButtonChecked(mhdlg,IDC_DECODE_MAGIC)!=0;
       config_decode_cfhd = IsDlgButtonChecked(mhdlg,IDC_DECODE_CFHD)!=0;
+      config_force_thread = IsDlgButtonChecked(mhdlg,IDC_FORCE_THREAD)!=0;
       saveConfig();
       EndDialog(mhdlg, TRUE);
       return TRUE;
@@ -206,6 +209,7 @@ void saveConfig()
   WritePrivateProfileStringW(L"force_ffmpeg",L"raw",config_decode_raw ? L"1":L"0",buf);
   WritePrivateProfileStringW(L"force_ffmpeg",L"MagicYUV",config_decode_magic ? L"1":L"0",buf);
   WritePrivateProfileStringW(L"force_ffmpeg",L"CineformHD",config_decode_cfhd ? L"1":L"0",buf);
+  WritePrivateProfileStringW(L"decode_model",L"force_frame_thread",config_force_thread ? L"1":L"0",buf);
   WritePrivateProfileStringW(0,0,0,buf);
 }
 
@@ -227,6 +231,7 @@ void loadConfig()
   config_decode_raw = GetPrivateProfileIntW(L"force_ffmpeg",L"raw",0,buf)!=0;
   config_decode_magic = GetPrivateProfileIntW(L"force_ffmpeg",L"MagicYUV",0,buf)!=0;
   config_decode_cfhd = GetPrivateProfileIntW(L"force_ffmpeg",L"CineformHD",0,buf)!=0;
+  config_force_thread = GetPrivateProfileIntW(L"decode_model",L"force_frame_thread",0,buf)!=0;
 
   ff_plugin_a = ff_plugin_b;
   ff_plugin_a.mpTypeSpecificInfo = &ff_class_a;

@@ -77,6 +77,7 @@
 #define IDC_16_BIT                      1045
 #define IDC_DECODE_CFHD                 1045
 #define IDC_PROFILE                     1046
+#define IDC_FORCE_THREAD                1046
 #define IDC_QUALITY                     1047
 #define IDC_QUALITY_VALUE               1048
 #define IDC_STEREO                      1049

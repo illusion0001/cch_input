@@ -10,6 +10,7 @@ extern "C" {
 }
 
 const int line_align = 16; // should be ok with any usable filter down the pipeline
+extern bool config_force_thread;
 
 uint8_t* align_buf(uint8_t* p)
 {
@@ -273,6 +274,11 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
     //m_pCodecCtx->thread_count = 1;
     m_pCodecCtx->thread_count = 0;
     m_pCodecCtx->thread_type = FF_THREAD_SLICE;
+    if(config_force_thread)
+      m_pCodecCtx->thread_type = FF_THREAD_SLICE|FF_THREAD_FRAME;
+  } else {
+    m_pCodecCtx->thread_count = 0;
+    m_pCodecCtx->thread_type = FF_THREAD_SLICE|FF_THREAD_FRAME;
   }
 
   fw_seek_threshold = 10;
