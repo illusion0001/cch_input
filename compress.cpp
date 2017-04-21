@@ -127,6 +127,7 @@ struct CodecBase{
   AVCodec* codec;
   AVCodecContext* ctx;
   AVFrame* frame;
+  VDLogProc logProc;
 
   CodecBase(){ 
     codec=0; ctx=0; frame=0;
@@ -137,6 +138,7 @@ struct CodecBase{
     codec_name = 0;
     codec_tag = 0;
     config = 0;
+    logProc = 0;
   }
 
   virtual ~CodecBase(){
@@ -1092,6 +1094,10 @@ extern "C" LRESULT WINAPI VDDriverProc(DWORD_PTR dwDriverId, HDRVR hDriver, UINT
   case VDICM_COMPRESS:
     return codec->compress((ICCOMPRESS *)lParam1, (VDXPixmapLayout*)lParam2);
 
+  case VDICM_LOGPROC:
+    codec->logProc = (VDLogProc)lParam1;
+    return 0;
+  
   case VDICM_COMPRESS_MATRIX_INFO:
     {
       int colorSpaceMode = (int)lParam1;
