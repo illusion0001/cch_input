@@ -129,9 +129,13 @@ int VDFFVideoSource::init_duration(const AVRational fr)
     int rndd = time_base.den/2;
     //! stream duration really means last timestamp
     // found on "10 bit.mp4"
-    int64_t duration = m_pStreamCtx->duration - m_pStreamCtx->start_time;
+    int64_t start_pts = m_pStreamCtx->start_time;
+    if(start_pts==AV_NOPTS_VALUE) start_pts = 0;
+    int64_t duration = m_pStreamCtx->duration - start_pts;
+    //! above idea fails on Hilary.0000.ts
+    if(duration<=0) duration = m_pStreamCtx->duration;
     sample_count = (int)((duration * time_base.num + rndd) / time_base.den);
-    int e = (int)((m_pStreamCtx->start_time * time_base.num + rndd) / time_base.den);
+    int e = (int)((start_pts * time_base.num + rndd) / time_base.den);
     e = abs(e);
     if(e>sample_count_error) sample_count_error = e;
   }
@@ -174,6 +178,11 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   avcodec_parameters_to_context(m_pCodecCtx,m_pStreamCtx->codecpar);
 
   AVRational r_fr = av_stream_get_r_frame_rate(m_pStreamCtx);
+  if(m_pStreamCtx->codec->field_order>AV_FIELD_PROGRESSIVE){
+    // interlaced seems to double r_framerate
+    // example: 00005.MTS
+    r_fr.den *= 2;
+  }
   int sample_count_error = init_duration(r_fr);
 
   if(pSource->is_image){
@@ -517,7 +526,7 @@ bool VDFFVideoSource::IsKey(int64_t sample)
     return x!=-1;
   }
 
-  return true;
+  return false;
 }
 
 int VDFFVideoSource::match_sparse_key(int64_t sample)
