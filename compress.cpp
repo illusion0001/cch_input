@@ -4,12 +4,15 @@
 #include <windows.h>
 #include <vfw.h>
 #include <commctrl.h>
+#include "vd2\plugin\vdinputdriver.h"
 extern "C" {
 #include <libavformat/avformat.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/opt.h>
 }
 #include "resource.h"
+
+#pragma warning(disable:4996) // silence deprecated stuff
 
 void init_av();
 extern HINSTANCE hInstance;
@@ -302,8 +305,8 @@ struct CodecBase{
   LRESULT compress_frames_info(ICCOMPRESSFRAMES *icf)
   {
     frame_total = icf->lFrameCount;
-    time_base.num = icf->dwRate;
-    time_base.den = icf->dwScale;
+    time_base.den = icf->dwRate;
+    time_base.num = icf->dwScale;
     keyint = icf->lKeyRate;
     return ICERR_OK;
   }
@@ -432,13 +435,16 @@ struct CodecBase{
     ctx->width = layout->w;
     ctx->height = layout->h;
     ctx->time_base = time_base;
-    ctx->gop_size = keyint;
+    ctx->gop_size = 1;
     ctx->max_b_frames = 1;
+    ctx->framerate = av_make_q(time_base.den,time_base.num);
 
     ctx->color_range = color_range;
     ctx->colorspace = colorspace;
 
     if(!init_ctx(layout)) return ICERR_BADPARAM;
+
+    if(keyint!=1) ctx->gop_size = keyint;
 
     if(avcodec_open2(ctx, codec, NULL)<0){ compress_end(); return ICERR_BADPARAM; }
 
@@ -470,7 +476,14 @@ struct CodecBase{
     return ICERR_OK;
   }
 
-  LRESULT compress(ICCOMPRESS *icc, VDXPixmapLayout* layout)
+  LRESULT compress1(ICCOMPRESS *icc, VDXPixmapLayout* layout)
+  {
+    VDXPictureCompress pc;
+    pc.px = layout;
+    return compress2(icc,&pc);
+  }
+
+  LRESULT compress2(ICCOMPRESS *icc, VDXPictureCompress* pc)
   {
     AVPacket pkt;
     av_init_packet(&pkt);
@@ -479,6 +492,8 @@ struct CodecBase{
 
     int got_output;
     int ret;
+
+    const VDXPixmapLayout* layout = pc->px;
 
     if(icc->lFrameNum<frame_total){
       frame->pts = icc->lFrameNum;
@@ -518,11 +533,16 @@ struct CodecBase{
         return ICERR_MEMORY;
       }
 
+      DWORD flags = 0;
+      if(pkt.flags & AV_PKT_FLAG_KEY) flags = AVIIF_KEYFRAME;
+      *icc->lpdwFlags = flags;
+
       memcpy(icc->lpOutput,pkt.data,pkt.size);
       icc->lpbiOutput->biSizeImage = pkt.size;
+      pc->pts = pkt.pts;
+      pc->dts = pkt.dts;
+      pc->duration = pkt.duration;
       av_packet_unref(&pkt);
-
-      *icc->lpdwFlags = AVIIF_KEYFRAME;
     } else {
       icc->lpbiOutput->biSizeImage = 0;
       *icc->lpdwFlags = VDCOMPRESS_WAIT;
@@ -782,7 +802,7 @@ struct CodecHUFF: public CodecBase{
 
   void getinfo(ICINFO& info){
     info.fccHandler = codec_tag;
-    info.dwFlags = VIDCF_COMPRESSFRAMES | VIDCF_FASTTEMPORALC;
+    info.dwFlags = VIDCF_COMPRESSFRAMES;
     wcscpy(info.szName, L"FFVHUFF");
     wcscpy(info.szDescription, L"FFMPEG Huffyuv lossless codec");
   }
@@ -883,7 +903,7 @@ struct CodecProres: public CodecBase{
 
   void getinfo(ICINFO& info){
     info.fccHandler = codec_tag;
-    info.dwFlags = VIDCF_COMPRESSFRAMES | VIDCF_FASTTEMPORALC;
+    info.dwFlags = VIDCF_COMPRESSFRAMES;
     wcscpy(info.szName, L"prores_ks");
     wcscpy(info.szDescription, L"FFMPEG / Apple ProRes (iCodec Pro)");
   }
@@ -977,6 +997,210 @@ void ConfigProres::change_format(int sel)
 
 //---------------------------------------------------------------------------
 
+class ConfigH264: public ConfigBase{
+public:
+  ConfigH264(){ dialog_id = IDD_ENC_PRORES; }
+  INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam);
+};
+
+const char* x264_preset_names[] = {
+  "fast", 
+  "medium",
+  "slow",
+};
+
+struct CodecH264: public CodecBase{
+  enum{ tag=MKTAG('H', '2', '6', '4') };
+  struct Config: public CodecBase::Config{
+    int preset;
+    int crf; // 0-51
+
+    Config(){ set_default(); }
+    void clear(){ CodecBase::Config::clear(); set_default(); }
+    void set_default(){
+      preset = 1;
+      crf = 23;
+      format = format_yuv420;
+      bits = 8;
+    }
+  } codec_config;
+
+  CodecH264(){
+    config = &codec_config;
+    codec_name = "libx264";
+    codec_tag = tag;
+  }
+
+  int config_size(){ return sizeof(Config); }
+  void reset_config(){ codec_config.clear(); }
+
+  void getinfo(ICINFO& info){
+    info.fccHandler = codec_tag;
+    info.dwFlags = VIDCF_COMPRESSFRAMES | VIDCF_FASTTEMPORALC;
+    wcscpy(info.szName, L"x264_test");
+    wcscpy(info.szDescription, L"FFMPEG / x264");
+  }
+
+  bool init_ctx(VDXPixmapLayout* layout)
+  {
+    ctx->thread_count = 0;
+    ctx->gop_size = -1;
+    ctx->max_b_frames = -1;
+    ctx->bit_rate = -1;
+
+    av_opt_set(ctx->priv_data, "preset", x264_preset_names[codec_config.preset], 0);
+    av_opt_set_double(ctx->priv_data, "crf", codec_config.crf, 0);
+    av_opt_set(ctx->priv_data, "level", "3", 0);
+    return true;
+  }
+
+  LRESULT configure(HWND parent)
+  {
+    ConfigH264 dlg;
+    dlg.Show(parent,this);
+    return ICERR_OK;
+  }
+};
+
+INT_PTR ConfigH264::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
+{
+  CodecH264::Config* config = (CodecH264::Config*)codec->config;
+  switch(msg){
+  case WM_INITDIALOG:
+    {
+      SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_RESETCONTENT, 0, 0);
+      for(int i=0; i<3; i++)
+        SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_ADDSTRING, 0, (LPARAM)x264_preset_names[i]);
+      SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_SETCURSEL, config->preset, 0);
+      SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMIN, FALSE, 0);
+      SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMAX, TRUE, 51);
+      SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETPOS, TRUE, config->crf);
+      SetDlgItemInt(mhdlg, IDC_QUALITY_VALUE, config->crf, false);
+      break;
+    }
+
+  case WM_HSCROLL:
+    if((HWND)lParam==GetDlgItem(mhdlg,IDC_QUALITY)){
+      config->crf = SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_GETPOS, 0, 0);
+      SetDlgItemInt(mhdlg, IDC_QUALITY_VALUE, config->crf, false);
+      break;
+    }
+    return false;
+
+  case WM_COMMAND:
+    switch(LOWORD(wParam)){
+    case IDC_PROFILE:
+      if(HIWORD(wParam)==LBN_SELCHANGE){
+        config->preset = (int)SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_GETCURSEL, 0, 0);
+        return TRUE;
+      }
+      break;
+    }
+  }
+  return ConfigBase::DlgProc(msg,wParam,lParam);
+}
+
+//---------------------------------------------------------------------------
+
+class ConfigVP8: public ConfigBase{
+public:
+  ConfigVP8(){ dialog_id = IDD_ENC_VP8; }
+  INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam);
+  virtual void init_format();
+};
+
+struct CodecVP8: public CodecBase{
+  enum{ tag=MKTAG('V', 'P', '8', '0') };
+  struct Config: public CodecBase::Config{
+    int crf; // 4-63
+
+    Config(){ set_default(); }
+    void clear(){ CodecBase::Config::clear(); set_default(); }
+    void set_default(){
+      crf = 10;
+      format = format_yuv420;
+      bits = 8;
+    }
+  } codec_config;
+
+  CodecVP8(){
+    config = &codec_config;
+    codec_name = "libvpx";
+    codec_tag = tag;
+  }
+
+  int config_size(){ return sizeof(Config); }
+  void reset_config(){ codec_config.clear(); }
+
+  void getinfo(ICINFO& info){
+    info.fccHandler = codec_tag;
+    info.dwFlags = VIDCF_COMPRESSFRAMES | VIDCF_FASTTEMPORALC;
+    wcscpy(info.szName, L"vp8");
+    wcscpy(info.szDescription, L"FFMPEG / VP8");
+  }
+
+  bool init_ctx(VDXPixmapLayout* layout)
+  {
+    ctx->thread_count = 0;
+    ctx->gop_size = -1;
+    ctx->max_b_frames = -1;
+    ctx->bit_rate = 0x400000000000;
+
+    av_opt_set_double(ctx->priv_data, "crf", codec_config.crf, 0);
+    av_opt_set_int(ctx->priv_data, "max-intra-rate", 0, 0);
+    ctx->qmin = codec_config.crf;
+    ctx->qmax = codec_config.crf;
+    return true;
+  }
+
+  LRESULT configure(HWND parent)
+  {
+    ConfigVP8 dlg;
+    dlg.Show(parent,this);
+    return ICERR_OK;
+  }
+};
+
+INT_PTR ConfigVP8::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
+{
+  CodecVP8::Config* config = (CodecVP8::Config*)codec->config;
+  switch(msg){
+  case WM_INITDIALOG:
+    {
+      SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMIN, FALSE, 4);
+      SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMAX, TRUE, 63);
+      SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETPOS, TRUE, config->crf);
+      SetDlgItemInt(mhdlg, IDC_QUALITY_VALUE, config->crf, false);
+      break;
+    }
+
+  case WM_HSCROLL:
+    if((HWND)lParam==GetDlgItem(mhdlg,IDC_QUALITY)){
+      config->crf = SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_GETPOS, 0, 0);
+      SetDlgItemInt(mhdlg, IDC_QUALITY_VALUE, config->crf, false);
+      break;
+    }
+    return false;
+  }
+  return ConfigBase::DlgProc(msg,wParam,lParam);
+}
+
+void ConfigVP8::init_format()
+{
+  const char* color_names[] = {
+    "YUV 4:2:0",
+  };
+
+  SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_RESETCONTENT, 0, 0);
+  for(int i=0; i<1; i++)
+    SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_ADDSTRING, 0, (LPARAM)color_names[i]);
+  int sel = 0;
+  SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_SETCURSEL, 0, 0);
+  EnableWindow(GetDlgItem(mhdlg, IDC_COLORSPACE),false);
+}
+
+//---------------------------------------------------------------------------
+
 extern "C" LRESULT WINAPI DriverProc(DWORD_PTR dwDriverId, HDRVR hDriver, UINT uMsg, LPARAM lParam1, LPARAM lParam2)
 {
   CodecBase* codec = (CodecBase*)dwDriverId;
@@ -999,6 +1223,8 @@ extern "C" LRESULT WINAPI DriverProc(DWORD_PTR dwDriverId, HDRVR hDriver, UINT u
       if(icopen->fccHandler==CodecFFV1::tag) codec = new CodecFFV1;
       if(icopen->fccHandler==CodecHUFF::tag) codec = new CodecHUFF;
       if(icopen->fccHandler==CodecProres::tag) codec = new CodecProres;
+      if(icopen->fccHandler==CodecVP8::tag) codec = new CodecVP8;
+      if(icopen->fccHandler==CodecH264::tag) codec = new CodecH264;
       if(codec){
         if(!codec->init()){
           delete codec;
@@ -1074,6 +1300,8 @@ extern "C" LRESULT WINAPI VDDriverProc(DWORD_PTR dwDriverId, HDRVR hDriver, UINT
     if(lParam1==0) return CodecFFV1::tag;
     if(lParam1==CodecFFV1::tag) return CodecHUFF::tag;
     if(lParam1==CodecHUFF::tag) return CodecProres::tag;
+    if(lParam1==CodecProres::tag) return CodecVP8::tag;
+    //if(lParam1==CodecVP8::tag) return CodecH264::tag;
     return 0;
 
   case VDICM_COMPRESS_INPUT_FORMAT:
@@ -1092,7 +1320,10 @@ extern "C" LRESULT WINAPI VDDriverProc(DWORD_PTR dwDriverId, HDRVR hDriver, UINT
     return codec->compress_begin((BITMAPINFO *)lParam2, (VDXPixmapLayout*)lParam1);
   
   case VDICM_COMPRESS:
-    return codec->compress((ICCOMPRESS *)lParam1, (VDXPixmapLayout*)lParam2);
+    return codec->compress1((ICCOMPRESS *)lParam1, (VDXPixmapLayout*)lParam2);
+
+  case VDICM_COMPRESS2:
+    return codec->compress2((ICCOMPRESS *)lParam1, (VDXPictureCompress *)lParam2);
 
   case VDICM_LOGPROC:
     codec->logProc = (VDLogProc)lParam1;

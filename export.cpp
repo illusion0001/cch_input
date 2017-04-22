@@ -763,6 +763,10 @@ void FFOutputFile::Write(uint32 index, const void *pBuffer, uint32 cbBuffer, Pac
   pkt.pos = -1;
   pkt.stream_index = s.st->index;
   pkt.pts = s.frame;
+  if(info.pts!=VDX_NOPTS_VALUE){
+    pkt.pts = info.pts;
+    pkt.dts = info.dts;
+  }
   int64_t samples = info.samples;
   if(info.pcm_samples!=-1){
     samples = info.pcm_samples;
