@@ -95,6 +95,7 @@
 #define IDC_CODER1                      1053
 #define IDC_CONTEXT                     1054
 #define IDC_SLICECRC                    1055
+#define IDC_MESSAGE                     1056
 #define IDC_SYS_OPTIONS                 1057
 #define IDC_DECODE_FFMPEG               1058
 #define IDC_CACHE_SIZE                  1059

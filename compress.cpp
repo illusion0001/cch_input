@@ -826,7 +826,7 @@ int ffv1_slice_tab[] = {0,4,6,9,12,16,24,30,36,42};
 
 class ConfigFFV1: public ConfigBase{
 public:
-  ConfigFFV1(){ dialog_id = IDD_ENC_FFV1; }
+  ConfigFFV1(){ dialog_id = IDD_ENC_FFV1; idc_message = IDC_MESSAGE; }
   INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam);
   void apply_level();
   void init_slices();
@@ -920,7 +920,7 @@ void ConfigFFV1::apply_level()
     config->slicecrc = 0;
   }
   init_slices();
-  if(config->level<1 && config->bits==16) config->bits = 12;
+  adjust_bits();
   init_bits();
   change_bits();
 }
@@ -1021,7 +1021,7 @@ INT_PTR ConfigFFV1::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
 
 class ConfigHUFF: public ConfigBase{
 public:
-  ConfigHUFF(){ dialog_id = IDD_ENC_FFVHUFF; }
+  ConfigHUFF(){ dialog_id = IDD_ENC_FFVHUFF; idc_message = IDC_MESSAGE; }
   INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam);
 };
 
