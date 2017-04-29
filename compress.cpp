@@ -238,6 +238,10 @@ struct CodecBase{
     return false;
   }
 
+  virtual int compress_input_info(VDXPixmapLayout* src){
+    return 0;
+  }
+
   LRESULT compress_input_format(FilterModPixmapInfo* info){
     if(config->format==format_rgba){
       return nsVDXPixmap::kPixFormat_XRGB8888;
@@ -882,6 +886,22 @@ struct CodecFFV1: public CodecBase{
     return CodecBase::test_av_format(format);
   }
 
+  virtual int compress_input_info(VDXPixmapLayout* src){
+    switch(src->format){
+    case nsVDXPixmap::kPixFormat_RGB888:
+    case nsVDXPixmap::kPixFormat_XRGB8888:
+    case nsVDXPixmap::kPixFormat_XRGB64:
+    case nsVDXPixmap::kPixFormat_YUV420_Planar:
+    case nsVDXPixmap::kPixFormat_YUV422_Planar:
+    case nsVDXPixmap::kPixFormat_YUV444_Planar:
+    case nsVDXPixmap::kPixFormat_YUV420_Planar16:
+    case nsVDXPixmap::kPixFormat_YUV422_Planar16:
+    case nsVDXPixmap::kPixFormat_YUV444_Planar16:
+      return 1;
+    }
+    return 0;
+  }
+
   void getinfo(ICINFO& info){
     info.fccHandler = codec_tag;
     info.dwFlags = VIDCF_COMPRESSFRAMES | VIDCF_FASTTEMPORALC;
@@ -1050,6 +1070,22 @@ struct CodecHUFF: public CodecBase{
     wcscpy(info.szDescription, L"FFMPEG Huffyuv lossless codec");
   }
 
+  virtual int compress_input_info(VDXPixmapLayout* src){
+    switch(src->format){
+    case nsVDXPixmap::kPixFormat_RGB888:
+    case nsVDXPixmap::kPixFormat_XRGB8888:
+    case nsVDXPixmap::kPixFormat_XRGB64:
+    case nsVDXPixmap::kPixFormat_YUV420_Planar:
+    case nsVDXPixmap::kPixFormat_YUV422_Planar:
+    case nsVDXPixmap::kPixFormat_YUV444_Planar:
+    case nsVDXPixmap::kPixFormat_YUV420_Planar16:
+    case nsVDXPixmap::kPixFormat_YUV422_Planar16:
+    case nsVDXPixmap::kPixFormat_YUV444_Planar16:
+      return 1;
+    }
+    return 0;
+  }
+
   bool init_ctx(VDXPixmapLayout* layout)
   {
     ctx->thread_count = 0;
@@ -1143,6 +1179,15 @@ struct CodecProres: public CodecBase{
 
   int config_size(){ return sizeof(Config); }
   void reset_config(){ codec_config.clear(); }
+
+  virtual int compress_input_info(VDXPixmapLayout* src){
+    switch(src->format){
+    case nsVDXPixmap::kPixFormat_YUV422_Planar16:
+    case nsVDXPixmap::kPixFormat_YUV444_Planar16:
+      return 1;
+    }
+    return 0;
+  }
 
   void getinfo(ICINFO& info){
     info.fccHandler = codec_tag;
@@ -1399,6 +1444,21 @@ struct CodecH265: public CodecBase{
     wcscpy(info.szDescription, L"FFMPEG / x265");
   }
 
+  virtual int compress_input_info(VDXPixmapLayout* src){
+    switch(src->format){
+    case nsVDXPixmap::kPixFormat_RGB888:
+    case nsVDXPixmap::kPixFormat_XRGB64:
+    case nsVDXPixmap::kPixFormat_YUV420_Planar:
+    case nsVDXPixmap::kPixFormat_YUV422_Planar:
+    case nsVDXPixmap::kPixFormat_YUV444_Planar:
+    case nsVDXPixmap::kPixFormat_YUV420_Planar16:
+    case nsVDXPixmap::kPixFormat_YUV422_Planar16:
+    case nsVDXPixmap::kPixFormat_YUV444_Planar16:
+      return 1;
+    }
+    return 0;
+  }
+
   bool init_ctx(VDXPixmapLayout* layout)
   {
     ctx->thread_count = 0;
@@ -1517,6 +1577,14 @@ struct CodecVP8: public CodecBase{
 
   int config_size(){ return sizeof(Config); }
   void reset_config(){ codec_config.clear(); }
+
+  virtual int compress_input_info(VDXPixmapLayout* src){
+    switch(src->format){
+    case nsVDXPixmap::kPixFormat_YUV420_Planar:
+      return 1;
+    }
+    return 0;
+  }
 
   void getinfo(ICINFO& info){
     info.fccHandler = codec_tag;
@@ -1694,6 +1762,9 @@ extern "C" LRESULT WINAPI VDDriverProc(DWORD_PTR dwDriverId, HDRVR hDriver, UINT
 
   case VDICM_COMPRESS_INPUT_FORMAT:
     return codec->compress_input_format((FilterModPixmapInfo*)lParam1);
+
+  case VDICM_COMPRESS_INPUT_INFO:
+    return codec->compress_input_info((VDXPixmapLayout*)lParam1);
 
   case VDICM_COMPRESS_QUERY:
     return codec->compress_query((BITMAPINFO *)lParam2, (VDXPixmapLayout*)lParam1);
