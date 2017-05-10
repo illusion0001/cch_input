@@ -381,6 +381,11 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   read_frame(0,true);
   pSource->video_start_time = start_time;
 
+  if(frame_fmt==-1){
+    mContext.mpCallbacks->SetError("FFMPEG: Unknown picture format.");
+    return -1;
+  }
+
   return 0;
 }
 
@@ -1367,7 +1372,7 @@ bool VDFFVideoSource::Read(sint64 start, uint32 lCount, void *lpBuffer, uint32 c
     return true;
   }
 
-  if(!copy_mode && !lpBuffer) return false;
+  if(!copy_mode && !lpBuffer) return true;
 
   av_packet_unref(&copy_pkt);
   if(copy_mode && start!=next_frame){

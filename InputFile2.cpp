@@ -303,8 +303,12 @@ bool VDXAPIENTRY VDFFInputFile::Append(const wchar_t* szFile)
 {
   if(!szFile) return true;
 
+  VDFFInputFile* head = head_segment ? head_segment : this;
+  VDFFInputFile* last = head;
+  while(last->next_segment) last = last->next_segment;
+
   VDFFInputFile* f = new VDFFInputFile(mContext);
-  f->head_segment = head_segment ? head_segment : this;
+  f->head_segment = head;
   f->Init(szFile,0);
 
   if(!f->m_pFormatCtx){
@@ -312,19 +316,20 @@ bool VDXAPIENTRY VDFFInputFile::Append(const wchar_t* szFile)
     return false;
   }
 
-  if(!test_append(f->head_segment,f)){
+  if(!test_append(head,f)){
     mContext.mpCallbacks->SetError("FFMPEG: Couldn't append incompatible formats.");
     delete f;
     return false;
   }
 
-  next_segment = f;
-  next_segment->AddRef();
-  if(f->head_segment->video_source){
+  last->next_segment = f;
+  last->next_segment->AddRef();
+
+  if(head->video_source){
     if(f->GetVideoSource(0,0)){
-      VDFFVideoSource::ConvertInfo& convertInfo = f->head_segment->video_source->convertInfo;
-      f->video_source->SetTargetFormat(convertInfo.req_format,convertInfo.req_dib,f->head_segment->video_source);
-      VDFFInputFile* f1 = f->head_segment;
+      VDFFVideoSource::ConvertInfo& convertInfo = head->video_source->convertInfo;
+      f->video_source->SetTargetFormat(convertInfo.req_format,convertInfo.req_dib,head->video_source);
+      VDFFInputFile* f1 = head;
       while(1){
         f1->video_source->m_streamInfo.mInfo.mSampleCount += f->video_source->sample_count;
         f1 = f1->next_segment;
@@ -332,15 +337,15 @@ bool VDXAPIENTRY VDFFInputFile::Append(const wchar_t* szFile)
         if(f1==f) break;
       }
     } else {
-      next_segment = 0;
+      last->next_segment = 0;
       f->Release();
       return false;
     }
   }
 
-  if(f->head_segment->audio_source){
+  if(head->audio_source){
     if(f->GetAudioSource(0,0)){
-      VDFFInputFile* f1 = f->head_segment;
+      VDFFInputFile* f1 = head;
       while(1){
         f1->audio_source->m_streamInfo.mSampleCount += f->audio_source->sample_count;
         f1 = f1->next_segment;
@@ -348,7 +353,7 @@ bool VDXAPIENTRY VDFFInputFile::Append(const wchar_t* szFile)
         if(f1==f) break;
       }
     } else {
-      next_segment = 0;
+      last->next_segment = 0;
       f->Release();
       return false;
     }
@@ -531,7 +536,7 @@ bool VDFFInputFile::GetVideoSource(int index, IVDXVideoSource **ppVS)
   }
 
   if(next_segment && next_segment->GetVideoSource(0,0)){
-    video_source->m_streamInfo.mInfo.mSampleCount += next_segment->video_source->sample_count;
+    video_source->m_streamInfo.mInfo.mSampleCount += next_segment->video_source->m_streamInfo.mInfo.mSampleCount;
   }
 
   return true;
@@ -578,7 +583,7 @@ bool VDFFInputFile::GetAudioSource(int index, IVDXAudioSource **ppAS)
   }
 
   if(next_segment && next_segment->GetAudioSource(0,0)){
-    audio_source->m_streamInfo.mSampleCount += next_segment->audio_source->sample_count;
+    audio_source->m_streamInfo.mSampleCount += next_segment->audio_source->m_streamInfo.mSampleCount;
   }
 
   return true;

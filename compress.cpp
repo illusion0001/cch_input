@@ -444,7 +444,7 @@ struct CodecBase{
 
     if(!init_ctx(layout)) return ICERR_BADPARAM;
 
-    if(keyint!=1) ctx->gop_size = keyint;
+    if(keyint>1) ctx->gop_size = keyint;
 
     if(avcodec_open2(ctx, codec, NULL)<0){ compress_end(); return ICERR_BADPARAM; }
 

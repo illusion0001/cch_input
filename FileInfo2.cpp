@@ -66,8 +66,14 @@ void VDFFInputFileInfoDialog::load_segment()
   swprintf(buf,buf_size,L"Timeline: frame %d to %d",start_frame,end_frame);
   SetDlgItemTextW(mhdlg, IDC_SEGMENT_TIMELINE, buf);
 
-  EnableWindow(GetDlgItem(mhdlg,IDC_SEGMENT_PREV),segment_pos>0);
-  EnableWindow(GetDlgItem(mhdlg,IDC_SEGMENT_NEXT),segment_pos<segment_count-1);
+  HWND prev = GetDlgItem(mhdlg,IDC_SEGMENT_PREV);
+  HWND next = GetDlgItem(mhdlg,IDC_SEGMENT_NEXT);
+  bool bprev = segment_pos>0;
+  bool bnext = segment_pos<segment_count-1;
+  if(GetFocus()==prev && !bprev) SetFocus(next);
+  if(GetFocus()==next && !bnext) SetFocus(prev);
+  EnableWindow(prev,bprev);
+  EnableWindow(next,bnext);
 
   print_format();
   print_metadata();
