@@ -53,6 +53,8 @@ public:
   {
   }
 
+  virtual bool  VDXAPIENTRY GetStreamControl(const wchar_t *path, const char* format, VDXStreamControl& sc);
+
   virtual bool	VDXAPIENTRY CreateOutputFile(IVDXOutputFile **ppFile) {
     *ppFile = new FFOutputFile(mpContext);
     return true;

@@ -60,6 +60,18 @@ struct IOBuffer{
   }
 };
 
+void adjust_codec_tag2(AVOutputFormat* format, AVStream* st)
+{
+  AVCodecID codec_id = st->codecpar->codec_id;
+  unsigned int tag = st->codecpar->codec_tag;
+  st->codecpar->codec_tag = 0;
+  AVCodecID codec_id1 = av_codec_get_id(format->codec_tag, tag);
+  unsigned int codec_tag2;
+  int have_codec_tag2 = av_codec_get_tag2(format->codec_tag, codec_id, &codec_tag2);
+  if(!format->codec_tag || codec_id1==codec_id || !have_codec_tag2)
+    st->codecpar->codec_tag = tag;
+}
+
 void adjust_codec_tag(AVOutputFormat* format, AVStream* st)
 {
   AVCodecID codec_id = st->codec->codec_id;
@@ -340,29 +352,16 @@ bool VDXAPIENTRY VDFFInputFile::ExecuteExport(int id, VDXHWND parent, IProjectSt
       if(i!=video && i!=audio) continue;
 
       AVStream *in_stream = fmt->streams[i];
-      AVStream *out_stream = avformat_new_stream(ofmt, in_stream->codec->codec);
+      AVStream *out_stream = avformat_new_stream(ofmt, 0);
       if(!out_stream){
         err = AVERROR_UNKNOWN;
         goto end;
       }
 
-      err = avcodec_copy_context(out_stream->codec, in_stream->codec);
+      err = avcodec_parameters_copy(out_stream->codecpar, in_stream->codecpar);
       if(err<0) goto end;
 
-      adjust_codec_tag(ofmt->oformat,out_stream);
-
-      if(ofmt->oformat->flags & AVFMT_GLOBALHEADER)
-        out_stream->codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-
-      out_stream->codec->bit_rate = in_stream->codec->bit_rate;
-      out_stream->codec->field_order = in_stream->codec->field_order;
-
-      uint64_t extra_size = (uint64_t)in_stream->codec->extradata_size + AV_INPUT_BUFFER_PADDING_SIZE;
-      if (in_stream->codec->extradata_size) {
-        out_stream->codec->extradata = (uint8_t*)av_mallocz(size_t(extra_size));
-        memcpy(out_stream->codec->extradata, in_stream->codec->extradata, in_stream->codec->extradata_size);
-      }
-      out_stream->codec->extradata_size = in_stream->codec->extradata_size;
+      adjust_codec_tag2(ofmt->oformat,out_stream);
 
       out_stream->avg_frame_rate = in_stream->avg_frame_rate;
       out_stream->time_base = in_stream->time_base;
@@ -513,31 +512,27 @@ void FFOutputFile::av_error(int err)
   mContext.mpCallbacks->SetError(buf);
 }
 
-/*
-void av_log_func2(void* obj, int type, const char* msg, va_list arg)
-{
-  char buf[1024];
-  vsprintf(buf,msg,arg);
-  OutputDebugString(buf);
-  switch(type){
-  case AV_LOG_PANIC:
-  case AV_LOG_FATAL:
-  case AV_LOG_ERROR:
-  case AV_LOG_WARNING:
-    ;//DebugBreak();
-  }
-}
-*/
-
 void init_av();
+
+bool VDXAPIENTRY VDFFOutputFileDriver::GetStreamControl(const wchar_t *path, const char* format, VDXStreamControl& sc){
+  init_av();
+
+  const int ff_path_size = MAX_PATH*4; // utf8, worst case
+  char out_ff_path[ff_path_size];
+  widechar_to_utf8(out_ff_path, ff_path_size, path);
+
+  int err = 0; 
+  AVOutputFormat* oformat = 0;
+  if(format && format[0]) oformat = av_guess_format(format, 0, 0);
+  if(!oformat) oformat = av_guess_format(0, out_ff_path, 0);
+  if(!oformat) return false;
+
+  if(oformat->flags & AVFMT_GLOBALHEADER) sc.global_header = true;
+  return true;
+}
 
 void FFOutputFile::Init(const wchar_t *path, const char* format)
 {
-  /*av_log_set_callback(av_log_func2);
-  av_log_set_level(AV_LOG_INFO);
-  av_log_set_flags(AV_LOG_SKIP_REPEATED);
-  */
-
   init_av();
 
   const int ff_path_size = MAX_PATH*4; // utf8, worst case
@@ -586,6 +581,24 @@ void FFOutputFile::SetVideo(uint32 index, const VDXStreamInfo& si, const void *p
 
   import_bmp(st,pFormat,cbFormat);
   adjust_codec_tag(st);
+
+  st->codec->pix_fmt = (AVPixelFormat)si.format;
+  st->codec->bit_rate = si.bit_rate;
+  st->codec->bits_per_coded_sample = si.bits_per_coded_sample;
+  st->codec->bits_per_raw_sample = si.bits_per_raw_sample;
+  st->codec->profile = si.profile;
+  st->codec->level = si.level;
+  st->codec->sample_aspect_ratio.num = si.sar_width;
+  st->codec->sample_aspect_ratio.den = si.sar_height;
+  st->codec->field_order = (AVFieldOrder)si.field_order;
+  st->codec->color_range = (AVColorRange)si.color_range;
+  st->codec->color_primaries = (AVColorPrimaries)si.color_primaries;
+  st->codec->color_trc = (AVColorTransferCharacteristic)si.color_trc;
+  st->codec->colorspace = (AVColorSpace)si.color_space;
+  st->codec->chroma_sample_location = (AVChromaLocation)si.chroma_location;
+  st->codec->has_b_frames = si.video_delay;
+  avcodec_parameters_from_context(st->codecpar,st->codec);
+  st->sample_aspect_ratio = st->codec->sample_aspect_ratio;
 
   st->avg_frame_rate = av_make_q(asi.dwRate,asi.dwScale);
   av_stream_set_r_frame_rate(st,st->avg_frame_rate);
@@ -722,8 +735,8 @@ void FFOutputFile::adjust_codec_tag(AVStream *st)
 {
   ::adjust_codec_tag(ofmt->oformat,st);
 
-  if(ofmt->oformat->flags & AVFMT_GLOBALHEADER)
-    st->codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+  //if(ofmt->oformat->flags & AVFMT_GLOBALHEADER)
+  //  st->codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 }
 
 void FFOutputFile::Write(uint32 index, const void *pBuffer, uint32 cbBuffer, PacketInfo& info)

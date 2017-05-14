@@ -131,6 +131,7 @@ struct CodecBase{
   AVCodecContext* ctx;
   AVFrame* frame;
   VDLogProc logProc;
+  bool global_header;
 
   CodecBase(){ 
     codec=0; ctx=0; frame=0;
@@ -142,6 +143,7 @@ struct CodecBase{
     codec_tag = 0;
     config = 0;
     logProc = 0;
+    global_header = false;
   }
 
   virtual ~CodecBase(){
@@ -441,6 +443,7 @@ struct CodecBase{
 
     ctx->color_range = color_range;
     ctx->colorspace = colorspace;
+    if(global_header) ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 
     if(!init_ctx(layout)) return ICERR_BADPARAM;
 
@@ -459,6 +462,37 @@ struct CodecBase{
     if(ret<0){ compress_end(); return ICERR_MEMORY; }
 
     return ICERR_OK;
+  }
+
+  void streamControl(VDXStreamControl* sc)
+  {
+    global_header = sc->global_header;
+  }
+
+  void getStreamInfo(VDXStreamInfo* si)
+  {
+    AVCodecParameters* par = avcodec_parameters_alloc();
+    avcodec_parameters_from_context(par,ctx);
+
+    si->avcodec_version = LIBAVCODEC_VERSION_INT;
+
+    si->format = par->format;
+    si->bit_rate = par->bit_rate;
+    si->bits_per_coded_sample = par->bits_per_coded_sample;
+    si->bits_per_raw_sample = par->bits_per_raw_sample;
+    si->profile = par->profile;
+    si->level = par->level;
+    si->sar_width = par->sample_aspect_ratio.num;
+    si->sar_height = par->sample_aspect_ratio.den;
+    si->field_order = par->field_order;
+    si->color_range = par->color_range;
+    si->color_primaries = par->color_primaries;
+    si->color_trc = par->color_trc;
+    si->color_space = par->color_space;
+    si->chroma_location = par->chroma_location;
+    si->video_delay = par->video_delay;
+
+    avcodec_parameters_free(&par);
   }
 
   LRESULT compress_end()
@@ -1318,12 +1352,24 @@ extern "C" LRESULT WINAPI VDDriverProc(DWORD_PTR dwDriverId, HDRVR hDriver, UINT
   
   case VDICM_COMPRESS_BEGIN:
     return codec->compress_begin((BITMAPINFO *)lParam2, (VDXPixmapLayout*)lParam1);
+
+  case VDICM_STREAMCONTROL:
+    codec->streamControl((VDXStreamControl *)lParam1);
+    return 0;
+  
+  case VDICM_GETSTREAMINFO:
+    codec->getStreamInfo((VDXStreamInfo *)lParam1);
+    return 0;
   
   case VDICM_COMPRESS:
     return codec->compress1((ICCOMPRESS *)lParam1, (VDXPixmapLayout*)lParam2);
 
   case VDICM_COMPRESS2:
     return codec->compress2((ICCOMPRESS *)lParam1, (VDXPictureCompress *)lParam2);
+
+  case VDICM_COMPRESS_TRUNCATE:
+    codec->frame_total = 0;
+    return 0;
 
   case VDICM_LOGPROC:
     codec->logProc = (VDLogProc)lParam1;
