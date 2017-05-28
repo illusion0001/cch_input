@@ -274,6 +274,9 @@ public:
 
 	virtual bool	VDXAPIENTRY GetVideoSource(int index, IVDXVideoSource **ppVS) = 0;
 	virtual bool	VDXAPIENTRY GetAudioSource(int index, IVDXAudioSource **ppAS) = 0;
+
+	// V8
+	virtual int VDXAPIENTRY GetFileFlags(){ return -1; }
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -328,7 +331,8 @@ enum {
 	// V5 (FilterMod): Extended StreamSource interface
 	// V6 (FilterMod): Extended IFilterModFileTool interface
 	// V7 (FilterMod): Extended IVDXAudioSource interface
-	kVDXPlugin_InputDriverAPIVersion = 7
+	// V8 (FilterMod): Extended IVDXInputFile interface
+	kVDXPlugin_InputDriverAPIVersion = 8
 };
 
 ///////////////////////////////////////////////////////////////////////////////

@@ -199,6 +199,7 @@ bool VDXAPIENTRY VDFFInputFileDriver::CreateInputFile(uint32_t flags, IVDXInputF
   if(!p) return false;
 
   if(flags & kOF_AutoSegmentScan) p->auto_append = true;
+  if(flags & kOF_SingleFile) p->single_file_mode = true;
   //p->auto_append = true;
   if(!select_mode || config_decode_cfhd) p->cfg_skip_cfhd = true;
 
@@ -219,6 +220,7 @@ VDFFInputFile::VDFFInputFile(const VDXInputDriverContext& context)
   next_segment = 0;
   head_segment = 0;
   auto_append = false;
+  single_file_mode = false;
   is_image = false;
   is_image_list = false;
   is_anim_image = false;
@@ -256,6 +258,13 @@ void VDFFInputFile::Init(const wchar_t *szFile, IVDXInputOptions *opts)
   m_pFormatCtx = open_file(AVMEDIA_TYPE_VIDEO);
 
   if(auto_append) do_auto_append(szFile);
+}
+
+int VDFFInputFile::GetFileFlags()
+{
+  int flags = 0;
+  if(is_image_list) flags |= VDFFInputFileDriver::kFF_Sequence;
+  return flags;
 }
 
 void VDFFInputFile::do_auto_append(const wchar_t *szFile)
@@ -405,7 +414,7 @@ AVFormatContext* VDFFInputFile::open_file(AVMediaType type, int streamIndex)
 
   AVInputFormat* fmt_image2 = av_find_input_format("image2");
 
-  if(is_image && fmt_image2){
+  if(is_image && fmt_image2 && !single_file_mode){
     wchar_t list_path[MAX_PATH];
     char start_number[MAX_PATH];
     if(detect_image_list(list_path,MAX_PATH,start_number,MAX_PATH)){

@@ -22,7 +22,12 @@ public:
     kOF_None			= 0,
     kOF_Quiet			= 1,
     kOF_AutoSegmentScan	= 2,
+    kOF_SingleFile	= 4,
     kOF_Max				= 0xFFFFFFFFUL
+  };
+
+  enum FileFlags {
+    kFF_Sequence = 1,
   };
 
   bool select_mode;
@@ -42,6 +47,8 @@ public:
   int64_t video_start_time;
   wchar_t path[MAX_PATH];
   bool auto_append;
+  bool single_file_mode;
+
   bool is_image_list;
   bool is_image;
   bool is_anim_image;
@@ -86,6 +93,7 @@ public:
   bool VDXAPIENTRY GetExportMenuInfo(int id, char* name, int name_size, bool* enabled);
   bool VDXAPIENTRY GetExportCommandName(int id, char* name, int name_size);
   bool VDXAPIENTRY ExecuteExport(int id, VDXHWND parent, IProjectState* state);
+  int VDXAPIENTRY GetFileFlags();
 
 public:
   AVFormatContext* getContext( void ) { return m_pFormatCtx; }
