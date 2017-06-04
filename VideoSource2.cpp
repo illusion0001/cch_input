@@ -184,7 +184,11 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   if(m_pStreamCtx->codec->field_order>AV_FIELD_PROGRESSIVE){
     // interlaced seems to double r_framerate
     // example: 00005.MTS
-    r_fr.den *= 2;
+    // however other samples do not show this
+    // example: amanda_excerpt.m2t
+    // idea of this: r_fr cannot be lower than average
+    AVRational avg_fr = m_pStreamCtx->avg_frame_rate;
+    if(int64_t(r_fr.num)*avg_fr.den>=int64_t(avg_fr.num)*r_fr.den*2) r_fr.den *= 2;
   }
   int sample_count_error = init_duration(r_fr);
   if(sample_count_error==-1) return -1;
