@@ -8,7 +8,7 @@
 
 #include <string>
 
-static const char* vsnstr = "Version 1.15";
+static const char* vsnstr = "Version 1.16";
 
 extern HINSTANCE hInstance;
  
@@ -387,7 +387,7 @@ void VDFFInputFileInfoDialog::print_performance()
   bool all_key = true;
   bool has_vfr = false;
 
-  while(f1){
+  while(f1 && f1->video_source){
     VDFFVideoSource* v1 = f1->video_source;
     buf_max += v1->buffer_reserve;
     {for(int i=0; i<v1->buffer_count; i++)
@@ -406,7 +406,15 @@ void VDFFInputFileInfoDialog::print_performance()
     f1 = f1->next_segment;
   }
 
-  int64_t mem_max = source->video_source->frame_size; 
+  if(buf_max==0){
+    SetDlgItemText(mhdlg, IDC_MEMORY_INFO, 0);
+    SetDlgItemText(mhdlg, IDC_STATS, 0);
+    SetDlgItemText(mhdlg, IDC_INDEX_INFO, 0);
+    return;
+  }
+
+  int64_t mem_max = 0;
+  if(source->video_source) mem_max = source->video_source->frame_size; 
   mem_max *= buf_max;
   mem_max = (mem_max+512*1024)/(1024*1024);
 
