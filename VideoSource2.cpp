@@ -33,6 +33,9 @@ VDFFVideoSource::VDFFVideoSource(const VDXInputDriverContext& context)
   m_pixmap_frame = -1;
   next_frame = -1;
   last_seek_frame = -1;
+  buffer = 0;
+  buffer_count = 0;
+  buffer_reserve = 0;
   frame_array = 0;
   frame_type = 0;
   flip_image = false;
@@ -312,13 +315,9 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   first_frame = 0;
   last_frame = 0;
   used_frames = 0;
-  buffer_count = keyframe_gap*2;
-  if(buffer_count<pSource->cfg_frame_buffers) buffer_count = pSource->cfg_frame_buffers;
-  if(buffer_count>sample_count) buffer_count = sample_count;
-  buffer_reserve = buffer_count;
-
-  buffer = (BufferPage*)malloc(sizeof(BufferPage)*buffer_reserve);
-  memset(buffer,0,sizeof(BufferPage)*buffer_reserve);
+  buffer_reserve = keyframe_gap*2;
+  if(buffer_reserve<pSource->cfg_frame_buffers) buffer_reserve = pSource->cfg_frame_buffers;
+  if(buffer_reserve>sample_count) buffer_reserve = sample_count;
 
   int fa_size = sample_count*sizeof(void*);
   frame_array = (BufferPage**)malloc(fa_size);
@@ -329,10 +328,18 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
 
   init_format();
   next_frame = 0;
+  if(frame_fmt==-1){
+    //! unable to reserve buffers for unknown format
+    mContext.mpCallbacks->SetError("FFMPEG: Unknown picture format.");
+    return -1;
+  }
 
-  #ifndef _WIN64
-  uint64_t max_heap = 0x20000000;
-  uint64_t mem_size = uint64_t(frame_size)*buffer_reserve;
+  MEMORYSTATUSEX ms = {sizeof(MEMORYSTATUSEX)};
+  GlobalMemoryStatusEx(&ms);
+
+  uint64_t max_virtual = ms.ullTotalPhys;
+  if(max_virtual<0x40000000) max_virtual = 0; else max_virtual -= 0x40000000;
+
   uint64_t mem_other = 0;
   if(m_pSource->head_segment){
     VDFFInputFile* f1 = m_pSource->head_segment;
@@ -344,11 +351,37 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
     }
   }
 
+  uint64_t mem_size = uint64_t(frame_size)*buffer_reserve;
+  if(mem_size+mem_other>max_virtual){
+    if(buffer_reserve>pSource->cfg_frame_buffers){
+      buffer_reserve = pSource->cfg_frame_buffers;
+      mem_size = uint64_t(frame_size)*buffer_reserve;
+    }
+  }
+
+  #ifndef _WIN64
+  uint64_t max_heap = 0x20000000;
   if(mem_size+mem_other>max_heap){
-    mem_size = (mem_size|0xFFFF)+1;
+    mem_size = (mem_size + 0xFFFF) & ~0xFFFF;
     mem = CreateFileMapping(INVALID_HANDLE_VALUE,0,PAGE_READWRITE,mem_size>>32,(DWORD)mem_size,0);
+    if(!mem){
+      if(buffer_reserve>pSource->cfg_frame_buffers){
+        buffer_reserve = pSource->cfg_frame_buffers;
+        mem_size = uint64_t(frame_size)*buffer_reserve;
+        mem_size = (mem_size + 0xFFFF) & ~0xFFFF;
+        mem = CreateFileMapping(INVALID_HANDLE_VALUE,0,PAGE_READWRITE,mem_size>>32,(DWORD)mem_size,0);
+      }
+    }
+    if(!mem){
+      mContext.mpCallbacks->SetErrorOutOfMemory();
+      return -1;
+    }
   }
   #endif
+
+  buffer = (BufferPage*)malloc(sizeof(BufferPage)*buffer_reserve);
+  memset(buffer,0,sizeof(BufferPage)*buffer_reserve);
+  buffer_count = buffer_reserve;
 
   m_streamInfo.mFlags = 0;
   m_streamInfo.mfccHandler = export_avi_fcc(m_pStreamCtx);
@@ -381,11 +414,6 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   // this is bullshit if the packet belongs to reordered frame (example: BBI frame sequence)
   read_frame(0,true);
   pSource->video_start_time = start_time;
-
-  if(frame_fmt==-1){
-    mContext.mpCallbacks->SetError("FFMPEG: Unknown picture format.");
-    return -1;
-  }
 
   return 0;
 }
@@ -1637,11 +1665,13 @@ int VDFFVideoSource::handle_frame()
     open_write(page);
     page->error = 0;
 
-    if(check_frame_format()){
+    if(!page->p){
+      page->error = BufferPage::err_memory;
+    } else if(!check_frame_format()){
+      page->error = BufferPage::err_badformat;
+    } else {
       uint8_t* dst = align_buf(page->p);
       av_image_copy_to_buffer(dst, frame_size, frame->data, frame->linesize, (AVPixelFormat)frame->format, frame->width, frame->height, line_align);
-    } else {
-      page->error = BufferPage::err_badformat;
     }
   } else if(direct_buffer){
     frame_type[pos] = av_get_picture_type_char(frame->pict_type);
@@ -1723,7 +1753,10 @@ void VDFFVideoSource::alloc_page(int pos)
     if(!buffer[i].refs){
       r = &buffer[i];
       r->i = i;
-      if(!mem && !r->p) r->p = (uint8_t*)malloc(frame_size+line_align-1);
+      if(!mem && !r->p){
+        r->p = (uint8_t*)malloc(frame_size+line_align-1);
+        if(!r->p) mContext.mpCallbacks->SetErrorOutOfMemory();
+      }
       break;
     }
   }}

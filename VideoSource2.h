@@ -119,7 +119,8 @@ public:
 
   struct BufferPage{
     enum {
-      err_badformat = 1
+      err_badformat = 1,
+      err_memory = 2
     };
 
     int i;
