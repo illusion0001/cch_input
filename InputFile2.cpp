@@ -30,6 +30,17 @@ bool check_magic_vfw(DWORD fcc)
   return true;
 }
 
+DWORD fcc_toupper(DWORD a)
+{
+  DWORD r = a;
+  char* c = (char*)(&r);
+  {for(int i=0; i<4; i++){
+    int v = c[i];
+    if(v>='a' && v<='z') c[i] = v+'A'-'a';
+  }}
+  return r;
+}
+
 int detect_avi(VDXMediaInfo& info, const void *pHeader, int32_t nHeaderSize)
 {
   if(nHeaderSize<64) return -1;
@@ -80,13 +91,19 @@ int detect_avi(VDXMediaInfo& info, const void *pHeader, int32_t nHeaderSize)
     init_av();
     bool have_codec = false;
     DWORD h1 = sh.fccHandler;
-    DWORD h2 = sh.fccHandler;
-    char* ch2 = (char*)(&h2);
+    char* ch = (char*)(&h1);
+    info.vcodec_name[0] = 0;
     {for(int i=0; i<4; i++){
-      int v = ch2[i];
-      if(v>='a' && v<='z') ch2[i] = v+'A'-'a';
-      info.vcodec_name[i] = v;
-      info.vcodec_name[i+1] = 0;
+      int v = ch[i];
+      if(v>=32){
+        wchar_t vc[] = {0,0};
+        vc[0] = v;
+        wcscat(info.vcodec_name,vc);
+      } else {
+        wchar_t vc[10];
+        swprintf(vc,10,L"[%d]",v);
+        wcscat(info.vcodec_name,vc);
+      }
     }}
 
     // skip internally supported formats
@@ -115,7 +132,7 @@ int detect_avi(VDXMediaInfo& info, const void *pHeader, int32_t nHeaderSize)
     if(!have_codec){
       AVCodecTag* riff_tag = (AVCodecTag*)avformat_get_riff_video_tags();
       while(riff_tag->id!=AV_CODEC_ID_NONE){
-        if(riff_tag->tag==h1 || riff_tag->tag==h2){
+        if(riff_tag->tag==h1 || fcc_toupper(riff_tag->tag)==fcc_toupper(h1)){
           if(riff_tag->id==AV_CODEC_ID_MAGICYUV && check_magic_vfw(h1)) return 0;
           have_codec = true;
           break;
@@ -127,7 +144,7 @@ int detect_avi(VDXMediaInfo& info, const void *pHeader, int32_t nHeaderSize)
     if(!have_codec){
       AVCodecTag* mov_tag = (AVCodecTag*)avformat_get_mov_video_tags();
       while(mov_tag->id!=AV_CODEC_ID_NONE){
-        if(mov_tag->tag==h1 || mov_tag->tag==h2){
+        if(mov_tag->tag==h1 || fcc_toupper(mov_tag->tag)==fcc_toupper(h1)){
           if(mov_tag->id==AV_CODEC_ID_MAGICYUV && check_magic_vfw(h1)) return 0;
           have_codec = true;
           break;
