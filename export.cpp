@@ -18,48 +18,6 @@ extern HINSTANCE hInstance;
 void utf8_to_widechar(wchar_t *dst, int max_dst, const char *src);
 void widechar_to_utf8(char *dst, int max_dst, const wchar_t *src);
 
-struct IOBuffer{
-  uint8_t* data;
-  int64_t size;
-  int64_t pos;
-
-  IOBuffer(){
-    data=0; size=0; pos=0; 
-  }
-
-  ~IOBuffer(){
-    av_free(data);
-  }
-
-  void copy(void* data, int size){
-    alloc(size);
-    memcpy(this->data,data,size);
-  }
-
-  void alloc(int n){
-    data = (uint8_t*)av_malloc(n+AVPROBE_PADDING_SIZE);
-    memset(data,0,n+AVPROBE_PADDING_SIZE);
-    size = n;
-  }
-
-  static int Read(void* obj, uint8_t* buf, int buf_size){
-    IOBuffer* t = (IOBuffer*)obj;
-    int64_t n = t->pos+buf_size<t->size ? buf_size : t->size-t->pos;
-    memcpy(buf,t->data+t->pos,int(n));
-    t->pos += n;
-    return int(n);
-  }
-
-  static int64_t Seek(void* obj, int64_t offset, int whence){
-    IOBuffer* t = (IOBuffer*)obj;
-    if(whence==AVSEEK_SIZE) return t->size;
-    if(whence==SEEK_CUR){ t->pos+=offset; return t->pos; }
-    if(whence==SEEK_SET){ t->pos=offset; return t->pos; }
-    if(whence==SEEK_END){ t->pos=t->size+offset; return t->pos; }
-    return -1;
-  }
-};
-
 void adjust_codec_tag2(AVOutputFormat* format, AVStream* st)
 {
   AVCodecID codec_id = st->codecpar->codec_id;

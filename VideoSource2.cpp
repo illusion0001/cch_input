@@ -184,6 +184,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
     r_fr.den *= 2;
   }
   int sample_count_error = init_duration(r_fr);
+  if(sample_count_error==-1) return -1;
 
   if(pSource->is_image){
     is_image_list = true;

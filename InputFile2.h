@@ -30,16 +30,41 @@ public:
     kFF_Sequence = 1,
   };
 
-  bool select_mode;
-
   VDFFInputFileDriver(const VDXInputDriverContext& context);
   ~VDFFInputFileDriver();
 
   int		VDXAPIENTRY DetectBySignature(const void *pHeader, int32_t nHeaderSize, const void *pFooter, int32_t nFooterSize, int64_t nFileSize);
+  int		VDXAPIENTRY DetectBySignature2(VDXMediaInfo& info, const void *pHeader, int32_t nHeaderSize, const void *pFooter, int32_t nFooterSize, int64_t nFileSize);
   bool	VDXAPIENTRY CreateInputFile(uint32_t flags, IVDXInputFile **ppFile);
 
 protected:
   const VDXInputDriverContext& mContext;
+};
+
+class VDFFInputFileOptions : public vdxunknown<IVDXInputOptions> {
+public:
+  enum { opt_version=1 };
+
+#pragma pack(push,1)
+  struct Data {
+    int version;
+    bool skip_cfhd_vfw;
+
+    Data(){ version=opt_version; skip_cfhd_vfw=false; }
+  } data;
+#pragma pack(pop)
+
+  bool Read(const void *src, uint32_t len) {
+    if(len!=sizeof(Data)) return false;
+    memcpy(&data,src,len);
+    if(data.version!=opt_version) return false;
+    return true;
+  }
+  uint32_t VDXAPIENTRY Write(void *buf, uint32_t buflen) {
+    if(buflen<sizeof(Data) || !buf) return sizeof(Data);
+    memcpy(buf,&data,sizeof(Data));
+    return sizeof(Data);
+  }
 };
 
 class VDFFInputFile : public vdxunknown<IVDXInputFile>, public IFilterModFileTool{
@@ -84,8 +109,8 @@ public:
   void VDXAPIENTRY Init(const wchar_t *szFile, IVDXInputOptions *opts);
   bool VDXAPIENTRY Append(const wchar_t *szFile);
 
-  bool VDXAPIENTRY PromptForOptions(VDXHWND, IVDXInputOptions **r){ *r=0; return false; }
-  bool VDXAPIENTRY CreateOptions(const void *buf, uint32_t len, IVDXInputOptions **r){ *r=0; return false; }
+  bool VDXAPIENTRY PromptForOptions(VDXHWND, IVDXInputOptions **r);
+  bool VDXAPIENTRY CreateOptions(const void *buf, uint32_t len, IVDXInputOptions **r);
   void VDXAPIENTRY DisplayInfo(VDXHWND hwndParent);
 
   bool VDXAPIENTRY GetVideoSource(int index, IVDXVideoSource **);

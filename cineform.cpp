@@ -290,11 +290,17 @@ int vfw_cfhd_decode(AVCodecContext* avctx, void* data, int* got_frame, AVPacket*
 
 AVCodec vfw_cfhd_decoder;
 
-void av_register_vfw_cfhd()
+bool test_cfhd_vfw()
 {
   HIC codec = ICOpen(ICTYPE_VIDEO, MAKEFOURCC('C','F','H','D'), ICMODE_DECOMPRESS);
   ICClose(codec);
-  if(!codec) return;
+  if(!codec) return false;
+  return true;
+}
+
+void av_register_vfw_cfhd()
+{
+  if(!test_cfhd_vfw()) return;
 
   vfw_cfhd_decoder.name = "CineForm HD (vfw)";
   vfw_cfhd_decoder.long_name = "CineForm HD (vfw)";

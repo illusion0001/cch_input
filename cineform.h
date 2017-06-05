@@ -17,4 +17,6 @@ void cfhd_set_buffer(AVCodecContext* avctx, void* buf);
 void cfhd_set_rgb(AVCodecContext* avctx);
 void cfhd_set_v210(AVCodecContext* avctx);
 
+bool test_cfhd_vfw();
+
 #endif

@@ -65,7 +65,7 @@ class ConfigureDialog: public VDXVideoFilterDialog {
 public:
 	virtual INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam);
   void Show(HWND parent){
-    VDXVideoFilterDialog::Show(hInstance,MAKEINTRESOURCE(IDD_INPUT_OPTIONS),parent);
+    VDXVideoFilterDialog::Show(hInstance,MAKEINTRESOURCE(IDD_SYS_INPUT_OPTIONS),parent);
   }
 };
 
@@ -106,17 +106,7 @@ bool VDXAPIENTRY StaticConfigureProc(VDXHWND parent)
 
 ///////////////////////////////////////////////////////////////////////////////
 
-bool VDXAPIENTRY ff_create_a(const VDXInputDriverContext *pContext, IVDXInputFileDriver **ppDriver)
-{
-  VDFFInputFileDriver *p = new VDFFInputFileDriver(*pContext);
-  if(!p) return false;
-  p->select_mode = true;
-  *ppDriver = p;
-  p->AddRef();
-  return true;
-}
-
-bool VDXAPIENTRY ff_create_b(const VDXInputDriverContext *pContext, IVDXInputFileDriver **ppDriver)
+bool VDXAPIENTRY ff_create(const VDXInputDriverContext *pContext, IVDXInputFileDriver **ppDriver)
 {
   VDFFInputFileDriver *p = new VDFFInputFileDriver(*pContext);
   if(!p) return false;
@@ -125,46 +115,61 @@ bool VDXAPIENTRY ff_create_b(const VDXInputDriverContext *pContext, IVDXInputFil
   return true;
 }
 
-#define option_a_init L"FFMpeg (select formats)|*.mov;*.mp4;*.avi"
-std::wstring option_a = option_a_init;
-std::wstring pattern_a; // example "*.mov|*.mp4|*.avi"
+#define option_video_init L"FFMpeg : video|*.mov;*.mp4;*.avi"
+std::wstring option_video = option_video_init;
+//std::wstring pattern_video; // example "*.mov|*.mp4|*.avi"
 
-VDXInputDriverDefinition ff_class_a={
+VDXInputDriverDefinition ff_video={
   sizeof(VDXInputDriverDefinition),
   VDXInputDriverDefinition::kFlagSupportsVideo|
   VDXInputDriverDefinition::kFlagSupportsAudio|
-  VDXInputDriverDefinition::kFlagCustomSignature|
-  VDXInputDriverDefinition::kFlagForceByName|
-  VDXInputDriverDefinition::kFlagNoOptions,
+  VDXInputDriverDefinition::kFlagCustomSignature,
   1, //priority, reset from options
   0, //SignatureLength
   0, //Signature
-  pattern_a.c_str(),
-  option_a.c_str(),
-  L"ffmpeg_select",
-  ff_create_a
+  0, //pattern_video.c_str(),
+  option_video.c_str(),
+  L"Caching input driver",
+  ff_create
 };
 
-#define option_b_init L"FFMpeg (all formats)|*.mov;*.mp4;*.avi"
-std::wstring option_b = option_b_init;
+#define option_image_init L"FFMpeg : images|*.tiff;*.dpx"
+std::wstring option_image = option_image_init;
 
-VDXInputDriverDefinition ff_class_b={
+VDXInputDriverDefinition ff_image={
   sizeof(VDXInputDriverDefinition),
   VDXInputDriverDefinition::kFlagSupportsVideo|
-  VDXInputDriverDefinition::kFlagSupportsAudio|
-  VDXInputDriverDefinition::kFlagNoOptions,
-  -2, //priority, reset from options
+  VDXInputDriverDefinition::kFlagCustomSignature|
+  VDXInputDriverDefinition::kFlagDuplicate,
+  1, //priority, reset from options
   0, //SignatureLength
   0, //Signature
   0,
-  option_b.c_str(),
-  L"ffmpeg_default",
-  ff_create_b
+  option_image.c_str(),
+  L"Caching input driver",
+  ff_create
 };
 
-VDXPluginInfo ff_plugin_b={
+#define option_audio_init L"FFMpeg : audio|*.wav;*.ogg"
+std::wstring option_audio = option_audio_init;
+
+VDXInputDriverDefinition ff_audio={
+  sizeof(VDXInputDriverDefinition),
+  VDXInputDriverDefinition::kFlagSupportsAudio|
+  VDXInputDriverDefinition::kFlagCustomSignature|
+  VDXInputDriverDefinition::kFlagDuplicate,
+  1, //priority, reset from options
+  0, //SignatureLength
+  0, //Signature
+  0,
+  option_audio.c_str(),
+  L"Caching input driver",
+  ff_create
+};
+
+VDXPluginInfo ff_plugin_video={
   sizeof(VDXPluginInfo),
-  L"FFMpeg (all formats)",
+  L"Caching input driver",
   L"Anton Shekhovtsov",
   L"Loads and decode files through ffmpeg libs.",
   (1 << 24) + (9 << 16),
@@ -172,17 +177,21 @@ VDXPluginInfo ff_plugin_b={
   0,
   10, // min api version
   kVDXPlugin_APIVersion,
-  4,  // min input api version
+  8,  // min input api version
   kVDXPlugin_InputDriverAPIVersion,
-  &ff_class_b
+  &ff_video
 };
 
-VDXPluginInfo ff_plugin_a;
+VDXPluginInfo ff_plugin_image;
+VDXPluginInfo ff_plugin_audio;
+
 VDPluginInfo* kPlugins[]={
   &ff_output_info,
   &ff_mp3enc_info,
   &ff_aacenc_info,
-  0,0, // reserved for input drivers
+  &ff_plugin_video,
+  &ff_plugin_image,
+  &ff_plugin_audio,
   0
 };
 
@@ -233,58 +242,29 @@ void loadConfig()
   config_decode_cfhd = GetPrivateProfileIntW(L"force_ffmpeg",L"CineformHD",0,buf)!=0;
   config_force_thread = GetPrivateProfileIntW(L"decode_model",L"force_frame_thread",0,buf)!=0;
 
-  ff_plugin_a = ff_plugin_b;
-  ff_plugin_a.mpTypeSpecificInfo = &ff_class_a;
-  ff_plugin_a.mpName = L"FFMpeg (select formats)"; // name must be unique
-  ff_plugin_a.mpStaticConfigureProc = StaticConfigureProc;
+  ff_plugin_video.mpStaticConfigureProc = 0;
 
-  int priority_a = GetPrivateProfileIntW(L"priority",L"select",ff_class_a.mPriority,buf);
-  int priority_b = GetPrivateProfileIntW(L"priority",L"default",ff_class_b.mPriority,buf);
+  ff_plugin_image = ff_plugin_video;
+  ff_plugin_image.mpTypeSpecificInfo = &ff_image;
+  ff_plugin_image.mpName = L"Caching input driver (images)"; // name must be unique
 
-  {
-    option_a = option_a_init;
-    int mp = option_a.rfind('|');
-    wchar_t mask[2048];
-    GetPrivateProfileStringW(L"file_mask",L"select",&option_a[mp+1],mask,2048,buf);
-    option_a.resize(mp+1);
+  ff_plugin_audio = ff_plugin_video;
+  ff_plugin_audio.mpTypeSpecificInfo = &ff_audio;
+  ff_plugin_audio.mpName = L"Caching input driver (audio)"; // name must be unique
 
-    int p = 0;
-    int n = wcslen(mask);
-    pattern_a = L"";
-    int count1 = 0;
-    int count2 = 0;
-    while(p<n){
-      int p1 = n;
-      wchar_t* p2 = wcschr(mask+p,';');
-      if(p2 && p2-mask<p1) p1 = p2-mask;
+  ff_plugin_video.mpStaticConfigureProc = StaticConfigureProc;
 
-      bool skip = false;
-      if(wcsncmp(mask+p,L"*.avi",5)==0) skip = true;
-      if(wcsncmp(mask+p,L"*.mp4",5)==0) skip = true;
-      if(wcsncmp(mask+p,L"*.mov",5)==0) skip = true;
-
-      if(count1) option_a += L";";
-      option_a += std::wstring(mask+p,p1-p);
-
-      if(!skip){
-        if(count2) pattern_a += L"|";
-        pattern_a += std::wstring(mask+p,p1-p);
-      }
-      p = p1+1;
-      count1++;
-      count2++;
-    }
-
-    ff_class_a.mpFilenameDetectPattern = pattern_a.c_str();
-    ff_class_a.mpFilenamePattern = option_a.c_str();
-  }
+  int priority = GetPrivateProfileIntW(L"priority",L"default",ff_video.mPriority,buf);
+  ff_video.mPriority = priority;
+  ff_image.mPriority = priority;
+  ff_audio.mPriority = priority;
 
   {
-    option_b = option_b_init;
-    int mp = option_b.rfind('|');
+    option_video = option_video_init;
+    int mp = option_video.rfind('|');
     wchar_t mask[2048];
-    GetPrivateProfileStringW(L"file_mask",L"default",&option_b[mp+1],mask,2048,buf);
-    option_b.resize(mp+1);
+    GetPrivateProfileStringW(L"file_mask",L"video",&option_video[mp+1],mask,2048,buf);
+    option_video.resize(mp+1);
 
     int p = 0;
     int n = wcslen(mask);
@@ -294,27 +274,64 @@ void loadConfig()
       wchar_t* p2 = wcschr(mask+p,';');
       if(p2 && p2-mask<p1) p1 = p2-mask;
 
-      if(count1) option_b += L";";
-      option_b += std::wstring(mask+p,p1-p);
+      if(count1) option_video += L";";
+      option_video += std::wstring(mask+p,p1-p);
 
       p = p1+1;
       count1++;
     }
 
-    ff_class_b.mpFilenamePattern = option_b.c_str();
+    ff_video.mpFilenamePattern = option_video.c_str();
   }
 
-  int pos = 0;
-  while(kPlugins[pos]) pos++;
+  {
+    option_image = option_image_init;
+    int mp = option_image.rfind('|');
+    wchar_t mask[2048];
+    GetPrivateProfileStringW(L"file_mask",L"images",&option_image[mp+1],mask,2048,buf);
+    option_image.resize(mp+1);
 
-  if(priority_a==priority_b){
-    ff_class_b.mPriority = priority_b;
-    kPlugins[pos] = &ff_plugin_b;
-  } else {
-    ff_class_a.mPriority = priority_a;
-    ff_class_b.mPriority = priority_b;
-    kPlugins[pos] = &ff_plugin_a;
-    kPlugins[pos+1] = &ff_plugin_b;
+    int p = 0;
+    int n = wcslen(mask);
+    int count1 = 0;
+    while(p<n){
+      int p1 = n;
+      wchar_t* p2 = wcschr(mask+p,';');
+      if(p2 && p2-mask<p1) p1 = p2-mask;
+
+      if(count1) option_image += L";";
+      option_image += std::wstring(mask+p,p1-p);
+
+      p = p1+1;
+      count1++;
+    }
+
+    ff_image.mpFilenamePattern = option_image.c_str();
+  }
+
+  {
+    option_audio = option_audio_init;
+    int mp = option_audio.rfind('|');
+    wchar_t mask[2048];
+    GetPrivateProfileStringW(L"file_mask",L"audio",&option_audio[mp+1],mask,2048,buf);
+    option_audio.resize(mp+1);
+
+    int p = 0;
+    int n = wcslen(mask);
+    int count1 = 0;
+    while(p<n){
+      int p1 = n;
+      wchar_t* p2 = wcschr(mask+p,';');
+      if(p2 && p2-mask<p1) p1 = p2-mask;
+
+      if(count1) option_audio += L";";
+      option_audio += std::wstring(mask+p,p1-p);
+
+      p = p1+1;
+      count1++;
+    }
+
+    ff_audio.mpFilenamePattern = option_audio.c_str();
   }
 }
 

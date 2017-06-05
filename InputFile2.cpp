@@ -4,9 +4,11 @@
 #include "AudioSource2.h"
 #include "cineform.h"
 #include "mov_mp4.h"
+#include "export.h"
 #include <windows.h>
 #include <vfw.h>
 #include <aviriff.h>
+#include "resource.h"
 
 typedef struct AVCodecTag {
   enum AVCodecID id;
@@ -28,7 +30,7 @@ bool check_magic_vfw(DWORD fcc)
   return true;
 }
 
-int detect_avi(const void *pHeader, int32_t nHeaderSize)
+int detect_avi(VDXMediaInfo& info, const void *pHeader, int32_t nHeaderSize)
 {
   if(nHeaderSize<64) return -1;
   uint8_t* data = (uint8_t*)pHeader;
@@ -56,6 +58,9 @@ int detect_avi(const void *pHeader, int32_t nHeaderSize)
 
   AVIMAINHEADER mh;
   memcpy(&mh,data,sizeof(mh)); data+=sizeof(mh); rsize-=sizeof(mh);
+  info.width = mh.dwWidth;
+  info.height = mh.dwHeight;
+  wcscpy(info.format_name,L"AVI");
 
   if(rsize<sizeof(ch)) return 1;
   memcpy(&ch,data,sizeof(ch)); data+=sizeof(ch); rsize-=sizeof(ch);
@@ -80,36 +85,38 @@ int detect_avi(const void *pHeader, int32_t nHeaderSize)
     {for(int i=0; i<4; i++){
       int v = ch2[i];
       if(v>='a' && v<='z') ch2[i] = v+'A'-'a';
+      info.vcodec_name[i] = v;
+      info.vcodec_name[i+1] = 0;
     }}
 
     // skip internally supported formats
     if(!config_decode_raw){
-      if(h1==MKTAG('U', 'Y', 'V', 'Y')) return -1;
-      if(h1==MKTAG('Y', 'U', 'Y', 'V')) return -1;
-      if(h1==MKTAG('Y', 'U', 'Y', '2')) return -1;
-      if(h1==MKTAG('Y', 'V', '2', '4')) return -1;
-      if(h1==MKTAG('Y', 'V', '1', '6')) return -1;
-      if(h1==MKTAG('Y', 'V', '1', '2')) return -1;
-      if(h1==MKTAG('I', '4', '2', '0')) return -1;
-      if(h1==MKTAG('I', 'Y', 'U', 'V')) return -1;
-      if(h1==MKTAG('Y', 'V', 'U', '9')) return -1;
-      if(h1==MKTAG('Y', '8', ' ', ' ')) return -1;
-      if(h1==MKTAG('Y', '8', '0', '0')) return -1;
-      if(h1==MKTAG('H', 'D', 'Y', 'C')) return -1;
-      if(h1==MKTAG('N', 'V', '1', '2')) return -1;
+      if(h1==MKTAG('U', 'Y', 'V', 'Y')) return 0;
+      if(h1==MKTAG('Y', 'U', 'Y', 'V')) return 0;
+      if(h1==MKTAG('Y', 'U', 'Y', '2')) return 0;
+      if(h1==MKTAG('Y', 'V', '2', '4')) return 0;
+      if(h1==MKTAG('Y', 'V', '1', '6')) return 0;
+      if(h1==MKTAG('Y', 'V', '1', '2')) return 0;
+      if(h1==MKTAG('I', '4', '2', '0')) return 0;
+      if(h1==MKTAG('I', 'Y', 'U', 'V')) return 0;
+      if(h1==MKTAG('Y', 'V', 'U', '9')) return 0;
+      if(h1==MKTAG('Y', '8', ' ', ' ')) return 0;
+      if(h1==MKTAG('Y', '8', '0', '0')) return 0;
+      if(h1==MKTAG('H', 'D', 'Y', 'C')) return 0;
+      if(h1==MKTAG('N', 'V', '1', '2')) return 0;
 
-      if(h1==MKTAG('v', '2', '1', '0')) return -1;
-      if(h1==MKTAG('b', '6', '4', 'a')) return -1;
-      if(h1==MKTAG('B', 'R', 'A', 64)) return -1;
-      if(h1==MKTAG('P', '2', '1', '0')) return -1;
-      if(h1==MKTAG('P', '2', '1', '6')) return -1;
+      if(h1==MKTAG('v', '2', '1', '0')) return 0;
+      if(h1==MKTAG('b', '6', '4', 'a')) return 0;
+      if(h1==MKTAG('B', 'R', 'A', 64)) return 0;
+      if(h1==MKTAG('P', '2', '1', '0')) return 0;
+      if(h1==MKTAG('P', '2', '1', '6')) return 0;
     }
 
     if(!have_codec){
       AVCodecTag* riff_tag = (AVCodecTag*)avformat_get_riff_video_tags();
       while(riff_tag->id!=AV_CODEC_ID_NONE){
         if(riff_tag->tag==h1 || riff_tag->tag==h2){
-          if(riff_tag->id==AV_CODEC_ID_MAGICYUV && check_magic_vfw(h1)) return -1;
+          if(riff_tag->id==AV_CODEC_ID_MAGICYUV && check_magic_vfw(h1)) return 0;
           have_codec = true;
           break;
         }
@@ -121,7 +128,7 @@ int detect_avi(const void *pHeader, int32_t nHeaderSize)
       AVCodecTag* mov_tag = (AVCodecTag*)avformat_get_mov_video_tags();
       while(mov_tag->id!=AV_CODEC_ID_NONE){
         if(mov_tag->tag==h1 || mov_tag->tag==h2){
-          if(mov_tag->id==AV_CODEC_ID_MAGICYUV && check_magic_vfw(h1)) return -1;
+          if(mov_tag->id==AV_CODEC_ID_MAGICYUV && check_magic_vfw(h1)) return 0;
           have_codec = true;
           break;
         }
@@ -129,7 +136,7 @@ int detect_avi(const void *pHeader, int32_t nHeaderSize)
       }
     }
 
-    if(!have_codec) return -1;
+    if(!have_codec) return 0;
   }
 
   return 1;
@@ -152,6 +159,31 @@ int detect_mp4_mov(const void *pHeader, int32_t nHeaderSize, int64_t nFileSize)
     return 1;
   }
 
+  return -1;
+}
+
+int detect_ff(VDXMediaInfo& info, const void *pHeader, int32_t nHeaderSize)
+{
+  init_av();
+
+  IOBuffer buf;
+  buf.copy(pHeader,nHeaderSize);
+  AVProbeData pd = {0};
+  pd.buf = buf.data;
+  pd.buf_size = (int)buf.size;
+
+  int score=0;
+  AVInputFormat* fmt = av_probe_input_format3(&pd,true,&score);
+  if(fmt){
+    for(int i=0; i<100; i++){
+      int c = fmt->name[i];
+      info.format_name[i] = c;
+      if(c==0) break;
+    }
+    info.format_name[99] = 0;
+  }
+  if(score==AVPROBE_SCORE_MAX) return 1;
+  if(score>0) return 0;
   return -1;
 }
 
@@ -178,7 +210,6 @@ bool FileExist(const wchar_t* name)
 VDFFInputFileDriver::VDFFInputFileDriver(const VDXInputDriverContext& context)
 : mContext(context)
 {
-  select_mode = false;
 }
 
 VDFFInputFileDriver::~VDFFInputFileDriver()
@@ -187,10 +218,26 @@ VDFFInputFileDriver::~VDFFInputFileDriver()
 
 int VDXAPIENTRY VDFFInputFileDriver::DetectBySignature(const void *pHeader, int32_t nHeaderSize, const void *pFooter, int32_t nFooterSize, int64_t nFileSize)
 {
-  if(!select_mode) return 1;
-  if(detect_avi(pHeader,nHeaderSize)==1) return 1;
-  if(detect_mp4_mov(pHeader,nHeaderSize,nFileSize)==1) return 1;
   return -1;
+}
+
+int VDXAPIENTRY VDFFInputFileDriver::DetectBySignature2(VDXMediaInfo& info, const void *pHeader, int32_t nHeaderSize, const void *pFooter, int32_t nFooterSize, int64_t nFileSize)
+{
+  int avi_q = detect_avi(info,pHeader,nHeaderSize);
+
+  if(avi_q==1) return kDC_High;
+  if(avi_q==0) return kDC_Moderate;
+
+  if(detect_mp4_mov(pHeader,nHeaderSize,nFileSize)==1){
+    wcscpy(info.format_name,L"iso media");
+    return kDC_High;
+  }
+
+  int ff_q = detect_ff(info,pHeader,nHeaderSize);
+  if(ff_q==1) return kDC_Moderate;
+  if(ff_q==0) return kDC_Low;
+
+  return kDC_None;
 }
 
 bool VDXAPIENTRY VDFFInputFileDriver::CreateInputFile(uint32_t flags, IVDXInputFile **ppFile)
@@ -201,11 +248,82 @@ bool VDXAPIENTRY VDFFInputFileDriver::CreateInputFile(uint32_t flags, IVDXInputF
   if(flags & kOF_AutoSegmentScan) p->auto_append = true;
   if(flags & kOF_SingleFile) p->single_file_mode = true;
   //p->auto_append = true;
-  if(!select_mode || config_decode_cfhd) p->cfg_skip_cfhd = true;
+  if(config_decode_cfhd) p->cfg_skip_cfhd = true;
 
   *ppFile = p;
   p->AddRef();
   return true;
+}
+
+//----------------------------------------------------------------------------------------------
+
+extern HINSTANCE hInstance;
+extern bool VDXAPIENTRY StaticConfigureProc(VDXHWND parent);
+
+class FileConfigureDialog: public VDXVideoFilterDialog {
+public:
+  VDFFInputFileOptions::Data* data;
+
+	virtual INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam);
+  void Show(HWND parent){
+    VDXVideoFilterDialog::Show(hInstance,MAKEINTRESOURCE(IDD_INPUT_OPTIONS),parent);
+  }
+};
+
+INT_PTR FileConfigureDialog::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
+{
+  switch(msg){
+  case WM_INITDIALOG:
+    CheckDlgButton(mhdlg, IDC_DECODE_CFHD, !data->skip_cfhd_vfw ? BST_CHECKED:BST_UNCHECKED);
+    return TRUE;
+  case WM_COMMAND:
+    switch(LOWORD(wParam)){
+    case IDC_SYS_OPTIONS:
+      StaticConfigureProc((VDXHWND)mhdlg);
+      return true;
+
+    case IDC_DECODE_CFHD:
+      data->skip_cfhd_vfw = !IsDlgButtonChecked(mhdlg,IDC_DECODE_CFHD)!=0;
+      return TRUE;
+
+    case IDOK:
+      EndDialog(mhdlg, TRUE);
+      return TRUE;
+
+    case IDCANCEL:
+      EndDialog(mhdlg, FALSE);
+      return TRUE;
+    }
+  }
+  return false;
+}
+
+bool VDXAPIENTRY VDFFInputFile::PromptForOptions(VDXHWND parent, IVDXInputOptions **r)
+{
+  VDFFInputFileOptions* opt = new VDFFInputFileOptions;
+  if(cfg_skip_cfhd) opt->data.skip_cfhd_vfw = true;
+  if(!test_cfhd_vfw()) opt->data.skip_cfhd_vfw = true;
+
+  opt->AddRef();
+  *r = opt;
+  FileConfigureDialog dlg;
+  dlg.data = &opt->data;
+  dlg.Show((HWND)parent);
+  return true;
+}
+
+bool VDXAPIENTRY VDFFInputFile::CreateOptions(const void *buf, uint32_t len, IVDXInputOptions **r)
+{
+  VDFFInputFileOptions* opt = new VDFFInputFileOptions;
+  if(opt->Read(buf,len)){
+    opt->AddRef();
+    *r = opt;
+    return true;
+  }
+
+  delete opt;
+  *r=0;
+  return false;
 }
 
 //----------------------------------------------------------------------------------------------
@@ -243,11 +361,16 @@ void VDFFInputFile::DisplayInfo(VDXHWND hwndParent)
   dlg.Show(hwndParent, this);
 }
 
-void VDFFInputFile::Init(const wchar_t *szFile, IVDXInputOptions *opts) 
+void VDFFInputFile::Init(const wchar_t *szFile, IVDXInputOptions *in_opts) 
 {
   if(!szFile){
     mContext.mpCallbacks->SetError("No File Given");
     return;
+  }
+
+  if(in_opts){
+    VDFFInputFileOptions* opt = (VDFFInputFileOptions*)in_opts;
+    if(opt->data.skip_cfhd_vfw) cfg_skip_cfhd = true;
   }
 
   wcscpy(path,szFile);
