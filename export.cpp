@@ -321,6 +321,7 @@ bool VDXAPIENTRY VDFFInputFile::ExecuteExport(int id, VDXHWND parent, IProjectSt
 
       adjust_codec_tag2(ofmt->oformat,out_stream);
 
+      out_stream->sample_aspect_ratio = in_stream->sample_aspect_ratio;
       out_stream->avg_frame_rate = in_stream->avg_frame_rate;
       out_stream->time_base = in_stream->time_base;
       err = avformat_transfer_internal_stream_timing_info(ofmt->oformat, out_stream, in_stream, AVFMT_TBCF_AUTO);
