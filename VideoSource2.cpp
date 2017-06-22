@@ -205,7 +205,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
       // try to force loading index
       // works for 2017-04-07 08-53-48.flv
       int64_t pos = m_pStreamCtx->duration;
-      if(pos==AV_NOPTS_VALUE) pos = sample_count*time_base.den / time_base.num;
+      if(pos==AV_NOPTS_VALUE) pos = int64_t(sample_count)*time_base.den / time_base.num;
       av_seek_frame(m_pFormatCtx,m_streamIndex,pos,AVSEEK_FLAG_BACKWARD);
       av_seek_frame(m_pFormatCtx,m_streamIndex,m_pStreamCtx->start_time,AVSEEK_FLAG_BACKWARD);
     }
@@ -1468,11 +1468,11 @@ bool VDFFVideoSource::Read(sint64 start, uint32 lCount, void *lpBuffer, uint32 c
     }
     if(jump!=last_seek_frame){
       last_seek_frame = jump;
-      int64_t pos = jump*time_base.den / time_base.num + start_time;
+      int64_t pos = int64_t(jump)*time_base.den / time_base.num + start_time;
 
       if(!(m_pFormatCtx->iformat->flags & AVFMT_SEEK_TO_PTS)){
         // because seeking works on DTS it needs some unknown offset to work
-        pos -= 8*time_base.den / time_base.num; // better than nothing
+        pos -= int64_t(8)*time_base.den / time_base.num; // better than nothing
         //pos -= keyframe_gap*time_base.den / 2 / time_base.num;
       }
       if(sparse_index){
