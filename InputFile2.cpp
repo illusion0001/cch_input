@@ -199,6 +199,11 @@ int detect_ff(VDXMediaInfo& info, const void *pHeader, int32_t nHeaderSize)
     }
     info.format_name[99] = 0;
   }
+  // some examples
+  // mpegts is detected with score 2, can be confused with arbitrary text file
+  // ac3 is not detected, but score is raised to 1 (not 0)
+  // tga is not detected, score is 0
+   
   if(score==AVPROBE_SCORE_MAX) return 1;
   if(score>0) return 0;
   return -1;
@@ -252,7 +257,7 @@ int VDXAPIENTRY VDFFInputFileDriver::DetectBySignature2(VDXMediaInfo& info, cons
 
   int ff_q = detect_ff(info,pHeader,nHeaderSize);
   if(ff_q==1) return kDC_Moderate;
-  if(ff_q==0) return kDC_Low;
+  if(ff_q==0) return kDC_VeryLow;
 
   return kDC_None;
 }
