@@ -1405,7 +1405,12 @@ bool VDFFVideoSource::Read(sint64 start, uint32 lCount, void *lpBuffer, uint32 c
     return true;
   }
 
-  if(!copy_mode && !lpBuffer) return true;
+  if(!copy_mode){
+    // 0 bytes identifies "drop frame"
+    *lBytesRead = 1;
+    if(lpBuffer) memset(lpBuffer,0,1);
+    else return true;
+  }
 
   av_packet_unref(&copy_pkt);
   if(copy_mode && start!=next_frame){
@@ -1711,6 +1716,8 @@ void VDFFVideoSource::free_buffers()
     page.access = 0;
     page.target = 0;
   }}
+
+  memset(frame_array,0,sample_count*sizeof(void*));
 
   dead_range_start = -1;
   dead_range_end = -1;
