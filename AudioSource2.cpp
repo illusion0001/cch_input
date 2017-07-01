@@ -271,6 +271,12 @@ bool VDFFAudioSource::Read(int64_t start, uint32_t count, void *lpBuffer, uint32
     return false;
   }
 
+  if(count==0){
+    *lBytesRead = 0;
+    *lSamplesRead = 0;
+    return false;
+  }
+
   if(start_time>0){
     int64_t real_start = start_time * time_base.num / time_base.den;
     if(start<real_start){
