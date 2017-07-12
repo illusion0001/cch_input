@@ -454,19 +454,28 @@ void VDXAPIENTRY VDFFVideoSource::GetStreamSourceInfoV3(VDXStreamSourceInfoV3& s
 
 void VDXAPIENTRY VDFFVideoSource::ApplyStreamMode(uint32 flags)
 {
-  if(direct_format){
-    bool copy_mode = false;
-    if(flags & kStreamModeDirectCopy) copy_mode = true;
-    decode_mode = false;
-    if(flags & kStreamModeUncompress) decode_mode = true;
-    setCopyMode(copy_mode);
-    next_frame = -1;
-  }
+  if((flags & kStreamModeDirectCopy)!=0 && !QueryStreamMode(kStreamModeDirectCopy)) return;
+  bool copy_mode = false;
+  if(flags & kStreamModeDirectCopy) copy_mode = true;
+  decode_mode = false;
+  if(flags & kStreamModeUncompress) decode_mode = true;
+  setCopyMode(copy_mode);
+  next_frame = -1;
+  if(m_pSource->next_segment) m_pSource->next_segment->video_source->ApplyStreamMode(flags);
 }
 
 bool VDXAPIENTRY VDFFVideoSource::QueryStreamMode(uint32 flags)
 {
-  if(flags==kStreamModeDirectCopy) return direct_format_len!=0;
+  if(flags==kStreamModeDirectCopy){
+    if(direct_format_len==0) return false;
+    if(m_pSource->head_segment){
+      VDFFVideoSource* head = m_pSource->head_segment->video_source;
+      if(direct_format_len!=head->direct_format_len) return false;
+      if(memcmp(direct_format,head->direct_format,direct_format_len)!=0) return false;
+    }
+    if(m_pSource->next_segment && !m_pSource->next_segment->video_source->QueryStreamMode(flags)) return false;
+    return true;
+  }
   return false;
 }
 

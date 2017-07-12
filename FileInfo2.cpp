@@ -70,10 +70,14 @@ void VDFFInputFileInfoDialog::load_segment()
   HWND next = GetDlgItem(mhdlg,IDC_SEGMENT_NEXT);
   bool bprev = segment_pos>0;
   bool bnext = segment_pos<segment_count-1;
+  EnableWindow(prev,true);
+  EnableWindow(next,true);
   if(GetFocus()==prev && !bprev) SetFocus(next);
   if(GetFocus()==next && !bnext) SetFocus(prev);
   EnableWindow(prev,bprev);
   EnableWindow(next,bnext);
+  SendMessage(prev, BM_SETSTYLE, (WPARAM)BS_FLAT, TRUE);
+  SendMessage(next, BM_SETSTYLE, (WPARAM)BS_FLAT, TRUE);
 
   print_format();
   print_metadata();
