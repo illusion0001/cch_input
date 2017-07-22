@@ -728,16 +728,18 @@ bool VDFFInputFile::GetAudioSource(int index, IVDXAudioSource **ppAS)
     return false;
   }
 
-  audio_source = pAS;
-  audio_source->AddRef();
-  
   if(ppAS){
     *ppAS = pAS;
     pAS->AddRef();
   }
 
-  if(next_segment && next_segment->GetAudioSource(0,0)){
-    audio_source->m_streamInfo.mSampleCount += next_segment->audio_source->m_streamInfo.mSampleCount;
+  if(index==0){
+    audio_source = pAS;
+    audio_source->AddRef();
+    
+    if(next_segment && next_segment->GetAudioSource(0,0)){
+      audio_source->m_streamInfo.mSampleCount += next_segment->audio_source->m_streamInfo.mSampleCount;
+    }
   }
 
   return true;
