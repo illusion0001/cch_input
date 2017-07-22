@@ -1470,7 +1470,7 @@ bool VDFFVideoSource::Read(sint64 start, uint32 lCount, void *lpBuffer, uint32 c
     next_frame = prev_key;
   }
 
-  if(!trust_index && jump>next_frame+fw_seek_threshold || jump<next_frame){
+  if(!trust_index && (next_frame==-1 || jump>next_frame+fw_seek_threshold || jump<next_frame)){
     // required to seek
     if(jump>=dead_range_start && jump<=dead_range_end){
       // just skip prefetching
