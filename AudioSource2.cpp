@@ -16,6 +16,9 @@ VDFFAudioSource::VDFFAudioSource(const VDXInputDriverContext& context)
   discard_samples = 0;
   out_layout = 0;
   out_fmt = AV_SAMPLE_FMT_NONE;
+  swr_layout = 0;
+  swr_rate = 0;
+  swr_fmt = AV_SAMPLE_FMT_NONE;
 }
 
 VDFFAudioSource::~VDFFAudioSource()
@@ -200,6 +203,25 @@ void VDFFAudioSource::SetTargetFormat(const VDXWAVEFORMATEX* target)
     mRawFormat.dwChannelMask = uint32_t(out_layout) & 0x3ffff;
   }
 
+  swr_layout = 0;
+  swr_rate = 0;
+  swr_fmt = AV_SAMPLE_FMT_NONE;
+  reset_swr();
+
+  reset_cache();
+}
+
+void VDFFAudioSource::reset_swr()
+{
+  uint64_t in_layout = m_pCodecCtx->channel_layout;
+  if(!in_layout) in_layout = av_get_default_channel_layout(m_pCodecCtx->channels);
+
+  if(in_layout==swr_layout && m_pCodecCtx->sample_rate==swr_rate && m_pCodecCtx->sample_fmt==swr_fmt) return;
+
+  swr_layout = in_layout;
+  swr_rate = m_pCodecCtx->sample_rate;
+  swr_fmt = m_pCodecCtx->sample_fmt;
+
   if(swr) swr_free(&swr);
   swr = swr_alloc();
   av_opt_set_int(swr, "in_channel_layout",     in_layout, 0);
@@ -211,8 +233,6 @@ void VDFFAudioSource::SetTargetFormat(const VDXWAVEFORMATEX* target)
   av_opt_set_sample_fmt(swr, "out_sample_fmt", out_fmt,  0);
   int rr = swr_init(swr);
   if(rr<0) mContext.mpCallbacks->SetError("FFMPEG: Audio resampler error.");
-
-  reset_cache();
 }
 
 void VDFFAudioSource::init_start_time()
@@ -418,6 +438,7 @@ int VDFFAudioSource::read_packet(AVPacket& pkt, ReadInfo& ri)
   int ret = avcodec_decode_audio4(m_pCodecCtx, frame, &got_frame, &pkt);
   if(ret<0) return ret;
   if(got_frame){
+    reset_swr();
     int64_t start = (frame->pkt_pts + time_adjust) * time_base.num / time_base.den;
     int count = frame->nb_samples;
     if(next_sample!=AV_NOPTS_VALUE && start!=next_sample){

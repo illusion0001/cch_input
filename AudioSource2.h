@@ -62,6 +62,9 @@ public:
   int src_linesize;
   uint64_t out_layout;
   AVSampleFormat out_fmt;
+  uint64_t swr_layout;
+  int swr_rate;
+  AVSampleFormat swr_fmt;
 
   struct BufferPage{
     enum {size=0x8000}; // max usable value 0xFFFF
@@ -102,5 +105,6 @@ public:
   void invalidate(int64_t start, uint32_t count);
   void alloc_page(int i);
   void reset_cache();
+  void reset_swr();
   int64_t frame_to_pts(sint64 start, AVStream* video);
 };
