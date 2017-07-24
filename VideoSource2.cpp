@@ -400,7 +400,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   m_streamInfo.mInfo.mPixelAspectRatio.mNumerator = ar1.num;
   m_streamInfo.mInfo.mPixelAspectRatio.mDenominator = ar1.den;
 
-  if(!is_image_list && trust_index && keyframe_gap==1){
+  if(allow_copy()){
     direct_format_len = sizeof(BITMAPINFOHEADER);
     direct_format_len += (m_pCodecCtx->extradata_size+1) & ~1;
     direct_format = malloc(direct_format_len);
@@ -433,6 +433,46 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   pSource->video_start_time = start_time;
 
   return 0;
+}
+
+bool VDFFVideoSource::allow_copy()
+{
+  if(is_image_list) return false;
+  if(trust_index && keyframe_gap==1) return true;
+  // various intra codecs
+  switch(m_pStreamCtx->codecpar->codec_id){
+  case AV_CODEC_ID_CLLC:
+  case AV_CODEC_ID_DNXHD:
+  case AV_CODEC_ID_DVVIDEO:
+  case AV_CODEC_ID_MJPEG:
+  case AV_CODEC_ID_RAWVIDEO:
+  case AV_CODEC_ID_HUFFYUV:
+  case AV_CODEC_ID_FFV1:
+  case AV_CODEC_ID_PNG:
+  case AV_CODEC_ID_FFVHUFF:
+  case AV_CODEC_ID_FRAPS:
+  case AV_CODEC_ID_JPEG2000:
+  case AV_CODEC_ID_DIRAC:
+  case AV_CODEC_ID_V210:
+  case AV_CODEC_ID_R210:
+  case AV_CODEC_ID_R10K:
+  case AV_CODEC_ID_LAGARITH:
+  case AV_CODEC_ID_PRORES:
+  case AV_CODEC_ID_UTVIDEO:
+  case AV_CODEC_ID_V410:
+  case AV_CODEC_ID_HQ_HQA:
+  case AV_CODEC_ID_HQX:
+  case AV_CODEC_ID_SNOW:
+  case AV_CODEC_ID_CFHD:
+  case AV_CODEC_ID_MAGICYUV:
+  case AV_CODEC_ID_SHEERVIDEO:
+    return true;
+  }
+
+  const AVCodecDescriptor* desc = av_codec_get_codec_descriptor(m_pCodecCtx);
+  if(desc->props & AV_CODEC_PROP_INTRA_ONLY) return true; 
+
+  return false;
 }
 
 void VDFFVideoSource::init_format()
@@ -474,6 +514,7 @@ void VDXAPIENTRY VDFFVideoSource::ApplyStreamMode(uint32 flags)
   if(flags & kStreamModeUncompress) decode_mode = true;
   setCopyMode(copy_mode);
   next_frame = -1;
+  last_seek_frame = -1;
   if(m_pSource->next_segment) m_pSource->next_segment->video_source->ApplyStreamMode(flags);
 }
 
@@ -1427,6 +1468,11 @@ bool VDFFVideoSource::Read(sint64 start, uint32 lCount, void *lpBuffer, uint32 c
     return true;
   }
 
+  if(copy_mode && frame_type[start]=='D'){
+    *lBytesRead = 0;
+    return true;
+  }
+
   if(!copy_mode){
     // 0 bytes identifies "drop frame"
     int size = 1;
@@ -1572,8 +1618,12 @@ bool VDFFVideoSource::read_frame(sint64 desired_frame, bool init)
       if(rf<0) return false;
       bool done = false;
       if(pkt.stream_index == m_streamIndex){
-        int pos = next_frame;
-        next_frame++;
+        int pos = handle_frame_num(pkt.pts,pkt.dts);
+        if(pos==-1 || pos>desired_frame){
+          av_packet_unref(&pkt);
+          return false;
+        }
+        next_frame = pos+1;
         if(pos==desired_frame){
           av_packet_unref(&copy_pkt);
           av_packet_ref(&copy_pkt,&pkt);
@@ -1655,29 +1705,33 @@ void VDFFVideoSource::set_start_time()
   if(frame_fmt==-1) init_format();
 }
 
-int VDFFVideoSource::handle_frame()
+int VDFFVideoSource::handle_frame_num(int64_t pts, int64_t dts)
 {
-  decoded_count++;
   dead_range_start = -1;
   dead_range_end = -1;
-  int64_t ts = frame->pkt_pts;
-  if(ts==AV_NOPTS_VALUE) ts = frame->pkt_dts;
+  int64_t ts = pts;
+  if(ts==AV_NOPTS_VALUE) ts = dts;
   int pos = next_frame;
 
   if(!trust_index && !is_image_list){
+    if(ts==AV_NOPTS_VALUE && pos==-1) return -1;
+
     // guess where we are
     // timestamp to frame number is at times unreliable
-    if(ts!=AV_NOPTS_VALUE){
-      ts -= start_time;
-      int rndd = time_base.den/2;
-      pos = int((ts*time_base.num + rndd) / time_base.den);
-    } else {
-      if(next_frame==-1) return -1;
-      pos = next_frame;
-    }
+    ts -= start_time;
+    int rndd = time_base.den/2;
+    pos = int((ts*time_base.num + rndd) / time_base.den);
   }
 
   if(pos>last_seek_frame) last_seek_frame = -1;
+  return pos;
+}
+
+int VDFFVideoSource::handle_frame()
+{
+  decoded_count++;
+  int pos = handle_frame_num(frame->pkt_pts,frame->pkt_dts);
+  if(pos==-1) return -1;
 
   if(next_frame>0 && pos>next_frame){
     // gap between frames, fill with dups
@@ -1685,6 +1739,8 @@ int VDFFVideoSource::handle_frame()
     BufferPage* page = frame_array[next_frame-1];
     if(page) copy(next_frame, pos-1, page);
   }
+
+  next_frame = pos+1;
 
   // ignore anything outside promised range
   if(pos<0 || pos>=sample_count){
@@ -1710,7 +1766,6 @@ int VDFFVideoSource::handle_frame()
     frame_type[pos] = av_get_picture_type_char(frame->pict_type);
   }
 
-  next_frame = pos+1;
   return pos;
 }
 

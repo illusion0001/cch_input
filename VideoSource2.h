@@ -177,6 +177,7 @@ public:
   int	 init_duration(const AVRational fr);
   void init_format();
   void set_pixmap_layout(uint8_t* p);
+  int handle_frame_num(int64_t pts, int64_t dts);
   int handle_frame();
   bool check_frame_format();
   void set_start_time();
@@ -191,4 +192,5 @@ public:
   int64_t frame_to_pts_next(sint64 start);
   void setCopyMode(bool v);
   int match_sparse_key(int64_t sample);
+  bool allow_copy();
 };
