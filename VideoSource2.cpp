@@ -413,6 +413,19 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
     memcpy(((uint8*)direct_format)+sizeof(BITMAPINFOHEADER),m_pCodecCtx->extradata,m_pCodecCtx->extradata_size);
   }
 
+  AVInputFormat* avi_format = av_find_input_format("avi");
+  if(m_pFormatCtx->iformat==avi_format){
+    memset(frame_type,'D',ft_size);
+
+    {for(int i=0; i<m_pStreamCtx->nb_index_entries; i++){
+      int64_t ts = m_pStreamCtx->index_entries[i].timestamp;
+      ts -= m_pStreamCtx->start_time;
+      int rndd = time_base.den/2;
+      int pos = int((ts*time_base.num + rndd) / time_base.den);
+      if(pos>=0 && pos<sample_count) frame_type[pos] = ' ';
+    }}
+  }
+
   //! hack around start_time
   // looks like ffmpeg will save first packet pts as start_time
   // this is bullshit if the packet belongs to reordered frame (example: BBI frame sequence)
@@ -1416,8 +1429,10 @@ bool VDFFVideoSource::Read(sint64 start, uint32 lCount, void *lpBuffer, uint32 c
 
   if(!copy_mode){
     // 0 bytes identifies "drop frame"
-    *lBytesRead = 1;
-    if(lpBuffer) memset(lpBuffer,0,1);
+    int size = 1;
+    if(frame_type[start]=='D') size = 0;
+    *lBytesRead = size;
+    if(lpBuffer) memset(lpBuffer,0,size);
     else return true;
   }
 
@@ -1843,6 +1858,6 @@ void VDFFVideoSource::copy(int start, int end, BufferPage* p)
     if(frame_array[i]) continue;
     p->refs++;
     frame_array[i] = p;
-    frame_type[i] = '+';
+    if(frame_type[i]==' ') frame_type[i] = '+';
   }}
 }
