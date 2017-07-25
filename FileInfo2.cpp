@@ -8,7 +8,7 @@
 
 #include <string>
 
-static const char* vsnstr = "Version 1.16";
+static const char* vsnstr = "Version 1.17";
 
 extern HINSTANCE hInstance;
  
@@ -148,16 +148,23 @@ void VDFFInputFileInfoDialog::print_format()
       VDXFraction fr = segment->video_source->m_streamInfo.mInfo.mSampleRate;
       seconds = double(segment->video_source->sample_count)*fr.mDenominator/fr.mNumerator;
     } else {
-      seconds = pFormatCtx->duration/(double)AV_TIME_BASE;
+      if(pFormatCtx->duration==AV_NOPTS_VALUE)
+        seconds = -1;
+      else
+        seconds = pFormatCtx->duration/(double)AV_TIME_BASE;
     }
 
-    int hours = (int)(seconds/3600);
-    seconds -= (hours * 3600);
-    int minutes = (int)(seconds/60);
-    seconds -= (minutes * 60);
+    if(seconds==-1){
+      SetDlgItemText(mhdlg, IDC_DURATION, "unknown");
+    } else {
+      int hours = (int)(seconds/3600);
+      seconds -= (hours * 3600);
+      int minutes = (int)(seconds/60);
+      seconds -= (minutes * 60);
 
-    sprintf(buf, "%d h : %d min : %.2f sec", hours, minutes, seconds);
-    SetDlgItemText(mhdlg, IDC_DURATION, buf);
+      sprintf(buf, "%d h : %d min : %.2f sec", hours, minutes, seconds);
+      SetDlgItemText(mhdlg, IDC_DURATION, buf);
+    }
   }
 
   sprintf(buf, "%I64d kb/sec", pFormatCtx->bit_rate/1000);

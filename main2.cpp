@@ -30,18 +30,24 @@ void saveConfig();
 
 int av_initialized;
 
+static int logmode = 0;
+
 void av_log_func(void* obj, int type, const char* msg, va_list arg)
 {
-  char buf[1024];
-  vsprintf(buf,msg,arg);
-  OutputDebugString(buf);
   switch(type){
   case AV_LOG_PANIC:
   case AV_LOG_FATAL:
   case AV_LOG_ERROR:
   case AV_LOG_WARNING:
-    ;//DebugBreak();
+    break;
+  default:
+    if(logmode==0) return;
   }
+
+  char buf[1024];
+  vsprintf(buf,msg,arg);
+  OutputDebugString(buf);
+  //DebugBreak();
 }
 
 void init_av()

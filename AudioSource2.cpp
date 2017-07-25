@@ -91,7 +91,12 @@ int	VDFFAudioSource::initStream(VDFFInputFile* pSource, int streamIndex)
       sample_count = m_pStreamCtx->nb_frames;
     } else*/ {
       // this gives inexact value
-      sample_count = m_pFormatCtx->duration * m_pCodecCtx->sample_rate / AV_TIME_BASE;
+      if(m_pFormatCtx->duration==AV_NOPTS_VALUE){
+        // fill 10 hours
+        sample_count = int64_t(3600*10)*m_pCodecCtx->sample_rate;
+      } else {
+        sample_count = m_pFormatCtx->duration * m_pCodecCtx->sample_rate / AV_TIME_BASE;
+      }
     }
   } else {
     AVRational tb = m_pStreamCtx->time_base;
