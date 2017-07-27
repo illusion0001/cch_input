@@ -198,7 +198,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
     trust_index = false;
     sparse_index = false;
     keyframe_gap = 1;
-    fw_seek_threshold = 0;
+    fw_seek_threshold = 1;
 
   } else {
     if(m_pStreamCtx->nb_index_entries<2){
@@ -1511,7 +1511,7 @@ bool VDFFVideoSource::Read(sint64 start, uint32 lCount, void *lpBuffer, uint32 c
     {for(int i=jump; i>next_frame; i--)
       if(m_pStreamCtx->index_entries[i].flags & AVINDEX_KEYFRAME){ next_key=i; break; } }
 
-    if(next_key!=-1 && next_key>next_frame+fw_seek_threshold){
+    if(next_key!=-1 && (next_frame==-1 || next_key>next_frame+fw_seek_threshold)){
       // required to seek forward
       int64_t pos = m_pStreamCtx->index_entries[next_key].timestamp;
       avcodec_flush_buffers(m_pCodecCtx);
@@ -1545,7 +1545,7 @@ bool VDFFVideoSource::Read(sint64 start, uint32 lCount, void *lpBuffer, uint32 c
       last_seek_frame = jump;
       int64_t pos = int64_t(jump)*time_base.den / time_base.num + start_time;
 
-      if(!(m_pFormatCtx->iformat->flags & AVFMT_SEEK_TO_PTS)){
+      if(!(m_pFormatCtx->iformat->flags & AVFMT_SEEK_TO_PTS) && !is_image_list){
         // because seeking works on DTS it needs some unknown offset to work
         pos -= int64_t(8)*time_base.den / time_base.num; // better than nothing
         //pos -= keyframe_gap*time_base.den / 2 / time_base.num;
