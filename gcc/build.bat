@@ -28,7 +28,7 @@
 @g++ -c %param% %src%\vd2\vdxframe\videofilterentry.cpp -o %out%\videofilterentry.o 2>>%log%
 
 @set objlist=%out%\rc.o %out%\audiosource2.o %out%\cineform.o %out%\export.o %out%\fflayer.o %out%\fflayer_render.o %out%\fileinfo2.o %out%\inputfile2.o %out%\main2.o %out%\vfmain.o %out%\videofilter.o %out%\videofilterdialog.o %out%\videofilterentry.o %out%\videosource2.o %out%\compress.o %out%\a_compress.o %out%\mov_mp4.o %out%\gopro.o
-@set fflib=-lavcodec -lavformat -lavutil -lswresample -lswscale -lmp3lame -lavcodec
+@set fflib=-lavcodec -lavformat -lavutil -lswresample -lswscale -lmp3lame -lvpx -lwebpmux -lwebp -lwavpack -lx265 -lavcodec
 @set syslib=-lvfw32 -lcomdlg32 -lz -lopus -lvorbis -lvorbisenc -llzma -liconv -lbz2 -lws2_32 -lgmp -lsecur32 -logg -lksguid
 
 @echo linking

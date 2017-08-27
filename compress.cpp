@@ -19,7 +19,7 @@ extern HINSTANCE hInstance;
 
 void copy_rgb24(AVFrame* frame, const VDXPixmapLayout* layout, const void* data)
 {
-  {for(int y=0; y<layout->h; y++){
+  if(frame->format==AV_PIX_FMT_RGB24){for(int y=0; y<layout->h; y++){
     uint8* s = (uint8*)data + layout->data + layout->pitch*y;
     uint8* d = frame->data[0] + frame->linesize[0]*y;
 
@@ -30,6 +30,22 @@ void copy_rgb24(AVFrame* frame, const VDXPixmapLayout* layout, const void* data)
 
       s+=3;
       d+=3;
+    }}
+  }}
+  if(frame->format==AV_PIX_FMT_GBRP){for(int y=0; y<layout->h; y++){
+    uint8* s = (uint8*)data + layout->data + layout->pitch*y;
+
+    uint8* g = frame->data[0] + frame->linesize[0]*y;
+    uint8* b = frame->data[1] + frame->linesize[1]*y;
+    uint8* r = frame->data[2] + frame->linesize[2]*y;
+
+    {for(int x=0; x<layout->w; x++){
+      b[0] = s[0];
+      g[0] = s[1];
+      r[0] = s[2];
+
+      r++; g++; b++;
+      s+=3;
     }}
   }}
 }
@@ -190,6 +206,7 @@ struct CodecBase{
       if(config->bits==8){
         if(test_av_format(AV_PIX_FMT_0RGB32)) return nsVDXPixmap::kPixFormat_XRGB8888;
         if(test_av_format(AV_PIX_FMT_RGB24)) return nsVDXPixmap::kPixFormat_RGB888;
+        if(test_av_format(AV_PIX_FMT_GBRP)) return nsVDXPixmap::kPixFormat_RGB888;
       }
 
       if(config->bits>8){
@@ -358,6 +375,10 @@ struct CodecBase{
         }
         if(test_av_format(AV_PIX_FMT_RGB24)){
           ctx->pix_fmt = AV_PIX_FMT_RGB24;
+          break;
+        }
+        if(test_av_format(AV_PIX_FMT_GBRP)){
+          ctx->pix_fmt = AV_PIX_FMT_GBRP;
           break;
         }
         break;
@@ -669,15 +690,15 @@ void ConfigBase::init_bits()
     enable_8 = true;
     break;
   case CodecBase::format_rgb:
-    enable_8 = true;
-    enable_9 = true;
-    enable_10 = true;
-    enable_12 = true;
-    enable_14 = true;
+    enable_8 = codec->test_av_format(AV_PIX_FMT_RGB24) || codec->test_av_format(AV_PIX_FMT_0RGB32) || codec->test_av_format(AV_PIX_FMT_GBRP);
+    enable_9 = codec->test_av_format(AV_PIX_FMT_GBRP9LE);
+    enable_10 = codec->test_av_format(AV_PIX_FMT_GBRP10LE);
+    enable_12 = codec->test_av_format(AV_PIX_FMT_GBRP12LE);
+    enable_14 = codec->test_av_format(AV_PIX_FMT_GBRP14LE);
     enable_16 = codec->test_av_format(AV_PIX_FMT_GBRP16LE);
     break;
   case CodecBase::format_yuv420:
-    enable_8 = true;
+    enable_8 = codec->test_av_format(AV_PIX_FMT_YUV420P);
     enable_9 = codec->test_av_format(AV_PIX_FMT_YUV420P9LE);
     enable_10 = codec->test_av_format(AV_PIX_FMT_YUV420P10LE);
     enable_12 = codec->test_av_format(AV_PIX_FMT_YUV420P12LE);
@@ -685,7 +706,7 @@ void ConfigBase::init_bits()
     enable_16 = codec->test_av_format(AV_PIX_FMT_YUV420P16LE);
     break;
   case CodecBase::format_yuv422:
-    enable_8 = true;
+    enable_8 = codec->test_av_format(AV_PIX_FMT_YUV422P);
     enable_9 = codec->test_av_format(AV_PIX_FMT_YUV422P9LE);
     enable_10 = codec->test_av_format(AV_PIX_FMT_YUV422P10LE);
     enable_12 = codec->test_av_format(AV_PIX_FMT_YUV422P12LE);
@@ -693,7 +714,7 @@ void ConfigBase::init_bits()
     enable_16 = codec->test_av_format(AV_PIX_FMT_YUV422P16LE);
     break;
   case CodecBase::format_yuv444:
-    enable_8 = true;
+    enable_8 = codec->test_av_format(AV_PIX_FMT_YUV444P);
     enable_9 = codec->test_av_format(AV_PIX_FMT_YUV444P9LE);
     enable_10 = codec->test_av_format(AV_PIX_FMT_YUV444P10LE);
     enable_12 = codec->test_av_format(AV_PIX_FMT_YUV444P12LE);
@@ -968,12 +989,13 @@ INT_PTR ConfigProres::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
         "proxy", 
         "lt",
         "standard",
-        "hq",
+        "high quality",
         "4444",
+        "4444XQ",
       };
 
       SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_RESETCONTENT, 0, 0);
-      for(int i=0; i<5; i++)
+      for(int i=0; i<6; i++)
         SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_ADDSTRING, 0, (LPARAM)profile_names[i]);
       CodecProres::Config* config = (CodecProres::Config*)codec->config;
       SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_SETCURSEL, config->profile, 0);
@@ -1136,6 +1158,148 @@ INT_PTR ConfigH264::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
 
 //---------------------------------------------------------------------------
 
+class ConfigH265: public ConfigBase{
+public:
+  ConfigH265(){ dialog_id = IDD_ENC_X265; }
+  INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam);
+  virtual void init_format();
+  virtual void change_format(int sel);
+};
+
+const char* x265_preset_names[] = {
+  "ultrafast",
+  "superfast",
+  "veryfast",
+  "faster",
+  "fast", 
+  "medium",
+  "slow",
+  "slower",
+  "veryslow",
+  "placebo",
+};
+
+struct CodecH265: public CodecBase{
+  enum{ tag=MKTAG('h', 'e', 'v', '1') };
+  struct Config: public CodecBase::Config{
+    int preset;
+    int crf; // 0-51
+
+    Config(){ set_default(); }
+    void clear(){ CodecBase::Config::clear(); set_default(); }
+    void set_default(){
+      preset = 4;
+      crf = 28;
+      format = format_yuv420;
+      bits = 8;
+    }
+  } codec_config;
+
+  CodecH265(){
+    config = &codec_config;
+    codec_name = "libx265";
+    codec_tag = tag;
+  }
+
+  int config_size(){ return sizeof(Config); }
+  void reset_config(){ codec_config.clear(); }
+
+  void getinfo(ICINFO& info){
+    info.fccHandler = codec_tag;
+    info.dwFlags = VIDCF_COMPRESSFRAMES | VIDCF_FASTTEMPORALC;
+    wcscpy(info.szName, L"x265");
+    wcscpy(info.szDescription, L"FFMPEG / x265");
+  }
+
+  bool init_ctx(VDXPixmapLayout* layout)
+  {
+    ctx->thread_count = 0;
+    ctx->gop_size = -1;
+    ctx->max_b_frames = -1;
+    ctx->bit_rate = -1;
+
+    av_opt_set(ctx->priv_data, "preset", x265_preset_names[codec_config.preset], 0);
+    av_opt_set_double(ctx->priv_data, "crf", codec_config.crf, 0);
+    return true;
+  }
+
+  LRESULT configure(HWND parent)
+  {
+    ConfigH265 dlg;
+    dlg.Show(parent,this);
+    return ICERR_OK;
+  }
+};
+
+INT_PTR ConfigH265::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
+{
+  CodecH264::Config* config = (CodecH264::Config*)codec->config;
+  switch(msg){
+  case WM_INITDIALOG:
+    {
+      SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_RESETCONTENT, 0, 0);
+      for(int i=0; i<10; i++)
+        SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_ADDSTRING, 0, (LPARAM)x265_preset_names[i]);
+      SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_SETCURSEL, config->preset, 0);
+      SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMIN, FALSE, 0);
+      SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMAX, TRUE, 51);
+      SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETPOS, TRUE, config->crf);
+      SetDlgItemInt(mhdlg, IDC_QUALITY_VALUE, config->crf, false);
+      break;
+    }
+
+  case WM_HSCROLL:
+    if((HWND)lParam==GetDlgItem(mhdlg,IDC_QUALITY)){
+      config->crf = SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_GETPOS, 0, 0);
+      SetDlgItemInt(mhdlg, IDC_QUALITY_VALUE, config->crf, false);
+      break;
+    }
+    return false;
+
+  case WM_COMMAND:
+    switch(LOWORD(wParam)){
+    case IDC_PROFILE:
+      if(HIWORD(wParam)==LBN_SELCHANGE){
+        config->preset = (int)SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_GETCURSEL, 0, 0);
+        return TRUE;
+      }
+      break;
+    }
+  }
+  return ConfigBase::DlgProc(msg,wParam,lParam);
+}
+
+void ConfigH265::init_format()
+{
+  const char* color_names[] = {
+    "RGB",
+    "YUV 4:2:0",
+    "YUV 4:2:2",
+    "YUV 4:4:4",
+  };
+
+  SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_RESETCONTENT, 0, 0);
+  for(int i=0; i<4; i++)
+    SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_ADDSTRING, 0, (LPARAM)color_names[i]);
+  int sel = 0;
+  if(codec->config->format==CodecBase::format_yuv420) sel = 1;
+  if(codec->config->format==CodecBase::format_yuv422) sel = 2;
+  if(codec->config->format==CodecBase::format_yuv444) sel = 3;
+  SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_SETCURSEL, sel, 0);
+}
+
+void ConfigH265::change_format(int sel)
+{
+  int format = CodecBase::format_rgb;
+  if(sel==1) format = CodecBase::format_yuv420;
+  if(sel==2) format = CodecBase::format_yuv422;
+  if(sel==3) format = CodecBase::format_yuv444;
+  codec->config->format = format;
+  init_bits();
+}
+
+//---------------------------------------------------------------------------
+
 class ConfigVP8: public ConfigBase{
 public:
   ConfigVP8(){ dialog_id = IDD_ENC_VP8; }
@@ -1258,6 +1422,7 @@ extern "C" LRESULT WINAPI DriverProc(DWORD_PTR dwDriverId, HDRVR hDriver, UINT u
       if(icopen->fccHandler==CodecHUFF::tag) codec = new CodecHUFF;
       if(icopen->fccHandler==CodecProres::tag) codec = new CodecProres;
       if(icopen->fccHandler==CodecVP8::tag) codec = new CodecVP8;
+      if(icopen->fccHandler==CodecH265::tag) codec = new CodecH265;
       if(icopen->fccHandler==CodecH264::tag) codec = new CodecH264;
       if(codec){
         if(!codec->init()){
@@ -1335,6 +1500,7 @@ extern "C" LRESULT WINAPI VDDriverProc(DWORD_PTR dwDriverId, HDRVR hDriver, UINT
     if(lParam1==CodecFFV1::tag) return CodecHUFF::tag;
     if(lParam1==CodecHUFF::tag) return CodecProres::tag;
     if(lParam1==CodecProres::tag) return CodecVP8::tag;
+    if(lParam1==CodecVP8::tag) return CodecH265::tag;
     //if(lParam1==CodecVP8::tag) return CodecH264::tag;
     return 0;
 

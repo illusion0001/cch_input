@@ -16,6 +16,7 @@
 #define IDD_ENC_AAC                     110
 #define IDD_ENC_VP8                     111
 #define IDD_INPUT_OPTIONS               112
+#define IDD_ENC_X265                    113
 #define IDC_FORMATNAME                  1004
 #define IDC_VIDEO_PIXFMT                1006
 #define IDC_VIDEO_WXH                   1007
