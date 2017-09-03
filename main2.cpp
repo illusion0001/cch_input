@@ -1,5 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <commctrl.h>
 
 #include <vd2/plugin/vdplugin.h>
 #include <vd2/plugin/vdinputdriver.h>
@@ -26,6 +27,8 @@ bool config_decode_raw = false;
 bool config_decode_magic = false;
 bool config_decode_cfhd = false;
 bool config_force_thread = false;
+bool config_disable_cache = false;
+float config_cache_size = 0.5;
 void saveConfig();
 
 int av_initialized;
@@ -73,7 +76,35 @@ public:
   void Show(HWND parent){
     VDXVideoFilterDialog::Show(hInstance,MAKEINTRESOURCE(IDD_SYS_INPUT_OPTIONS),parent);
   }
+  void init_cache();
 };
+
+float GetDlgItemFloat(HWND wnd, int id, float bv){
+  HWND w1 = GetDlgItem(wnd,id);
+  char buf[128];
+  if(!GetWindowText(w1,buf,128)) return bv;
+  float v;
+  if(sscanf(buf,"%f",&v)!=1) return bv;
+  return v;
+}
+
+void SetDlgItemFloat(HWND wnd, int id, float v){
+  HWND w1 = GetDlgItem(wnd,id);
+  char buf[128];
+  sprintf(buf,"%g",v);
+  SetWindowText(w1,buf);
+}
+
+void ConfigureDialog::init_cache()
+{
+  MEMORYSTATUSEX ms = {sizeof(MEMORYSTATUSEX)};
+  GlobalMemoryStatusEx(&ms);
+  uint64_t gb1 = 0x40000000;
+  int max = int(ms.ullTotalPhys/gb1);
+
+  SetDlgItemFloat(mhdlg,IDC_CACHE_SIZE,config_cache_size);
+  SendMessage(GetDlgItem(mhdlg, IDC_CACHE_SPIN), UDM_SETRANGE, 0, (LPARAM)MAKELONG(max,0));
+}
 
 INT_PTR ConfigureDialog::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -83,6 +114,8 @@ INT_PTR ConfigureDialog::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
     CheckDlgButton(mhdlg,IDC_DECODE_MAGIC, config_decode_magic ? BST_CHECKED:BST_UNCHECKED);
     CheckDlgButton(mhdlg,IDC_DECODE_CFHD, config_decode_cfhd ? BST_CHECKED:BST_UNCHECKED);
     CheckDlgButton(mhdlg,IDC_FORCE_THREAD, config_force_thread ? BST_CHECKED:BST_UNCHECKED);
+    CheckDlgButton(mhdlg,IDC_DISABLE_CACHE2, config_disable_cache ? BST_CHECKED:BST_UNCHECKED);
+    init_cache();
     return TRUE;
   case WM_COMMAND:
     switch(LOWORD(wParam)){
@@ -91,6 +124,8 @@ INT_PTR ConfigureDialog::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
       config_decode_magic = IsDlgButtonChecked(mhdlg,IDC_DECODE_MAGIC)!=0;
       config_decode_cfhd = IsDlgButtonChecked(mhdlg,IDC_DECODE_CFHD)!=0;
       config_force_thread = IsDlgButtonChecked(mhdlg,IDC_FORCE_THREAD)!=0;
+      config_disable_cache = IsDlgButtonChecked(mhdlg,IDC_DISABLE_CACHE2)!=0;
+      config_cache_size = GetDlgItemFloat(mhdlg,IDC_CACHE_SIZE,0.5);
       saveConfig();
       EndDialog(mhdlg, TRUE);
       return TRUE;
@@ -225,6 +260,12 @@ void saveConfig()
   WritePrivateProfileStringW(L"force_ffmpeg",L"MagicYUV",config_decode_magic ? L"1":L"0",buf);
   WritePrivateProfileStringW(L"force_ffmpeg",L"CineformHD",config_decode_cfhd ? L"1":L"0",buf);
   WritePrivateProfileStringW(L"decode_model",L"force_frame_thread",config_force_thread ? L"1":L"0",buf);
+  WritePrivateProfileStringW(L"decode_model",L"disable_cache",config_disable_cache ? L"1":L"0",buf);
+
+  wchar_t buf2[128];
+  swprintf(buf2,128,L"%g",config_cache_size);
+  WritePrivateProfileStringW(L"decode_model",L"cache_size",buf2,buf);
+
   WritePrivateProfileStringW(0,0,0,buf);
 }
 
@@ -247,6 +288,12 @@ void loadConfig()
   config_decode_magic = GetPrivateProfileIntW(L"force_ffmpeg",L"MagicYUV",0,buf)!=0;
   config_decode_cfhd = GetPrivateProfileIntW(L"force_ffmpeg",L"CineformHD",0,buf)!=0;
   config_force_thread = GetPrivateProfileIntW(L"decode_model",L"force_frame_thread",0,buf)!=0;
+  config_disable_cache = GetPrivateProfileIntW(L"decode_model",L"disable_cache",0,buf)!=0;
+
+  wchar_t buf2[128];
+  GetPrivateProfileStringW(L"decode_model",L"cache_size",L"0.5",buf2,128,buf);
+  float v2;
+  if(swscanf(buf2,L"%f",&v2)==1) config_cache_size = v2; else config_cache_size = 0.5;
 
   ff_plugin_video.mpStaticConfigureProc = 0;
 

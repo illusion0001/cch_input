@@ -81,13 +81,19 @@
 #define IDC_DECODE_CFHD                 1045
 #define IDC_PROFILE                     1046
 #define IDC_FORCE_THREAD                1046
+#define IDC_DISABLE_CACHE               1046
 #define IDC_QUALITY                     1047
+#define IDC_FORCE_THREAD2               1047
+#define IDC_DISABLE_CACHE2              1047
 #define IDC_QUALITY_VALUE               1048
 #define IDC_STEREO                      1049
 #define IDC_CBR                         1050
 #define IDC_QUALITY_LABEL               1051
 #define IDC_SYS_OPTIONS                 1057
 #define IDC_DECODE_FFMPEG               1058
+#define IDC_CACHE_SIZE                  1059
+#define IDC_SPIN1                       1060
+#define IDC_CACHE_SPIN                  1060
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -96,7 +102,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        112
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1059
+#define _APS_NEXT_CONTROL_VALUE         1061
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

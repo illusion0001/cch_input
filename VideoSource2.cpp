@@ -11,6 +11,7 @@ extern "C" {
 
 const int line_align = 16; // should be ok with any usable filter down the pipeline
 extern bool config_force_thread;
+extern float config_cache_size;
 
 uint8_t* align_buf(uint8_t* p)
 {
@@ -143,6 +144,11 @@ int VDFFVideoSource::init_duration(const AVRational fr)
     if(e>sample_count_error) sample_count_error = e;
   }
 
+  if(sample_count==0){
+    // found in 1-frame nut
+    sample_count = 1;
+  }
+
   m_streamInfo.mInfo.mSampleRate.mNumerator = fr.num;
   m_streamInfo.mInfo.mSampleRate.mDenominator = fr.den;
 
@@ -221,14 +227,17 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
         // works for 30.mov
         // works for device-2017-02-13-115329.mp4
         AVRational avg_fr = m_pStreamCtx->avg_frame_rate;
-        sample_count_error = init_duration(avg_fr);
-        if(abs(m_pStreamCtx->nb_index_entries - sample_count)<=sample_count_error){
-          sample_count = m_pStreamCtx->nb_index_entries;
-          trust_index = true;
-          average_fr = true;
-        } else {
-          // becomes worse, step back (guess, no sample)
-          sample_count_error = init_duration(r_fr);
+        // 0 found in some wmv
+        if(avg_fr.num!=0){
+          sample_count_error = init_duration(avg_fr);
+          if(abs(m_pStreamCtx->nb_index_entries - sample_count)<=sample_count_error){
+            sample_count = m_pStreamCtx->nb_index_entries;
+            trust_index = true;
+            average_fr = true;
+          } else {
+            // becomes worse, step back (guess, no sample)
+            sample_count_error = init_duration(r_fr);
+          }
         }
       }
     }
@@ -342,7 +351,10 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   GlobalMemoryStatusEx(&ms);
 
   uint64_t max_virtual = ms.ullTotalPhys;
-  if(max_virtual<0x40000000) max_virtual = 0; else max_virtual -= 0x40000000;
+  uint64_t gb1 = 0x40000000;
+  if(max_virtual<2*gb1) max_virtual = 0; else max_virtual -= 2*gb1;
+  uint64_t max2 = (uint64_t)config_cache_size*gb1;
+  if(max2<max_virtual) max_virtual = max2;
 
   uint64_t mem_other = 0;
   if(m_pSource->head_segment){
@@ -356,7 +368,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   }
 
   uint64_t mem_size = uint64_t(frame_size)*buffer_reserve;
-  if(mem_size+mem_other>max_virtual){
+  if(mem_size+mem_other>max_virtual || pSource->cfg_disable_cache){
     if(buffer_reserve>pSource->cfg_frame_buffers){
       buffer_reserve = pSource->cfg_frame_buffers;
       mem_size = uint64_t(frame_size)*buffer_reserve;
@@ -1836,7 +1848,7 @@ void VDFFVideoSource::alloc_page(int pos)
         }
       }
       first_frame++;
-    }
+    } else break;
   }
 
   if(!r){for(int i=0; i<buffer_count; i++){

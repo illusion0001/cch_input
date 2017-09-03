@@ -20,6 +20,7 @@ void init_av();
 extern bool config_decode_raw;
 extern bool config_decode_magic;
 extern bool config_decode_cfhd;
+extern bool config_disable_cache;
 
 bool check_magic_vfw(DWORD fcc)
 {
@@ -277,6 +278,7 @@ bool VDXAPIENTRY VDFFInputFileDriver::CreateInputFile(uint32_t flags, IVDXInputF
   if(flags & kOF_SingleFile) p->single_file_mode = true;
   //p->auto_append = true;
   if(config_decode_cfhd) p->cfg_skip_cfhd = true;
+  if(config_disable_cache) p->cfg_disable_cache = true;
 
   *ppFile = p;
   p->AddRef();
@@ -303,6 +305,7 @@ INT_PTR FileConfigureDialog::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
   switch(msg){
   case WM_INITDIALOG:
     CheckDlgButton(mhdlg, IDC_DECODE_CFHD, !data->skip_cfhd_vfw ? BST_CHECKED:BST_UNCHECKED);
+    CheckDlgButton(mhdlg, IDC_DISABLE_CACHE, data->disable_cache ? BST_CHECKED:BST_UNCHECKED);
     return TRUE;
   case WM_COMMAND:
     switch(LOWORD(wParam)){
@@ -312,6 +315,10 @@ INT_PTR FileConfigureDialog::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
 
     case IDC_DECODE_CFHD:
       data->skip_cfhd_vfw = !IsDlgButtonChecked(mhdlg,IDC_DECODE_CFHD)!=0;
+      return TRUE;
+
+    case IDC_DISABLE_CACHE:
+      data->disable_cache = IsDlgButtonChecked(mhdlg,IDC_DISABLE_CACHE)!=0;
       return TRUE;
 
     case IDOK:
@@ -331,6 +338,7 @@ bool VDXAPIENTRY VDFFInputFile::PromptForOptions(VDXHWND parent, IVDXInputOption
   VDFFInputFileOptions* opt = new VDFFInputFileOptions;
   if(cfg_skip_cfhd) opt->data.skip_cfhd_vfw = true;
   if(!test_cfhd_vfw()) opt->data.skip_cfhd_vfw = true;
+  if(cfg_disable_cache) opt->data.disable_cache = true;
 
   opt->AddRef();
   *r = opt;
@@ -373,6 +381,7 @@ VDFFInputFile::VDFFInputFile(const VDXInputDriverContext& context)
 
   cfg_frame_buffers = 40;
   cfg_skip_cfhd = false;
+  cfg_disable_cache = false;
 }
 
 VDFFInputFile::~VDFFInputFile()
@@ -399,7 +408,10 @@ void VDFFInputFile::Init(const wchar_t *szFile, IVDXInputOptions *in_opts)
   if(in_opts){
     VDFFInputFileOptions* opt = (VDFFInputFileOptions*)in_opts;
     if(opt->data.skip_cfhd_vfw) cfg_skip_cfhd = true;
+    if(opt->data.disable_cache) cfg_disable_cache = true;
   }
+
+  if(cfg_frame_buffers<1) cfg_frame_buffers = 1;
 
   wcscpy(path,szFile);
 

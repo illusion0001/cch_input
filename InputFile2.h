@@ -43,21 +43,30 @@ protected:
 
 class VDFFInputFileOptions : public vdxunknown<IVDXInputOptions> {
 public:
-  enum { opt_version=1 };
+  enum { opt_version=2 };
 
 #pragma pack(push,1)
   struct Data {
     int version;
     bool skip_cfhd_vfw;
+    bool disable_cache;
 
-    Data(){ version=opt_version; skip_cfhd_vfw=false; }
+    Data(){ clear(); }
+    void clear(){ version=opt_version; skip_cfhd_vfw=false; disable_cache=false; }
   } data;
 #pragma pack(pop)
 
   bool Read(const void *src, uint32_t len) {
-    if(len!=sizeof(Data)) return false;
-    memcpy(&data,src,len);
-    if(data.version!=opt_version) return false;
+    if(len<=sizeof(int)) return false;
+    Data* d = (Data*)src;
+    if(d->version>opt_version || d->version<1) return false;
+    data.clear();
+    if(d->version>=1){
+      data.skip_cfhd_vfw = d->skip_cfhd_vfw;
+    }
+    if(d->version>=2){
+      data.disable_cache = d->disable_cache;
+    }
     return true;
   }
   uint32_t VDXAPIENTRY Write(void *buf, uint32_t buflen) {
@@ -80,6 +89,7 @@ public:
 
   int cfg_frame_buffers;
   bool cfg_skip_cfhd;
+  bool cfg_disable_cache;
 
   AVFormatContext* m_pFormatCtx;
   VDFFVideoSource* video_source;
