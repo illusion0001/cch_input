@@ -141,6 +141,7 @@ public:
   char* frame_type;
   int64_t desired_frame;
   int required_count;
+  int last_request;
   int next_frame;
   int first_frame;
   int last_frame;
@@ -166,6 +167,8 @@ public:
   bool is_image_list;
   bool copy_mode;
   bool decode_mode;
+  bool small_cache_mode;
+  bool enable_prefetch;
   int64_t dead_range_start;
   int64_t dead_range_end;
 
@@ -184,6 +187,8 @@ public:
   bool read_frame(sint64 desired_frame, bool init=false);
   void alloc_direct_buffer();
   void alloc_page(int pos);
+  BufferPage* remove_page(int play_pos, bool before=true, bool after=true);
+  void dealloc_page(BufferPage* p);
   void free_buffers();
   void open_page(BufferPage* p, int flag);
   void open_read(BufferPage* p){ open_page(p,1); }
@@ -191,6 +196,10 @@ public:
   void copy(int start, int end, BufferPage* p);
   int64_t frame_to_pts_next(sint64 start);
   void setCopyMode(bool v);
-  int match_sparse_key(int64_t sample);
+  void setDecodeMode(bool v);
+  void setCacheMode(bool v);
   bool allow_copy();
+  int calc_sparse_key(int64_t sample, int64_t& pos);
+  int calc_seek(int jump, int64_t& pos);
+  int calc_prefetch(int jump);
 };

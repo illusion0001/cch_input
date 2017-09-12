@@ -32,6 +32,7 @@ VDFFVideoSource::VDFFVideoSource(const VDXInputDriverContext& context)
   CurrentDecoderErrorMode = kErrorModeReportAll;
   m_pixmap_data = 0;
   m_pixmap_frame = -1;
+  last_request = -1;
   next_frame = -1;
   last_seek_frame = -1;
   buffer = 0;
@@ -46,6 +47,8 @@ VDFFVideoSource::VDFFVideoSource(const VDXInputDriverContext& context)
   is_image_list = false;
   copy_mode = false;
   decode_mode = true;
+  small_cache_mode = false;
+  enable_prefetch = false;
   decoded_count = 0;
   buffer = 0;
   mem = 0;
@@ -69,10 +72,7 @@ VDFFVideoSource::~VDFFVideoSource()
 
   if(buffer) {for(int i=0; i<buffer_count; i++){
     BufferPage& p = buffer[i];
-    if(p.map_base)
-      UnmapViewOfFile(p.map_base);
-    else
-      free(p.p);
+    dealloc_page(&p);
   }}
   if(mem) CloseHandle(mem);
   free(buffer);
@@ -296,7 +296,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   }
 
   // threading has big negative impact on random access within all-keyframe files
-  if(keyframe_gap==1){
+  if(allow_copy()){
     //m_pCodecCtx->thread_count = 1;
     m_pCodecCtx->thread_count = 0;
     m_pCodecCtx->thread_type = FF_THREAD_SLICE;
@@ -353,7 +353,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   uint64_t max_virtual = ms.ullTotalPhys;
   uint64_t gb1 = 0x40000000;
   if(max_virtual<2*gb1) max_virtual = 0; else max_virtual -= 2*gb1;
-  uint64_t max2 = (uint64_t)config_cache_size*gb1;
+  uint64_t max2 = (uint64_t)(config_cache_size*gb1);
   if(max2<max_virtual) max_virtual = max2;
 
   uint64_t mem_other = 0;
@@ -369,10 +369,9 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
 
   uint64_t mem_size = uint64_t(frame_size)*buffer_reserve;
   if(mem_size+mem_other>max_virtual || pSource->cfg_disable_cache){
-    if(buffer_reserve>pSource->cfg_frame_buffers){
-      buffer_reserve = pSource->cfg_frame_buffers;
-      mem_size = uint64_t(frame_size)*buffer_reserve;
-    }
+    buffer_reserve = int((max_virtual-mem_other)/frame_size);
+    if(buffer_reserve<pSource->cfg_frame_buffers || pSource->cfg_disable_cache) buffer_reserve = pSource->cfg_frame_buffers;
+    mem_size = uint64_t(frame_size)*buffer_reserve;
   }
 
   #ifndef _WIN64
@@ -481,7 +480,7 @@ bool VDFFVideoSource::allow_copy()
     return true;
   }
 
-  const AVCodecDescriptor* desc = av_codec_get_codec_descriptor(m_pCodecCtx);
+  const AVCodecDescriptor* desc = avcodec_descriptor_get(m_pCodecCtx->codec_id);
   if(desc->props & AV_CODEC_PROP_INTRA_ONLY) return true; 
 
   return false;
@@ -521,12 +520,15 @@ void VDXAPIENTRY VDFFVideoSource::ApplyStreamMode(uint32 flags)
 {
   if((flags & kStreamModeDirectCopy)!=0 && !QueryStreamMode(kStreamModeDirectCopy)) return;
   bool copy_mode = false;
+  bool decode_mode = false;
+  bool cache_mode = true;
   if(flags & kStreamModeDirectCopy) copy_mode = true;
-  decode_mode = false;
   if(flags & kStreamModeUncompress) decode_mode = true;
+  if(flags & kStreamModePlayForward) cache_mode = false;
   setCopyMode(copy_mode);
-  next_frame = -1;
-  last_seek_frame = -1;
+  setDecodeMode(decode_mode);
+  setCacheMode(cache_mode);
+
   if(m_pSource->next_segment) m_pSource->next_segment->video_source->ApplyStreamMode(flags);
 }
 
@@ -557,9 +559,55 @@ int VDFFVideoSource::GetDirectFormatLen()
 
 void VDFFVideoSource::setCopyMode(bool v)
 {
+  if(copy_mode==v) return;
   copy_mode = v;
-  if(v) free_buffers();
+  if(v){
+    free_buffers();
+    next_frame = -1;
+    last_seek_frame = -1;
+    enable_prefetch = false;
+  }
   av_packet_unref(&copy_pkt);
+}
+
+void VDFFVideoSource::setDecodeMode(bool v)
+{
+  if(decode_mode==v) return;
+  decode_mode = v;
+  if(v){
+    // must begin from IDR
+    next_frame = -1;
+    last_seek_frame = -1;
+    enable_prefetch = false;
+  }
+}
+
+void VDFFVideoSource::setCacheMode(bool v)
+{
+  small_cache_mode = !v;
+  if(!v){
+    enable_prefetch = false;
+    int buffer_max = m_pSource->cfg_frame_buffers;
+    if(mem && used_frames>buffer_max){
+      free_buffers();
+      CloseHandle(mem);
+      int64_t mem_size = uint64_t(frame_size)*buffer_reserve;
+      mem_size = (mem_size + 0xFFFF) & ~0xFFFF;
+      mem = CreateFileMapping(INVALID_HANDLE_VALUE,0,PAGE_READWRITE,mem_size>>32,(DWORD)mem_size,0);
+
+    } else {
+      int anchor = next_frame-1;
+      while(1){
+        BufferPage* p = remove_page(anchor,false,true);
+        if(!p) break;
+        if(used_frames>buffer_max) dealloc_page(p);
+      }
+      while(used_frames>buffer_max){
+        BufferPage* p = remove_page(anchor);
+        dealloc_page(p);
+      }
+    }
+  }
 }
 
 IVDXStreamSource::ErrorMode VDFFVideoSource::GetDecodeErrorMode() 
@@ -582,7 +630,7 @@ bool VDFFVideoSource::IsDecodeErrorModeSupported(IVDXStreamSource::ErrorMode mod
 
 void VDFFVideoSource::GetVideoSourceInfo(VDXVideoSourceInfo& info)
 {
-  info.mFlags = 0;
+  info.mFlags = VDXVideoSourceInfo::kFlagSyncDecode;
   info.mWidth = m_pCodecCtx->width;
   info.mHeight = m_pCodecCtx->height;
   info.mDecoderModel = VDXVideoSourceInfo::kDecoderModelCustom;
@@ -635,27 +683,12 @@ bool VDFFVideoSource::IsKey(int64_t sample)
     return (m_pStreamCtx->index_entries[sample].flags & AVINDEX_KEYFRAME)!=0;
   }
   if(sparse_index){
-    int x = match_sparse_key(sample);
-    return x!=-1;
+    int64_t pos;
+    int x = calc_sparse_key(sample,pos);
+    return x==sample;
   }
 
   return false;
-}
-
-int VDFFVideoSource::match_sparse_key(int64_t sample)
-{
-  // somehow start_time is not included in the index timestamps
-  // works with 10 bit.mp4: sample*den/num = exactly key timestamp
-  // half-frame bias helps with some rounding noise
-  // works with 2017-04-07 08-53-48.flv
-  int rd = time_base.den/2;
-  int64_t pos1 = (sample*time_base.den + rd) / time_base.num;
-  int x = av_index_search_timestamp(m_pStreamCtx,pos1,AVSEEK_FLAG_BACKWARD);
-  if(x==-1) return -1;
-  int64_t ts = m_pStreamCtx->index_entries[x].timestamp;
-  int pos = int((ts*time_base.num + rd) / time_base.den);
-  if(pos==sample) return x;
-  return -1;
 }
 
 int64_t VDFFVideoSource::GetFrameNumberForSample(int64_t sample_num)
@@ -724,6 +757,7 @@ const void* VDFFVideoSource::DecodeFrame(const void* inputBuffer, uint32_t data_
 
   BufferPage* page = frame_array[targetFrame];
   if(!page){
+    // this now must be impossible with help of kFlagSyncDecode
     mContext.mpCallbacks->SetError("Cache overflow: set \"Performance \\ Video buffering\" to 32 or less");
     return 0;
   }
@@ -1454,6 +1488,122 @@ int64_t VDFFVideoSource::frame_to_pts_next(sint64 start)
   }
 }
 
+// return frame num (guessed)
+int VDFFVideoSource::calc_sparse_key(int64_t sample, int64_t& pos)
+{
+  // somehow start_time is not included in the index timestamps
+  // works with 10 bit.mp4: sample*den/num = exactly key timestamp
+  // half-frame bias helps with some rounding noise
+  // works with 2017-04-07 08-53-48.flv
+  int rd = time_base.den/2;
+  int64_t pos1 = (sample*time_base.den + rd) / time_base.num;
+  int x = av_index_search_timestamp(m_pStreamCtx,pos1,AVSEEK_FLAG_BACKWARD);
+  if(x==-1) return -1;
+  pos = m_pStreamCtx->index_entries[x].timestamp;
+  int frame = int((pos*time_base.num + rd) / time_base.den);
+  return frame;
+}
+
+int VDFFVideoSource::calc_seek(int jump, int64_t& pos)
+{
+  if(is_image_list){
+    if(next_frame==-1 || jump>next_frame+fw_seek_threshold || jump<next_frame){
+      pos = int64_t(jump)*time_base.den / time_base.num + start_time;
+      return jump;
+    }
+    return -1;
+  }
+
+  if(trust_index && jump>next_frame){
+    int next_key = -1;
+    {for(int i=jump; i>next_frame; i--)
+      if(m_pStreamCtx->index_entries[i].flags & AVINDEX_KEYFRAME){ next_key=i; break; } }
+
+    if(next_key!=-1 && (next_frame==-1 || next_key>next_frame+fw_seek_threshold)){
+      // required to seek forward
+      pos = m_pStreamCtx->index_entries[next_key].timestamp;
+      return next_key;
+    }
+  }
+
+  if(trust_index && jump<next_frame){
+    // required to seek backward
+    int prev_key = 0;
+    {for(int i=jump; i>=0; i--)
+      if(m_pStreamCtx->index_entries[i].flags & AVINDEX_KEYFRAME){ prev_key=i; break; } }
+    pos = m_pStreamCtx->index_entries[prev_key].timestamp;
+    return prev_key;
+  }
+
+  if(!trust_index && (next_frame==-1 || jump>next_frame+fw_seek_threshold || jump<next_frame)){
+    if(jump>=dead_range_start && jump<=dead_range_end) return -1;
+    if(jump==last_seek_frame) return -1;
+
+    // required to seek somewhere
+    pos = int64_t(jump)*time_base.den / time_base.num + start_time;
+    int dst = jump;
+
+    if(!(m_pFormatCtx->iformat->flags & AVFMT_SEEK_TO_PTS)){
+      // because seeking works on DTS it needs some unknown offset to work
+      pos -= int64_t(8)*time_base.den / time_base.num; // better than nothing
+      dst -= 8;
+      if(dst<0) dst = 0;
+    }
+    if(sparse_index){
+      // when jumping to keys and we can guess key locations, use that
+      // works with 2017-04-07 08-53-48.flv
+      int64_t pos1;
+      int dst1 = calc_sparse_key(jump,pos1);
+      // only apply this correction when moving through keys
+      if(dst1==jump){
+        pos = pos1;
+        dst = dst1;
+      }
+    }
+
+    if(jump==0 && pos>0){
+      // unconfirmed (probably useless)
+      pos = 0;
+      dst = 0;
+    }
+
+    return dst;
+  }
+
+  return -1;
+}
+
+int VDFFVideoSource::calc_prefetch(int jump)
+{
+  if(keyframe_gap==1) return -1;
+  if(small_cache_mode || copy_mode) return -1;
+  if(jump>=last_request) return -1;
+  if(!enable_prefetch) return -1; // do not activate until first explicit backward seek
+  if(dead_range_start!=-1) return -1; // in such case we have much worse problem than prefetch is meant so solve
+  if(!trust_index && !sparse_index) return -1;
+
+  int x = -1;
+  int n = 0;
+  {for(int i=jump; i>=0; i--){
+    if(i<jump-keyframe_gap) break;
+    if(!frame_array[i]){ x=i; break; }
+  }}
+  if(x==-1) return -1; // all nearby frames are already cached
+
+  int prev_key = 0;
+  if(trust_index){
+    {for(int i=x; i>=0; i--)
+      if(m_pStreamCtx->index_entries[i].flags & AVINDEX_KEYFRAME){ prev_key=i; break; } }
+  }
+  if(sparse_index){
+    int64_t pos;
+    prev_key = calc_sparse_key(x,pos);
+  }
+
+  if(jump-prev_key>buffer_reserve) return -1; // impossible to hold both ends of cache
+  return x;
+}
+
 bool VDFFVideoSource::Read(sint64 start, uint32 lCount, void *lpBuffer, uint32 cbBuffer, uint32 *lBytesRead, uint32 *lSamplesRead)
 {
   if(start>=sample_count){
@@ -1504,76 +1654,30 @@ bool VDFFVideoSource::Read(sint64 start, uint32 lCount, void *lpBuffer, uint32 c
   if(head->required_count) head->required_count--;
 
   int jump = (int)start;
-
-  if(frame_array[start]){
-    // prefetch backward seek
-    int x = -1;
-    {for(int i=(int)start; i>=0; i--){
-      if(i<start-keyframe_gap) break;
-      if(!frame_array[i]){ x=i; break; }
-    }}
-
-    if(x!=-1){
-      jump = x;
-    } else return true;
+  if(!copy_mode && frame_array[jump]){
+    jump = calc_prefetch(jump);
+    if(jump==-1) return true;
   }
 
-  if(trust_index && jump>next_frame){
-    int next_key = -1;
-    {for(int i=jump; i>next_frame; i--)
-      if(m_pStreamCtx->index_entries[i].flags & AVINDEX_KEYFRAME){ next_key=i; break; } }
+  last_request = (int)start;
 
-    if(next_key!=-1 && (next_frame==-1 || next_key>next_frame+fw_seek_threshold)){
-      // required to seek forward
-      int64_t pos = m_pStreamCtx->index_entries[next_key].timestamp;
-      avcodec_flush_buffers(m_pCodecCtx);
-      av_seek_frame(m_pFormatCtx,m_streamIndex,pos,0);
-      next_frame = next_key;
-    }
+  if(start>=dead_range_start && start<=dead_range_end){
+    // we already known this does not work so fail fast
+    mContext.mpCallbacks->SetError("requested frame not found; next valid frame = %d", next_frame-1);
+    return false;
   }
 
-  if(trust_index && jump<next_frame){
-    // required to seek backward
-    int prev_key = 0;
-    {for(int i=jump; i>=0; i--)
-      if(m_pStreamCtx->index_entries[i].flags & AVINDEX_KEYFRAME){ prev_key=i; break; } }
-    int64_t pos = m_pStreamCtx->index_entries[prev_key].timestamp;
+  int64_t seek_pos;
+  int seek_frame = calc_seek(jump,seek_pos);
+  if(seek_frame!=-1){
+    if(jump<next_frame) enable_prefetch = true;
+
     avcodec_flush_buffers(m_pCodecCtx);
-    av_seek_frame(m_pFormatCtx,m_streamIndex,pos,0);
-    next_frame = prev_key;
-  }
+    av_seek_frame(m_pFormatCtx,m_streamIndex,seek_pos,AVSEEK_FLAG_BACKWARD);
+    if(trust_index || is_image_list) next_frame = seek_frame; else next_frame = -1;
 
-  if(!trust_index && (next_frame==-1 || jump>next_frame+fw_seek_threshold || jump<next_frame)){
-    // required to seek
-    if(jump>=dead_range_start && jump<=dead_range_end){
-      // just skip prefetching
-      if(frame_array[start]) return true;
-
-      // we already known this does not work so fail fast
-      mContext.mpCallbacks->SetError("requested frame not found; next valid frame = %d", next_frame-1);
-      return false;
-    }
-    if(jump!=last_seek_frame){
-      last_seek_frame = jump;
-      int64_t pos = int64_t(jump)*time_base.den / time_base.num + start_time;
-
-      if(!(m_pFormatCtx->iformat->flags & AVFMT_SEEK_TO_PTS) && !is_image_list){
-        // because seeking works on DTS it needs some unknown offset to work
-        pos -= int64_t(8)*time_base.den / time_base.num; // better than nothing
-        //pos -= keyframe_gap*time_base.den / 2 / time_base.num;
-      }
-      if(sparse_index){
-        // when jumping to keys and we can guess key locations, use that
-        // works with 2017-04-07 08-53-48.flv
-        int x = match_sparse_key(jump);
-        if(x!=-1) pos = m_pStreamCtx->index_entries[x].timestamp;
-      }
-
-      if(jump==0 && pos>0) pos = 0;
-      avcodec_flush_buffers(m_pCodecCtx);
-      av_seek_frame(m_pFormatCtx,m_streamIndex,pos,AVSEEK_FLAG_BACKWARD);
-      if(is_image_list) next_frame = jump; else next_frame = -1;
-    }
+    // this helps to prevent seeking again to satisfy same request
+    if(!trust_index) last_seek_frame = jump;
   }
 
   while(1){
@@ -1603,7 +1707,7 @@ bool VDFFVideoSource::Read(sint64 start, uint32 lCount, void *lpBuffer, uint32 c
       return true;
     }
 
-    if(frame_array[start]) return true;
+    if(!copy_mode && frame_array[start]) return true;
 
     //! missed seek or bad stream, just fail
     // better idea is to build new corrected index maybe
@@ -1803,6 +1907,11 @@ void VDFFVideoSource::free_buffers()
   {for(int i=0; i<buffer_count; i++){
     BufferPage& page = buffer[i];
     frame_array[page.target] = 0;
+    if(page.map_base){
+      UnmapViewOfFile(page.map_base);
+      page.map_base = 0;
+      page.p = 0;
+    }
     page.refs = 0;
     page.access = 0;
     page.target = 0;
@@ -1818,14 +1927,15 @@ void VDFFVideoSource::free_buffers()
   next_frame = -1;
 }
 
-void VDFFVideoSource::alloc_page(int pos)
+VDFFVideoSource::BufferPage* VDFFVideoSource::remove_page(int pos, bool before, bool after)
 {
-  BufferPage* r = 0;
+  if(!used_frames) return 0;
 
-  if(used_frames>=buffer_count) while(1){
-    if(last_frame>pos){
+  BufferPage* r = 0;
+  while(1){
+    if(last_frame>pos && after){
       if(frame_array[last_frame]){
-        if(r) break;
+        if(r) return r;
         BufferPage* p1 = frame_array[last_frame];
         frame_array[last_frame] = 0;
         p1->refs--;
@@ -1836,9 +1946,9 @@ void VDFFVideoSource::alloc_page(int pos)
       }
       last_frame--;
 
-    } else if(first_frame<pos){
+    } else if(first_frame<pos && before){
       if(frame_array[first_frame]){
-        if(r) break;
+        if(r) return r;
         BufferPage* p1 = frame_array[first_frame];
         frame_array[first_frame] = 0;
         p1->refs--;
@@ -1848,9 +1958,17 @@ void VDFFVideoSource::alloc_page(int pos)
         }
       }
       first_frame++;
-    } else break;
+    } else return 0;
   }
+}
 
+void VDFFVideoSource::alloc_page(int pos)
+{
+  BufferPage* r = 0;
+  int buffer_max = buffer_count;
+  if(small_cache_mode) buffer_max = m_pSource->cfg_frame_buffers;
+
+  if(used_frames>=buffer_max) r = remove_page(pos);
   if(!r){for(int i=0; i<buffer_count; i++){
     if(!buffer[i].refs){
       r = &buffer[i];
@@ -1869,6 +1987,19 @@ void VDFFVideoSource::alloc_page(int pos)
   frame_array[pos] = r;
   if(pos>last_frame) last_frame = pos;
   if(pos<first_frame) first_frame = pos;
+}
+
+void VDFFVideoSource::dealloc_page(BufferPage* p)
+{
+  if(p->map_base)
+    UnmapViewOfFile(p->map_base);
+  else
+    free(p->p);
+
+  p->map_base = 0;
+  p->p = 0;
+  p->error = 0;
+  p->access = 0;
 }
 
 void VDFFVideoSource::open_page(BufferPage* p, int flag)
