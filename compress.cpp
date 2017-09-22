@@ -197,6 +197,47 @@ struct CodecBase{
     return false; 
   }
 
+  bool test_bits(int format, int bits){
+    switch(format){
+    case format_rgba:
+      if(bits==8) return test_av_format(AV_PIX_FMT_RGB32);
+      break;
+    case format_rgb:
+      if(bits==8) return test_av_format(AV_PIX_FMT_0RGB32) || test_av_format(AV_PIX_FMT_RGB24) || test_av_format(AV_PIX_FMT_GBRP);
+      if(bits==9) return test_av_format(AV_PIX_FMT_GBRP9LE);
+      if(bits==10) return test_av_format(AV_PIX_FMT_GBRP10LE);
+      if(bits==12) return test_av_format(AV_PIX_FMT_GBRP12LE);
+      if(bits==14) return test_av_format(AV_PIX_FMT_GBRP14LE);
+      if(bits==16) return test_av_format(AV_PIX_FMT_GBRP16LE);
+      break;
+    case format_yuv420:
+      if(bits==8) return test_av_format(AV_PIX_FMT_YUV420P);
+      if(bits==9) return test_av_format(AV_PIX_FMT_YUV420P9LE);
+      if(bits==10) return test_av_format(AV_PIX_FMT_YUV420P10LE);
+      if(bits==12) return test_av_format(AV_PIX_FMT_YUV420P12LE);
+      if(bits==14) return test_av_format(AV_PIX_FMT_YUV420P14LE);
+      if(bits==16) return test_av_format(AV_PIX_FMT_YUV420P16LE);
+      break;
+    case format_yuv422:
+      if(bits==8) return test_av_format(AV_PIX_FMT_YUV422P);
+      if(bits==9) return test_av_format(AV_PIX_FMT_YUV422P9LE);
+      if(bits==10) return test_av_format(AV_PIX_FMT_YUV422P10LE);
+      if(bits==12) return test_av_format(AV_PIX_FMT_YUV422P12LE);
+      if(bits==14) return test_av_format(AV_PIX_FMT_YUV422P14LE);
+      if(bits==16) return test_av_format(AV_PIX_FMT_YUV422P16LE);
+      break;
+    case format_yuv444:
+      if(bits==8) return test_av_format(AV_PIX_FMT_YUV444P);
+      if(bits==9) return test_av_format(AV_PIX_FMT_YUV444P9LE);
+      if(bits==10) return test_av_format(AV_PIX_FMT_YUV444P10LE);
+      if(bits==12) return test_av_format(AV_PIX_FMT_YUV444P12LE);
+      if(bits==14) return test_av_format(AV_PIX_FMT_YUV444P14LE);
+      if(bits==16) return test_av_format(AV_PIX_FMT_YUV444P16LE);
+      break;
+    }
+    return false;
+  }
+
   LRESULT compress_input_format(FilterModPixmapInfo* info){
     if(config->format==format_rgba){
       return nsVDXPixmap::kPixFormat_XRGB8888;
@@ -616,11 +657,13 @@ public:
   CodecBase* codec;
   void* old_param;
   int dialog_id;
+  int idc_message;
 
   ConfigBase()
   {
     codec = 0;
     old_param = 0;
+    idc_message = -1;
   }
 
   virtual ~ConfigBase()
@@ -641,6 +684,9 @@ public:
   virtual void init_format();
   virtual void change_format(int sel);
   void init_bits();
+  void adjust_bits();
+  void notify_bits_change(int bits_new, int bits_old);
+  void notify_hide();
 };
 
 void ConfigBase::init_format()
@@ -659,82 +705,66 @@ void ConfigBase::init_format()
   SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_SETCURSEL, codec->config->format-1, 0);
 }
 
+void ConfigBase::adjust_bits()
+{
+  int format = codec->config->format;
+  int bits = codec->config->bits;
+  if(!codec->test_bits(format,bits)){
+    int option[6] = {
+      codec->test_bits(format,8) ? 8:0,
+      codec->test_bits(format,9) ? 9:0,
+      codec->test_bits(format,10)? 10:0,
+      codec->test_bits(format,12)? 12:0,
+      codec->test_bits(format,14)? 14:0,
+      codec->test_bits(format,16)? 16:0,
+    };
+
+    int bits1=0;
+    {for(int i=0; i<6; i++){
+      int x = option[i];
+      if(x) bits1=x;
+      if(x>=bits) break;
+    }}
+
+    notify_bits_change(bits1,codec->config->bits);
+    codec->config->bits = bits1;
+  }
+}
+
 void ConfigBase::change_format(int sel)
 {
   codec->config->format = sel+1;
-
-  switch(codec->config->format){
-  case CodecBase::format_rgba:
-    codec->config->bits = 8;
-    break;
-  case CodecBase::format_yuv420:
-  case CodecBase::format_yuv422:
-  case CodecBase::format_yuv444:
-    codec->config->bits = 8;
-    break;
-  }
-
+  adjust_bits();
   init_bits();
 }
 
 void ConfigBase::init_bits()
 {
-  bool enable_8 = false;
-  bool enable_9 = false;
-  bool enable_10 = false;
-  bool enable_12 = false;
-  bool enable_14 = false;
-  bool enable_16 = false;
-  switch(codec->config->format){
-  case CodecBase::format_rgba:
-    enable_8 = true;
-    break;
-  case CodecBase::format_rgb:
-    enable_8 = codec->test_av_format(AV_PIX_FMT_RGB24) || codec->test_av_format(AV_PIX_FMT_0RGB32) || codec->test_av_format(AV_PIX_FMT_GBRP);
-    enable_9 = codec->test_av_format(AV_PIX_FMT_GBRP9LE);
-    enable_10 = codec->test_av_format(AV_PIX_FMT_GBRP10LE);
-    enable_12 = codec->test_av_format(AV_PIX_FMT_GBRP12LE);
-    enable_14 = codec->test_av_format(AV_PIX_FMT_GBRP14LE);
-    enable_16 = codec->test_av_format(AV_PIX_FMT_GBRP16LE);
-    break;
-  case CodecBase::format_yuv420:
-    enable_8 = codec->test_av_format(AV_PIX_FMT_YUV420P);
-    enable_9 = codec->test_av_format(AV_PIX_FMT_YUV420P9LE);
-    enable_10 = codec->test_av_format(AV_PIX_FMT_YUV420P10LE);
-    enable_12 = codec->test_av_format(AV_PIX_FMT_YUV420P12LE);
-    enable_14 = codec->test_av_format(AV_PIX_FMT_YUV420P14LE);
-    enable_16 = codec->test_av_format(AV_PIX_FMT_YUV420P16LE);
-    break;
-  case CodecBase::format_yuv422:
-    enable_8 = codec->test_av_format(AV_PIX_FMT_YUV422P);
-    enable_9 = codec->test_av_format(AV_PIX_FMT_YUV422P9LE);
-    enable_10 = codec->test_av_format(AV_PIX_FMT_YUV422P10LE);
-    enable_12 = codec->test_av_format(AV_PIX_FMT_YUV422P12LE);
-    enable_14 = codec->test_av_format(AV_PIX_FMT_YUV422P14LE);
-    enable_16 = codec->test_av_format(AV_PIX_FMT_YUV422P16LE);
-    break;
-  case CodecBase::format_yuv444:
-    enable_8 = codec->test_av_format(AV_PIX_FMT_YUV444P);
-    enable_9 = codec->test_av_format(AV_PIX_FMT_YUV444P9LE);
-    enable_10 = codec->test_av_format(AV_PIX_FMT_YUV444P10LE);
-    enable_12 = codec->test_av_format(AV_PIX_FMT_YUV444P12LE);
-    enable_14 = codec->test_av_format(AV_PIX_FMT_YUV444P14LE);
-    enable_16 = codec->test_av_format(AV_PIX_FMT_YUV444P16LE);
-    break;
-  }
-
-  EnableWindow(GetDlgItem(mhdlg,IDC_8_BIT),enable_8);
-  EnableWindow(GetDlgItem(mhdlg,IDC_9_BIT),enable_9);
-  EnableWindow(GetDlgItem(mhdlg,IDC_10_BIT),enable_10);
-  EnableWindow(GetDlgItem(mhdlg,IDC_12_BIT),enable_12);
-  EnableWindow(GetDlgItem(mhdlg,IDC_14_BIT),enable_14);
-  EnableWindow(GetDlgItem(mhdlg,IDC_16_BIT),enable_16);
+  int format = codec->config->format;
+  EnableWindow(GetDlgItem(mhdlg,IDC_8_BIT), codec->test_bits(format,8));
+  EnableWindow(GetDlgItem(mhdlg,IDC_9_BIT), codec->test_bits(format,9));
+  EnableWindow(GetDlgItem(mhdlg,IDC_10_BIT),codec->test_bits(format,10));
+  EnableWindow(GetDlgItem(mhdlg,IDC_12_BIT),codec->test_bits(format,12));
+  EnableWindow(GetDlgItem(mhdlg,IDC_14_BIT),codec->test_bits(format,14));
+  EnableWindow(GetDlgItem(mhdlg,IDC_16_BIT),codec->test_bits(format,16));
   CheckDlgButton(mhdlg,IDC_8_BIT,codec->config->bits==8 ? BST_CHECKED:BST_UNCHECKED);
   CheckDlgButton(mhdlg,IDC_9_BIT,codec->config->bits==9 ? BST_CHECKED:BST_UNCHECKED);
   CheckDlgButton(mhdlg,IDC_10_BIT,codec->config->bits==10 ? BST_CHECKED:BST_UNCHECKED);
   CheckDlgButton(mhdlg,IDC_12_BIT,codec->config->bits==12 ? BST_CHECKED:BST_UNCHECKED);
   CheckDlgButton(mhdlg,IDC_14_BIT,codec->config->bits==14 ? BST_CHECKED:BST_UNCHECKED);
   CheckDlgButton(mhdlg,IDC_16_BIT,codec->config->bits==16 ? BST_CHECKED:BST_UNCHECKED);
+}
+
+void ConfigBase::notify_hide(){
+  if(idc_message!=-1) SetDlgItemText(mhdlg,idc_message,0);
+}
+
+void ConfigBase::notify_bits_change(int bits_new, int bits_old){
+  if(idc_message!=-1){
+    wchar_t buf[80];
+    swprintf(buf,L"(!) Bit depth adjusted (was %d)",bits_old);
+    SetDlgItemTextW(mhdlg,idc_message,buf);
+  }
 }
 
 INT_PTR ConfigBase::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam){
@@ -744,6 +774,7 @@ INT_PTR ConfigBase::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam){
       SetDlgItemText(mhdlg,IDC_ENCODER_LABEL,LIBAVCODEC_IDENT);
       init_format();
       init_bits();
+      notify_hide();
       return true;
     }
 
@@ -772,6 +803,7 @@ INT_PTR ConfigBase::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam){
     case IDC_12_BIT:
     case IDC_14_BIT:
     case IDC_16_BIT:
+      notify_hide();
       if(IsDlgButtonChecked(mhdlg,IDC_8_BIT)) codec->config->bits = 8;
       if(IsDlgButtonChecked(mhdlg,IDC_9_BIT)) codec->config->bits = 9;
       if(IsDlgButtonChecked(mhdlg,IDC_10_BIT)) codec->config->bits = 10;
