@@ -1294,17 +1294,8 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   }
 
   if(convertInfo.direct_copy){
-    // now pixmap_data should be useless
-    // but VD thinks its a good idea to call GetFrameBuffer immediately and use it as destination for something in "fast recompress"
-    
-    //this hackery helps to run analysis pass in fast recompress, but it is impossible to write a file anyway due to some VD bugs
-    uint32_t size = av_image_get_buffer_size(convertInfo.av_fmt,w,h,line_align);
-    m_pixmap_data = (uint8_t*)realloc(m_pixmap_data, size+line_align-1);
-    set_pixmap_layout(align_buf(m_pixmap_data));
-    if(convertInfo.out_garbage) memset(m_pixmap_data,0,size+line_align-1);
-    
-    //free(m_pixmap_data);
-    //m_pixmap_data = 0;
+    free(m_pixmap_data);
+    m_pixmap_data = 0;
 
   } else {
     uint32_t size = av_image_get_buffer_size(convertInfo.av_fmt,w,h,line_align);
