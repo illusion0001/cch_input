@@ -578,6 +578,8 @@ AVFormatContext* VDFFInputFile::open_file(AVMediaType type, int streamIndex)
   AVInputFormat* fmt_image2 = av_find_input_format("image2");
 
   if(is_image && fmt_image2 && !single_file_mode){
+    avformat_find_stream_info(fmt, 0);
+    AVRational r_fr = av_stream_get_r_frame_rate(fmt->streams[0]);
     wchar_t list_path[MAX_PATH];
     char start_number[MAX_PATH];
     if(detect_image_list(list_path,MAX_PATH,start_number,MAX_PATH)){
@@ -586,6 +588,11 @@ AVFormatContext* VDFFInputFile::open_file(AVMediaType type, int streamIndex)
       widechar_to_utf8(ff_path, ff_path_size, list_path);
       AVDictionary* options = 0;
       av_dict_set(&options, "start_number", start_number, 0);
+      if(r_fr.num!=0){
+        char buf[80];
+        sprintf(buf,"%d/%d",r_fr.num,r_fr.den);
+        av_dict_set(&options, "framerate", buf, 0);
+      }
       err = avformat_open_input(&fmt, ff_path, fmt_image2, &options);
       av_dict_free(&options);
       if(err!=0){
