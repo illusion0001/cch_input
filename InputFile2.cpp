@@ -379,7 +379,7 @@ VDFFInputFile::VDFFInputFile(const VDXInputDriverContext& context)
   is_image_list = false;
   is_anim_image = false;
 
-  cfg_frame_buffers = 40;
+  cfg_frame_buffers = 0;
   cfg_skip_cfhd = false;
   cfg_disable_cache = false;
 }

@@ -328,7 +328,10 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   first_frame = 0;
   last_frame = 0;
   used_frames = 0;
-  buffer_reserve = keyframe_gap*2;
+  if(keyframe_gap>1)
+    buffer_reserve = keyframe_gap*2;
+  else
+    buffer_reserve = 1;
   if(buffer_reserve<pSource->cfg_frame_buffers) buffer_reserve = pSource->cfg_frame_buffers;
   if(buffer_reserve>sample_count) buffer_reserve = sample_count;
 
@@ -1949,7 +1952,7 @@ VDFFVideoSource::BufferPage* VDFFVideoSource::remove_page(int pos, bool before, 
         }
       }
       first_frame++;
-    } else return 0;
+    } else return r;
   }
 }
 
@@ -2026,7 +2029,7 @@ void VDFFVideoSource::open_page(BufferPage* p, int flag)
       if(!p->map_base){
         uint64_t pos = uint64_t(frame_size)*p->i;
         uint64_t pos0 = pos & ~0xFFFF;
-        uint64_t pos1 = ((pos+frame_size) | 0xFFFF)+1;
+        uint64_t pos1 = (pos+frame_size+0xFFFF) & ~0xFFFF;
 
         p->map_base = MapViewOfFile(mem, FILE_MAP_WRITE, pos0>>32, (DWORD)pos0, (SIZE_T)(pos1-pos0));
         if(p->map_base){
