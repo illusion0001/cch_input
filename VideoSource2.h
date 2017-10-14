@@ -193,7 +193,7 @@ public:
   void open_page(BufferPage* p, int flag);
   void open_read(BufferPage* p){ open_page(p,1); }
   void open_write(BufferPage* p){ open_page(p,2); }
-  void copy(int start, int end, BufferPage* p);
+  void copy_page(int start, int end, BufferPage* p);
   int64_t frame_to_pts_next(sint64 start);
   void setCopyMode(bool v);
   void setDecodeMode(bool v);

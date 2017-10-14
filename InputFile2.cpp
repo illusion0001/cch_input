@@ -584,6 +584,7 @@ AVFormatContext* VDFFInputFile::open_file(AVMediaType type, int streamIndex)
     char start_number[MAX_PATH];
     if(detect_image_list(list_path,MAX_PATH,start_number,MAX_PATH)){
       is_image_list = true;
+      auto_append = false;
       avformat_close_input(&fmt);
       widechar_to_utf8(ff_path, ff_path_size, list_path);
       AVDictionary* options = 0;

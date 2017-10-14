@@ -1681,7 +1681,7 @@ bool VDFFVideoSource::Read(sint64 start, uint32 lCount, void *lpBuffer, uint32 c
         // end of stream, fill with dups
         BufferPage* page = frame_array[next_frame-1];
         if(page){
-          copy(next_frame, int(start), page);
+          copy_page(next_frame, int(start), page);
           next_frame = int(start)+1;
           fail = false;
         }
@@ -1847,7 +1847,7 @@ int VDFFVideoSource::handle_frame()
     // gap between frames, fill with dups
     // caused by non-constant framerate etc
     BufferPage* page = frame_array[next_frame-1];
-    if(page) copy(next_frame, pos-1, page);
+    if(page) copy_page(next_frame, pos-1, page);
   }
 
   next_frame = pos+1;
@@ -1983,6 +1983,19 @@ void VDFFVideoSource::alloc_page(int pos)
   if(pos<first_frame) first_frame = pos;
 }
 
+void VDFFVideoSource::copy_page(int start, int end, BufferPage* p)
+{
+  {for(int i=start; i<=end; i++){
+    if(frame_array[i]) continue;
+    p->refs++;
+    frame_array[i] = p;
+    if(i>last_frame) last_frame = i;
+    if(i<first_frame) first_frame = i;
+
+    if(frame_type[i]==' ') frame_type[i] = '+';
+  }}
+}
+
 void VDFFVideoSource::dealloc_page(BufferPage* p)
 {
   if(p->map_base)
@@ -2042,14 +2055,4 @@ void VDFFVideoSource::open_page(BufferPage* p, int flag)
       break;
     }
   }
-}
-
-void VDFFVideoSource::copy(int start, int end, BufferPage* p)
-{
-  {for(int i=start; i<=end; i++){
-    if(frame_array[i]) continue;
-    p->refs++;
-    frame_array[i] = p;
-    if(frame_type[i]==' ') frame_type[i] = '+';
-  }}
 }
