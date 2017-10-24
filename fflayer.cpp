@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <malloc.h>
+#include <string>
 
 #include "fflayer.h"
 #include "resource.h"
@@ -37,6 +38,9 @@ LRESULT CALLBACK EditWndProc(HWND wnd,UINT msg,WPARAM wparam,LPARAM lparam)
 
 //-------------------------------------------------------------------------------------------------
 
+extern std::wstring option_image;
+extern std::wstring option_video;
+
 bool logoOpenImage(HWND hwnd, wchar_t* path, int max_path) {
   OPENFILENAMEW ofn = {0};
   wchar_t szFile[MAX_PATH];
@@ -48,8 +52,21 @@ bool logoOpenImage(HWND hwnd, wchar_t* path, int max_path) {
 
   ofn.lStructSize = sizeof(ofn);
   ofn.hwndOwner = hwnd;
-  ofn.lpstrFilter = L"Image file (*.bmp,*.tga,*.jpg,*.jpeg,*.png)\0*.bmp;*.tga;*.jpg;*.jpeg;*.png\0Video file (*.avi,*.mp4,*.mov)\0*.avi;*.mp4;*.mov\0All files (*.*)\0*.*\0";
-  ofn.nFilterIndex = 1;
+  std::wstring image = option_image;
+  image.resize(image.length()+1,0);
+  int x1 = image.find('|');
+  image[x1] = 0;
+  std::wstring video = option_video;
+  video.resize(video.length()+1,0);
+  int x2 = video.find('|');
+  video[x2] = 0;
+
+  std::wstring s;
+  s += video;
+  s += image;
+  s += L"All files (*.*)\0*.*\0";
+  ofn.lpstrFilter = s.c_str();
+  ofn.nFilterIndex = 2;
   ofn.lpstrFile = szFile;
   ofn.nMaxFile = sizeof szFile;
   ofn.Flags = OFN_EXPLORER | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY | OFN_ENABLESIZING | OFN_ENABLETEMPLATE;
