@@ -5115,7 +5115,7 @@ float *LoadCube64_3DLUT(DECODER *decoder, CFHDDATA *cfhddata, int *lutsize)
 			int validcflook = 0;
 			int len = 0;
 
-#ifdef _WINDOWS
+#ifdef CRT_S
 			len = (int)fread_s(&CFLKhdr, sizeof(CFLook_Header), 1, sizeof(CFLook_Header), fp);
 #else
 			len = (int)fread(&CFLKhdr, 1, sizeof(CFLook_Header), fp);

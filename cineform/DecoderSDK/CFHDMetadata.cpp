@@ -531,7 +531,7 @@ bool CSampleMetadata::GetClipDatabase()
 				if(m_databaseData)
 				{
 					fseek (fp, 0, SEEK_SET);
-#ifdef _WINDOWS
+#ifdef CRT_S
 					len = (uint32_t)fread_s(m_databaseData, len, 1, len, fp);
 #else
 					len = (uint32_t)fread(m_databaseData,1,len,fp);

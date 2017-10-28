@@ -37,9 +37,9 @@
 #ifdef _WINDOWS
 #include <windows.h>
 #include <direct.h>
- #ifdef __cplusplus
-  #include <atlbase.h> // Required for VS2005 but not 2003
- #endif
+ //#ifdef __cplusplus
+ // #include <atlbase.h> // Required for VS2005 but not 2003
+ //#endif
 #elif __APPLE__
 #include <string.h>
 #include <sys/stat.h>		// for _mkdir()
@@ -54,6 +54,7 @@
 #ifdef __cplusplus
 
 //#include <string>
+#include "ccombstr.h"
 
 #endif
 

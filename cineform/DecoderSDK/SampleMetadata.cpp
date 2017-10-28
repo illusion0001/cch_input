@@ -56,7 +56,8 @@ void InitGetLUTPaths(char *pPathStr, size_t pathSize, char *pDBStr, size_t DBSiz
 {
 	if (pPathStr && pDBStr)
 	{
-#ifdef _WINDOWS
+#if 1
+#elif _WINDOWS
 		USES_CONVERSION;
 
 		TCHAR defaultLUTpath[260] = "C:\\Program Files\\Common Files\\CineForm\\LUTs";

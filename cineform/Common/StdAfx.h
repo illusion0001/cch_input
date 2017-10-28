@@ -29,11 +29,13 @@
 #include <windows.h>
 
 // Includes required for Visual Studio 2005 (not required for Visual Studio 2003)
-#include <atlbase.h>
+//#include <atlbase.h>
+#include "ccombstr.h"
 
 #include <stdlib.h>
 #include <memory.h>
 #include <assert.h>
+#include <stdio.h>
 
 #ifdef WIN32
 #define __STDC_LIMIT_MACROS

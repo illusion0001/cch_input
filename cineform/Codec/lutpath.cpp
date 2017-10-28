@@ -28,6 +28,7 @@
 #ifdef _WINDOWS
 // Must include the following file for Visual Studio 2005 (not required for Visual Studio 2003)
 //#include <atlbase.h>
+#include <errno.h>
 #else
 #include <errno.h>
 #endif
@@ -477,7 +478,8 @@ void InitLUTPaths(DECODER *decoder)
 {
 	if(decoder)
 	{
-#ifdef _WINDOWS
+#if 1
+#elif _WINDOWS
 		USES_CONVERSION;
 
 		TCHAR defaultLUTpath[260] = "C:\\Program Files\\Common Files\\CineForm\\LUTs";
@@ -645,7 +647,9 @@ void InitLUTPaths(DECODER *decoder)
 void InitLUTPathsEnc(ENCODER *encoder)
 {
 	if(encoder && encoder->LUTsPathStr[0] == 0)
-#ifdef _WINDOWS
+#if 1
+  ;
+#elif _WINDOWS
 	{
 		USES_CONVERSION;
 
