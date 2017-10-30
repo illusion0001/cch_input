@@ -3,7 +3,6 @@
 @path %path%;%bin%;%msys%\usr\bin
 @set lib=%msys%\..\local32\lib
 @set include=%msys%\..\local32\include
-@set libcfhd=..\cineform\obj32\libcfhd.a
 @set out=obj32
 
 @call build

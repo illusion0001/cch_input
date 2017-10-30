@@ -273,8 +273,8 @@ BEGIN
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,20,179,10
     CONTROL         "MagicYUV - default off, pass to official codec",IDC_DECODE_MAGIC,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,33,159,10
-    CONTROL         "Cineform HD - default off, pass to VFW wrapper",IDC_DECODE_CFHD,
-                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,46,170,10
+    CONTROL         "Cineform HD - default off, pass to native codec",IDC_DECODE_CFHD,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,46,167,10
     CONTROL         "Always use frame threading - default off, auto",IDC_FORCE_THREAD,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,69,165,10
     CONTROL         "Disable cache",IDC_DISABLE_CACHE2,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,14,82,59,10
@@ -358,7 +358,8 @@ FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
     DEFPUSHBUTTON   "OK",IDOK,77,81,50,14
     CONTROL         "Disable cache",IDC_DISABLE_CACHE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,16,14,59,10
-    CONTROL         "Use VFW decoder for CFHD",IDC_DECODE_CFHD,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,16,37,104,10
+    CONTROL         "Use native decoder for Cineform HD",IDC_DECODE_CFHD,
+                    "Button",BS_AUTOCHECKBOX | WS_TABSTOP,16,37,131,10
     PUSHBUTTON      "System options",IDC_SYS_OPTIONS,7,58,59,14
     LTEXT           "System options are not associated with specific files.",IDC_STATIC,73,56,130,19
 END

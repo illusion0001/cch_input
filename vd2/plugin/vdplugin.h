@@ -324,6 +324,10 @@ namespace nsVDXPixmap {
 		kPixFormat_YUV420_Planar16	= 60,
 		kPixFormat_Y16				= 61,
 		kPixFormat_XYUV64			= 62,
+		kPixFormat_YUV444_V410 = 63,
+		kPixFormat_YUV444_Y410 = 64,
+		kPixFormat_R210 = 65,
+		kPixFormat_R10K = 66,
 
 		kPixFormat_VDXA_RGB			= 0x10001,
 		kPixFormat_VDXA_YUV			= 0x10002

@@ -48,11 +48,11 @@ public:
 #pragma pack(push,1)
   struct Data {
     int version;
-    bool skip_cfhd_vfw;
+    bool skip_native_cfhd;
     bool disable_cache;
 
     Data(){ clear(); }
-    void clear(){ version=opt_version; skip_cfhd_vfw=false; disable_cache=false; }
+    void clear(){ version=opt_version; skip_native_cfhd=false; disable_cache=false; }
   } data;
 #pragma pack(pop)
 
@@ -62,7 +62,7 @@ public:
     if(d->version>opt_version || d->version<1) return false;
     data.clear();
     if(d->version>=1){
-      data.skip_cfhd_vfw = d->skip_cfhd_vfw;
+      data.skip_native_cfhd = d->skip_native_cfhd;
     }
     if(d->version>=2){
       data.disable_cache = d->disable_cache;

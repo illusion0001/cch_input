@@ -22,6 +22,8 @@
 #pragma comment(lib, "delayimp")
 #endif
 
+#pragma comment(lib, "vfw32")
+
 HINSTANCE hInstance;
 bool config_decode_raw = false;
 bool config_decode_magic = false;
@@ -59,8 +61,7 @@ void init_av()
     av_initialized = 1;
     av_register_all();
     avcodec_register_all();
-    //av_register_cfhd();
-    av_register_vfw_cfhd();
+    av_register_cfhd();
 
     #ifdef FFDEBUG
     //av_log_set_callback(av_log_func);
@@ -435,20 +436,15 @@ bool loadModules()
 
 void unloadModules()
 {
-  char* module_name[6] = {
+  char* module_name[5] = {
     "avutil-55.dll",
     "swresample-2.dll",
     "swscale-4.dll",
     "avcodec-57.dll",
     "avformat-57.dll",
-    #ifdef _WIN64
-    "cfhddecoder64.dll",
-    #else
-    "cfhddecoder.dll",
-    #endif
   };
 
-  {for(int i=5; i>=0; i--){
+  {for(int i=4; i>=0; i--){
     __FUnloadDelayLoadedDLL2(module_name[i]);
   }}
 

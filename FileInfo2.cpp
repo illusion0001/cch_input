@@ -4,11 +4,12 @@
 #include "VideoSource2.h"
 #include "AudioSource2.h"
 #include "resource.h"
+#include "cineform.h"
 #include "gopro.h"
 
 #include <string>
 
-static const char* vsnstr = "Version 1.18";
+static const char* vsnstr = "Version 2.0";
 
 extern HINSTANCE hInstance;
  
@@ -197,9 +198,10 @@ void VDFFInputFileInfoDialog::print_video()
     const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(pVideoCtx->pix_fmt);
     bool is_rgb = (desc->flags & AV_PIX_FMT_FLAG_RGB)!=0;
 
-    if(segment->video_source->direct_v210){
+    if(segment->video_source->direct_cfhd){
+      std::string name = cfhd_format_name(pVideoCtx);
+      strcpy(buf, name.c_str());
       is_rgb = false;
-      strcpy(buf, "v210");
     }
 
     if(!is_rgb){

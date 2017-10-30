@@ -42,7 +42,6 @@ VDFFVideoSource::VDFFVideoSource(const VDXInputDriverContext& context)
   frame_type = 0;
   flip_image = false;
   direct_buffer = false;
-  direct_v210 = false;
   direct_cfhd = false;
   is_image_list = false;
   copy_mode = false;
@@ -445,6 +444,9 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   // this is bullshit if the packet belongs to reordered frame (example: BBI frame sequence)
   read_frame(0,true);
   pSource->video_start_time = start_time;
+  if(frame_fmt!=m_pCodecCtx->pix_fmt){
+    init_format();
+  }
 
   return 0;
 }
@@ -495,6 +497,9 @@ bool VDFFVideoSource::allow_copy()
 
 void VDFFVideoSource::init_format()
 {
+  if(direct_cfhd){
+    cfhd_set_format(m_pCodecCtx,convertInfo.ext_format);
+  }
   frame_fmt = m_pCodecCtx->pix_fmt;
   frame_width = m_pCodecCtx->width;
   frame_height = m_pCodecCtx->height;
@@ -505,10 +510,6 @@ void VDFFVideoSource::init_format()
     int row = (frame_width+47)/48*128;
     int frame_size2 = row*frame_height;
     if(frame_size2>frame_size) frame_size = frame_size2;
-  }
-  if(direct_cfhd){
-    if(direct_v210) cfhd_set_v210(m_pCodecCtx);
-    else cfhd_set_rgb(m_pCodecCtx);
   }
   free_buffers();
 }
@@ -890,11 +891,18 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   // but! currently I notice huge color upsampling error
 
   // which is best default? rgb afraid to use; sws can do either fast-bad or slow-good, but vd can do good-fast-enough
+  using namespace nsVDXPixmap;
+
   bool default_rgb = false;
   bool fast_rgb = false;
 
-  using namespace nsVDXPixmap;
+  if(convertInfo.ext_format && opt_format==kPixFormat_Null){
+    convertInfo.ext_format = kPixFormat_Null;
+    init_format();
+  }
+
   VDXPixmapFormat base_format = kPixFormat_Null;
+  VDXPixmapFormat ext_format = kPixFormat_Null;
   VDXPixmapFormat trigger = kPixFormat_Null;
   VDXPixmapFormat perfect_format = kPixFormat_Null;
   AVPixelFormat perfect_av_fmt = frame_fmt;
@@ -999,7 +1007,7 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     perfect_format = kPixFormat_YUV422_YUYV;
     trigger = kPixFormat_YUV422_YUYV;
     perfect_bitexact = true;
-    //! not tested at all
+    // examples: cineform
     break;
 
   case AV_PIX_FMT_YUV444P:
@@ -1061,6 +1069,61 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
       convertInfo.direct_copy = perfect_bitexact;
     }
 
+  } else if(direct_cfhd){
+    switch(opt_format){
+    case kPixFormat_RGB888:
+      if(cfhd_test_format(m_pCodecCtx,opt_format)){
+        base_format = kPixFormat_RGB888;
+        ext_format = kPixFormat_RGB888;
+        convertInfo.av_fmt = AV_PIX_FMT_BGR24;
+        convertInfo.direct_copy = true;
+        break;
+      }
+      return false;
+
+    case kPixFormat_XRGB8888:
+      if(cfhd_test_format(m_pCodecCtx,opt_format)){
+        base_format = kPixFormat_XRGB8888;
+        ext_format = kPixFormat_XRGB8888;
+        convertInfo.av_fmt = AV_PIX_FMT_BGRA;
+        convertInfo.direct_copy = true;
+        break;
+      }
+      return false;
+
+    case kPixFormat_YUV422_V210:
+      if(cfhd_test_format(m_pCodecCtx,opt_format)){
+        base_format = kPixFormat_YUV422_V210;
+        ext_format = kPixFormat_YUV422_V210;
+        convertInfo.av_fmt = AV_PIX_FMT_BGR24;
+        convertInfo.direct_copy = true;
+        break;
+      }
+      return false;
+
+    case kPixFormat_R210:
+      if(cfhd_test_format(m_pCodecCtx,opt_format)){
+        base_format = kPixFormat_R210;
+        ext_format = kPixFormat_R210;
+        convertInfo.av_fmt = AV_PIX_FMT_BGRA;
+        convertInfo.direct_copy = true;
+        break;
+      }
+      return false;
+
+    case kPixFormat_XRGB64:
+      if(cfhd_test_format(m_pCodecCtx,opt_format)){
+        base_format = kPixFormat_XRGB64;
+        ext_format = kPixFormat_XRGB64;
+        convertInfo.av_fmt = AV_PIX_FMT_BGRA64;
+        convertInfo.direct_copy = true;
+        break;
+      }
+      return false;
+
+    default:
+      return false;
+    }
   } else {
     switch(opt_format){
     case kPixFormat_YUV420_Planar:
@@ -1071,7 +1134,6 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
         base_format = perfect_format;
         convertInfo.av_fmt = perfect_av_fmt;
         convertInfo.direct_copy = perfect_bitexact;
-        skip_colorspace = true;
       } else return false;
       break;
 
@@ -1080,12 +1142,10 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
         base_format = perfect_format;
         convertInfo.av_fmt = perfect_av_fmt;
         convertInfo.direct_copy = perfect_bitexact;
-        skip_colorspace = true;
 
       } else if(convertInfo.in_yuv){
         base_format = kPixFormat_YUV444_Planar;
         convertInfo.av_fmt = AV_PIX_FMT_YUV444P;
-        skip_colorspace = true;
       } else return false;
       break;
 
@@ -1094,12 +1154,10 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
         base_format = perfect_format;
         convertInfo.av_fmt = perfect_av_fmt;
         convertInfo.direct_copy = perfect_bitexact;
-        skip_colorspace = true;
 
       } else if(convertInfo.in_yuv){
         base_format = kPixFormat_YUV444_Planar16;
         convertInfo.av_fmt = AV_PIX_FMT_YUV444P16;
-        skip_colorspace = true;
       } else return false;
       break;
 
@@ -1162,15 +1220,6 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
         convertInfo.direct_copy = false;
       }
       break;
-
-    case kPixFormat_YUV422_V210:
-      if(direct_buffer){
-        base_format = kPixFormat_YUV422_V210;
-        convertInfo.av_fmt = AV_PIX_FMT_BGR24;
-        convertInfo.direct_copy = true;
-        break;
-      }
-      return false;
 
     default:
       return false;
@@ -1262,15 +1311,16 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
 
   if(head && head->m_pixmap.format!=format){
     format = (VDXPixmapFormat)head->m_pixmap.format;
+    ext_format = head->convertInfo.ext_format;
     convertInfo.av_fmt = head->convertInfo.av_fmt;
     convertInfo.direct_copy = true;
     convertInfo.out_garbage = true;
   }
 
-  bool v210 = format==kPixFormat_YUV422_V210;
-  if(v210!=this->direct_v210){
-    this->direct_v210 = v210;
+  if(ext_format!=convertInfo.ext_format){
+    convertInfo.ext_format = ext_format;
     init_format();
+    desc = av_pix_fmt_desc_get(frame_fmt);
   }
 
   memset(&m_pixmap,0,sizeof(m_pixmap));
@@ -1288,6 +1338,7 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     m_pixmap_info.ref_b = 0xFFFF;
     m_pixmap_info.ref_a = 0xFFFF;
     break;
+  case kPixFormat_YUV422_V210:
   case kPixFormat_YUV420_Planar16:
   case kPixFormat_YUV422_Planar16:
   case kPixFormat_YUV444_Planar16:
@@ -1302,6 +1353,7 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   if((desc->flags & AV_PIX_FMT_FLAG_ALPHA) && (out_desc->flags & AV_PIX_FMT_FLAG_ALPHA)){
     m_pixmap_info.alpha_type = FilterModPixmapInfo::kAlphaMask;
   }
+  if(direct_cfhd) cfhd_get_info(m_pCodecCtx,m_pixmap_info);
 
   if(convertInfo.direct_copy){
     free(m_pixmap_data);
@@ -1878,7 +1930,10 @@ int VDFFVideoSource::handle_frame()
       page->error = BufferPage::err_badformat;
     } else {
       uint8_t* dst = align_buf(page->p);
-      av_image_copy_to_buffer(dst, frame_size, frame->data, frame->linesize, (AVPixelFormat)frame->format, frame->width, frame->height, line_align);
+      if(convertInfo.ext_format==nsVDXPixmap::kPixFormat_YUV422_V210)
+        memcpy(dst,frame->data[0],frame->linesize[0]*frame->height);
+      else
+        av_image_copy_to_buffer(dst, frame_size, frame->data, frame->linesize, (AVPixelFormat)frame->format, frame->width, frame->height, line_align);
     }
   } else if(direct_buffer){
     frame_type[pos] = av_get_picture_type_char(frame->pict_type);

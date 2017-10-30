@@ -263,6 +263,8 @@ CFHDDECODER_API CFHD_Error
 CFHD_GetImageSize(uint32_t imageWidth, uint32_t imageHeight, CFHD_PixelFormat pixelFormat, 
 				  CFHD_VideoSelect videoselect,	CFHD_Stereo3DType stereotype, uint32_t *imageSizeOut);
 
+int CFHD_get_decoder_color_flags(CFHD_DecoderRef decoderRef);
+
 // Decode one frame of CineForm HD encoded video
 CFHDDECODER_API CFHD_Error
 CFHD_DecodeSample(CFHD_DecoderRef decoderRef,

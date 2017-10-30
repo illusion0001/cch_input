@@ -105,6 +105,7 @@ public:
 
   struct ConvertInfo{
     nsVDXPixmap::VDXPixmapFormat req_format;
+    nsVDXPixmap::VDXPixmapFormat ext_format;
     bool req_dib;
 
     AVPixelFormat av_fmt;
@@ -113,6 +114,12 @@ public:
     bool in_subs;
     bool out_rgb;
     bool out_garbage;
+
+    ConvertInfo(){
+      req_format = nsVDXPixmap::kPixFormat_Null;
+      ext_format = nsVDXPixmap::kPixFormat_Null;
+      av_fmt = AV_PIX_FMT_NONE;
+    }
   } convertInfo;
 
   ErrorMode CurrentDecoderErrorMode;
@@ -162,7 +169,6 @@ public:
   bool has_vfr;
   bool average_fr;
   bool direct_buffer;
-  bool direct_v210;
   bool direct_cfhd;
   bool is_image_list;
   bool copy_mode;
