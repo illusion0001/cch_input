@@ -264,6 +264,7 @@ int vfw_cfhd_decode(AVCodecContext* avctx, void* data, int* got_frame, AVPacket*
   if(!key) flags |= ICDECOMPRESS_NOTKEYFRAME;
 
   if(obj->buf){
+    frame->buf[0] = av_buffer_alloc(0); // needed to mute avcodec assert
     BITMAPINFOHEADER bm = obj->bmin;
     bm.biSizeImage = avpkt->size;
     ICDecompress(obj->codec,flags,&bm,avpkt->data,&obj->bmout,obj->buf);

@@ -453,8 +453,10 @@ bool VDFFVideoSource::allow_copy()
 {
   if(is_image_list) return false;
   if(trust_index && keyframe_gap==1) return true;
+
+  AVCodecID codec_id = m_pStreamCtx->codecpar->codec_id;
   // various intra codecs
-  switch(m_pStreamCtx->codecpar->codec_id){
+  switch(codec_id){
   case AV_CODEC_ID_CLLC:
   case AV_CODEC_ID_DNXHD:
   case AV_CODEC_ID_DVVIDEO:
@@ -483,8 +485,10 @@ bool VDFFVideoSource::allow_copy()
     return true;
   }
 
-  const AVCodecDescriptor* desc = avcodec_descriptor_get(m_pCodecCtx->codec_id);
-  if(desc->props & AV_CODEC_PROP_INTRA_ONLY) return true; 
+  if(codec_id==CFHD_ID) return true;
+
+  const AVCodecDescriptor* desc = avcodec_descriptor_get(codec_id);
+  if(desc && (desc->props & AV_CODEC_PROP_INTRA_ONLY)) return true; 
 
   return false;
 }
@@ -1290,6 +1294,9 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   case kPixFormat_XYUV64:
     m_pixmap_info.ref_r = 0xFFFF;
     if(convertInfo.direct_copy) m_pixmap_info.ref_r = src_max_value;
+    if(m_pCodecCtx->colorspace==AVCOL_SPC_BT709) m_pixmap_info.colorSpaceMode = kColorSpaceMode_709;
+    if(m_pCodecCtx->color_range==AVCOL_RANGE_MPEG) m_pixmap_info.colorRangeMode = kColorRangeMode_Limited;
+    if(m_pCodecCtx->color_range==AVCOL_RANGE_JPEG) m_pixmap_info.colorRangeMode = kColorRangeMode_Full;
     break;
   }
   if((desc->flags & AV_PIX_FMT_FLAG_ALPHA) && (out_desc->flags & AV_PIX_FMT_FLAG_ALPHA)){
@@ -1541,6 +1548,7 @@ int VDFFVideoSource::calc_seek(int jump, int64_t& pos)
       // because seeking works on DTS it needs some unknown offset to work
       pos -= int64_t(8)*time_base.den / time_base.num; // better than nothing
       dst -= 8;
+      if(pos<0) pos = 0;
       if(dst<0) dst = 0;
     }
     if(sparse_index){
@@ -1919,6 +1927,7 @@ void VDFFVideoSource::free_buffers()
   last_frame = 0;
   used_frames = 0;
   next_frame = -1;
+  last_seek_frame = -1;
 }
 
 VDFFVideoSource::BufferPage* VDFFVideoSource::remove_page(int pos, bool before, bool after)
