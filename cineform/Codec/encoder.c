@@ -1953,12 +1953,13 @@ bool EncodeSample(ENCODER *encoder, uint8_t *data, int width, int height, int pi
 	frame = encoder->frame;
 	assert(frame != NULL);
 
-
+  /*
 	if(pitch < 0) 
 	{		
 		data += (display_height - 1) * pitch;
 		pitch = -pitch;
 	}
+  */
 
 #if DEBUG && 0
 	{
@@ -8864,7 +8865,7 @@ void OverrideEncoderSettings(ENCODER *encoder)
 					if(len <= MAX_ENCODE_DATADASE_LENGTH)
 					{
 						fseek (fp, 0, SEEK_SET);
-#ifdef _WINDOWS
+#ifdef CRT_S
 						len = (int)fread_s(buffer, MAX_ENCODE_DATADASE_LENGTH, 1, len, fp);
 #else
 						len = (int)fread(buffer,1,len,fp);

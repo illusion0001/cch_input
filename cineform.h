@@ -9,6 +9,9 @@ extern "C" {
 #include <libavutil/imgutils.h>
 }
 
+#include <windows.h>
+#include <vfw.h>
+
 struct AVCodecContext;
 
 const AVCodecID CFHD_ID = (AVCodecID)MKBETAG('C','F','H','D');
@@ -20,5 +23,8 @@ void cfhd_set_format(AVCodecContext* avctx, nsVDXPixmap::VDXPixmapFormat fmt);
 bool cfhd_test_format(AVCodecContext* avctx, nsVDXPixmap::VDXPixmapFormat fmt);
 void cfhd_get_info(AVCodecContext* avctx, FilterModPixmapInfo& info);
 std::string cfhd_format_name(AVCodecContext* avctx);
+
+LRESULT WINAPI DriverProc_CF(DWORD_PTR dwDriverId, HDRVR hDriver, UINT uMsg, LPARAM lParam1, LPARAM lParam2);
+LRESULT WINAPI VDDriverProc_CF(DWORD_PTR dwDriverId, HDRVR hDriver, UINT uMsg, LPARAM lParam1, LPARAM lParam2);
 
 #endif

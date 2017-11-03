@@ -11,6 +11,8 @@ extern "C" {
 #include <libavutil/opt.h>
 }
 #include "resource.h"
+#include "compress.h"
+#include "cineform.h"
 
 #pragma warning(disable:4996) // silence deprecated stuff
 
@@ -112,7 +114,7 @@ void copy_yuv(AVFrame* frame, const VDXPixmapLayout* layout, const void* data, i
   }}
 }
 
-struct CodecBase{
+struct CodecBase: public CodecClass{
   enum {
     format_rgb = 1,
     format_rgba = 2,
@@ -149,7 +151,7 @@ struct CodecBase{
   VDLogProc logProc;
   bool global_header;
 
-  CodecBase(){ 
+  CodecBase(){
     codec=0; ctx=0; frame=0;
     keyint=1;
     color_range=AVCOL_RANGE_UNSPECIFIED;
@@ -1657,6 +1659,9 @@ void ConfigVP8::init_format()
 
 extern "C" LRESULT WINAPI DriverProc(DWORD_PTR dwDriverId, HDRVR hDriver, UINT uMsg, LPARAM lParam1, LPARAM lParam2)
 {
+  CodecClass* cs = (CodecClass*)dwDriverId;
+  if(cs && cs->class_id==1) return DriverProc_CF(dwDriverId, hDriver, uMsg, lParam1, lParam2);
+
   CodecBase* codec = (CodecBase*)dwDriverId;
 
   switch (uMsg){
@@ -1680,6 +1685,7 @@ extern "C" LRESULT WINAPI DriverProc(DWORD_PTR dwDriverId, HDRVR hDriver, UINT u
       if(icopen->fccHandler==CodecVP8::tag) codec = new CodecVP8;
       if(icopen->fccHandler==CodecH265::tag) codec = new CodecH265;
       if(icopen->fccHandler==CodecH264::tag) codec = new CodecH264;
+      if(icopen->fccHandler==CFHD_TAG) return DriverProc_CF(dwDriverId, hDriver, uMsg, lParam1, lParam2);
       if(codec){
         if(!codec->init()){
           delete codec;
@@ -1748,6 +1754,9 @@ extern "C" LRESULT WINAPI DriverProc(DWORD_PTR dwDriverId, HDRVR hDriver, UINT u
 
 extern "C" LRESULT WINAPI VDDriverProc(DWORD_PTR dwDriverId, HDRVR hDriver, UINT uMsg, LPARAM lParam1, LPARAM lParam2)
 {
+  CodecClass* cs = (CodecClass*)dwDriverId;
+  if(cs && cs->class_id==1) return VDDriverProc_CF(dwDriverId, hDriver, uMsg, lParam1, lParam2);
+
   CodecBase* codec = (CodecBase*)dwDriverId;
 
   switch (uMsg){
@@ -1757,7 +1766,8 @@ extern "C" LRESULT WINAPI VDDriverProc(DWORD_PTR dwDriverId, HDRVR hDriver, UINT
     if(lParam1==CodecHUFF::tag) return CodecProres::tag;
     if(lParam1==CodecProres::tag) return CodecVP8::tag;
     if(lParam1==CodecVP8::tag) return CodecH265::tag;
-    //if(lParam1==CodecVP8::tag) return CodecH264::tag;
+    if(lParam1==CodecH265::tag) return CFHD_TAG;
+    //if(lParam1==CFHD_TAG) return CodecH264::tag;
     return 0;
 
   case VDICM_COMPRESS_INPUT_FORMAT:

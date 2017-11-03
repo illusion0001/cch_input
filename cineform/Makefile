@@ -1,5 +1,5 @@
 include config
-param = -O2 -msse2 -I$(include) -I$(root)/codec -I$(root)/common -I$(root)/convertlib -D_WINDOWS -D_ASMOPT=0
+param = -O3 -msse2 -I$(include) -I$(root)/codec -I$(root)/common -I$(root)/convertlib -D_WINDOWS -D_ASMOPT=0
 
 common = MessageQueue.o ThreadMessage.o ThreadPool.o
 decoder = CFHDDecoder.o CFHDMetadata.o Conversion.o ISampleDecoder.o SampleDecoder.o SampleMetadata.o

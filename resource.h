@@ -16,7 +16,9 @@
 #define IDD_ENC_AAC                     110
 #define IDD_ENC_VP8                     111
 #define IDD_INPUT_OPTIONS               112
+#define IDB_CINEFORM                    112
 #define IDD_ENC_X265                    113
+#define IDD_ENC_CINEFORM                114
 #define IDC_FORMATNAME                  1004
 #define IDC_VIDEO_PIXFMT                1006
 #define IDC_VIDEO_WXH                   1007
@@ -70,6 +72,7 @@
 #define IDC_REF_FOLLOW                  1041
 #define IDC_9_BIT                       1041
 #define IDC_EXPORT_PROGRESS             1041
+#define IDC_ENCODER_LABEL2              1041
 #define IDC_LOOP                        1042
 #define IDC_10_BIT                      1042
 #define IDC_EXPORT_STATE                1042
@@ -107,7 +110,7 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        112
+#define _APS_NEXT_RESOURCE_VALUE        113
 #define _APS_NEXT_COMMAND_VALUE         40001
 #define _APS_NEXT_CONTROL_VALUE         1061
 #define _APS_NEXT_SYMED_VALUE           101
