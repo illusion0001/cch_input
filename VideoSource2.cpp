@@ -512,6 +512,7 @@ void VDFFVideoSource::init_format()
     if(frame_size2>frame_size) frame_size = frame_size2;
   }
   free_buffers();
+  {for(int i=0; i<buffer_count; i++) dealloc_page(&buffer[i]); }
 }
 
 void VDXAPIENTRY VDFFVideoSource::GetStreamSourceInfo(VDXStreamSourceInfo& srcInfo)
@@ -760,7 +761,7 @@ const void* VDFFVideoSource::DecodeFrame(const void* inputBuffer, uint32_t data_
 
   if(convertInfo.out_garbage){
     mContext.mpCallbacks->SetError("Segment has incompatible format: try changing decode format to RGBA");
-    return align_buf(m_pixmap_data);
+    return 0;
   }
 
   BufferPage* page = frame_array[targetFrame];
@@ -874,7 +875,10 @@ bool VDFFVideoSource::SetTargetFormat(int format, bool useDIBAlignment)
   while(1){
     f1 = f1->next_segment;
     if(!f1) break;
-    if(f1->video_source) f1->video_source->SetTargetFormat(opt_format,useDIBAlignment,this);
+    if(f1->video_source){
+      bool r1 = f1->video_source->SetTargetFormat(opt_format,useDIBAlignment,this);
+      if(!r1 && opt_format!=0) f1->video_source->SetTargetFormat(nsVDXPixmap::kPixFormat_Null,useDIBAlignment,this);
+    }
   }
   return r;
 }
@@ -1091,8 +1095,21 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
       }
       return false;
 
+    case kPixFormat_YUV422_YUYV:
+    case kPixFormat_YUV422_UYVY:
+    case kPixFormat_YUV422_Planar:
+      if(cfhd_test_format(m_pCodecCtx,kPixFormat_YUV422_YUYV)){
+        base_format = kPixFormat_YUV422_YUYV;
+        ext_format = kPixFormat_YUV422_YUYV;
+        convertInfo.av_fmt = AV_PIX_FMT_YUYV422;
+        convertInfo.direct_copy = true;
+        break;
+      }
+      return false;
+
     case kPixFormat_YUV422_V210:
-      if(cfhd_test_format(m_pCodecCtx,opt_format)){
+    case kPixFormat_YUV422_Planar16:
+      if(cfhd_test_format(m_pCodecCtx,kPixFormat_YUV422_V210)){
         base_format = kPixFormat_YUV422_V210;
         ext_format = kPixFormat_YUV422_V210;
         convertInfo.av_fmt = AV_PIX_FMT_BGR24;
@@ -1313,7 +1330,7 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     format = (VDXPixmapFormat)head->m_pixmap.format;
     ext_format = head->convertInfo.ext_format;
     convertInfo.av_fmt = head->convertInfo.av_fmt;
-    convertInfo.direct_copy = true;
+    convertInfo.direct_copy = false;
     convertInfo.out_garbage = true;
   }
 
@@ -1355,7 +1372,7 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   }
   if(direct_cfhd) cfhd_get_info(m_pCodecCtx,m_pixmap_info);
 
-  if(convertInfo.direct_copy){
+  if(convertInfo.direct_copy || convertInfo.out_garbage){
     free(m_pixmap_data);
     m_pixmap_data = 0;
 
