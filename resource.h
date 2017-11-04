@@ -104,6 +104,7 @@
 #define IDC_CACHE_SIZE                  1059
 #define IDC_SPIN1                       1060
 #define IDC_CACHE_SPIN                  1060
+#define IDC_THREADING                   1061
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -112,7 +113,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        113
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1061
+#define _APS_NEXT_CONTROL_VALUE         1062
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

@@ -68,6 +68,7 @@ struct CodecCF: public CodecClass{
     int format;
     int bits;
     int quality;
+    int threads;
 
     Config(){ clear(); }
     void clear(){
@@ -75,6 +76,7 @@ struct CodecCF: public CodecClass{
       format = format_yuv422;
       bits = 8;
       quality = 2;
+      threads = 0; // 0=auto, 1=off
     }
   } config;
 
@@ -89,12 +91,24 @@ struct CodecCF: public CodecClass{
   uint32_t frameNumber;
   uint32_t pool_depth;
 
+  struct Buffer{
+    void* p;
+    void* data;
+    ptrdiff_t pitch;
+    uint32_t frameNumber;
+    int ref;
+  };
+  Buffer* buffer;
+  int buffer_count;
+
   CodecCF(){
     class_id=1;
     keyint=1;
     encRef=0;
     poolRef=0;
     use709=true;
+    buffer=0;
+    buffer_count=0;
   }
 
   virtual ~CodecCF(){
@@ -252,13 +266,32 @@ struct CodecCF: public CodecClass{
 
     CFHD_EncodingQuality quality = quality_list[config.quality];
 
-    if(1){
+    if(config.threads==1){
       CFHD_Error error;
       error = CFHD_OpenEncoder(&encRef, 0);
       error = CFHD_PrepareToEncode(encRef, layout->w, layout->h, pixelFormat, encodedFormat, encodingFlags, quality);
     } else {
+      int n = config.threads;
+      if(n==0){
+	      SYSTEM_INFO info;
+	      GetSystemInfo(&info);
+	      n = info.dwNumberOfProcessors;
+      }
+      buffer_count = n;
+      buffer = (Buffer*)malloc(sizeof(Buffer)*buffer_count);
+      if(!buffer){ compress_end(); return ICERR_MEMORY; }
+      memset(buffer,0,sizeof(Buffer)*buffer_count);
+      int row_size = (int)layout->pitch;
+      if(row_size<0) row_size = -row_size;
+      int buffer_size = row_size*layout->h+16;
+      {for(int i=0; i<buffer_count; i++){
+        void* p = malloc(buffer_size);
+        if(!p){ compress_end(); return ICERR_MEMORY; }
+        buffer[i].p = p;
+      }}
+
       CFHD_Error error;
-      error = CFHD_CreateEncoderPool(&poolRef, 4, 8, 0);
+      error = CFHD_CreateEncoderPool(&poolRef, n, buffer_count, 0);
       error = CFHD_PrepareEncoderPool(poolRef, layout->w, layout->h, pixelFormat, encodedFormat, encodingFlags, quality);
       CFHD_StartEncoderPool(poolRef);
     }
@@ -278,39 +311,84 @@ struct CodecCF: public CodecClass{
       CFHD_ReleaseEncoderPool(poolRef);
       poolRef = 0;
     }
+    if(buffer){
+      for(int i=0; i<buffer_count; i++) free(buffer[i].p);
+      free(buffer);
+      buffer = 0;
+      buffer_count = 0;
+    }
     return ICERR_OK;
   }
 
-  LRESULT compress1(ICCOMPRESS *icc, VDXPixmapLayout* layout)
+  void copy_image(Buffer* buf, char* data, VDXPixmapLayout* layout)
   {
-    bool flush = frameNumber>=(uint32_t)frame_total;
-    char* data = (char*)icc->lpInput;
-    ptrdiff_t pitch = layout->pitch;
+    char* d = (char*)((((ptrdiff_t)buf->p)+15) & ~15);
+    char* s = data;
+    int row_size = (int)layout->pitch;
+    if(row_size<0){
+      data += layout->pitch*(layout->h-1);
+      row_size = -row_size;
+    }
+    buf->data = d;
+    buf->pitch = layout->pitch;
+
+    {for(int y=0; y<layout->h; y++){
+      memcpy(d,s,row_size);
+      d += buf->pitch;
+      s += layout->pitch;
+    }}
+  }
+
+  bool send_frame(char* data, VDXPixmapLayout* layout)
+  {
+    Buffer* buf = 0;
+    {for(int i=0; i<buffer_count; i++)
+      if(buffer[i].ref==0){ buf = &buffer[i]; break; } }
+    if(!buf) return false;
+
+    buf->ref = 1;
+    buf->frameNumber = frameNumber;
+    copy_image(buf,data,layout);
+
+    data = (char*)buf->data;
+    ptrdiff_t pitch = buf->pitch;
     if((pitch>0) ^ topdown){
       data += pitch*(layout->h-1);
       pitch = -pitch;
     }
 
+    CFHD_Error error = CFHD_EncodeAsyncSample(poolRef, frameNumber, data, pitch, 0);
+    frameNumber++;
+    pool_depth++;
+    return true;
+  }
+
+  LRESULT compress1(ICCOMPRESS *icc, VDXPixmapLayout* layout)
+  {
+    bool flush = frameNumber>=(uint32_t)frame_total;
+
     if(encRef){
+      char* data = (char*)icc->lpInput;
+      ptrdiff_t pitch = layout->pitch;
+      if((pitch>0) ^ topdown){
+        data += pitch*(layout->h-1);
+        pitch = -pitch;
+      }
       CFHD_Error error = CFHD_EncodeSample(encRef, data, pitch);
-      void* data;
-      size_t size;
-      error = CFHD_GetSampleData(encRef,&data,&size);
-      memcpy(icc->lpOutput,data,size);
-      icc->lpbiOutput->biSizeImage = size;
+      void* cdata;
+      size_t csize;
+      error = CFHD_GetSampleData(encRef,&cdata,&csize);
+      memcpy(icc->lpOutput,cdata,csize);
+      icc->lpbiOutput->biSizeImage = csize;
       *icc->lpdwFlags = AVIIF_KEYFRAME;
     } else {
-      // this way does not work. Requires to hold incoming bitmaps
-      if(!flush && pool_depth<8){
-        CFHD_Error error = CFHD_EncodeAsyncSample(poolRef, frameNumber, data, pitch, 0);
-        frameNumber++;
-        pool_depth++;
-      }
+      bool blocked = false;
+      if(!flush) blocked = !send_frame((char*)icc->lpInput,layout);
       if(pool_depth){
         uint32_t frame_number;
         CFHD_SampleBufferRef sampleRef = 0;
         CFHD_Error error;
-        if(flush)
+        if(flush || blocked)
           error = CFHD_WaitForSample(poolRef, &frame_number, &sampleRef);
         else
           error = CFHD_TestForSample(poolRef, &frame_number, &sampleRef);
@@ -320,14 +398,22 @@ struct CodecCF: public CodecClass{
           *icc->lpdwFlags = VDCOMPRESS_WAIT;
         }
         if(error==CFHD_ERROR_OKAY){
-          void* data;
-          size_t size;
-          error = CFHD_GetEncodedSample(sampleRef, &data, &size);
-          memcpy(icc->lpOutput,data,size);
-          icc->lpbiOutput->biSizeImage = size;
+          void* cdata;
+          size_t csize;
+          error = CFHD_GetEncodedSample(sampleRef, &cdata, &csize);
+          memcpy(icc->lpOutput,cdata,csize);
+          icc->lpbiOutput->biSizeImage = csize;
           *icc->lpdwFlags = AVIIF_KEYFRAME;
           CFHD_ReleaseSampleBuffer(poolRef, sampleRef);
           pool_depth--;
+          {for(int i=0; i<buffer_count; i++){
+            Buffer* buf = &buffer[i];
+            if(buf->ref && buf->frameNumber==frame_number){
+              buf->ref = 0;
+              break;
+            }
+          }}
+          if(blocked) send_frame((char*)icc->lpInput,layout);
         }
       }
     }
@@ -392,6 +478,7 @@ INT_PTR ConfigCF::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam){
       SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMAX, TRUE, 5);
       SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETPOS, TRUE, codec->config.quality);
       SetDlgItemText(mhdlg, IDC_QUALITY_VALUE, quality_names[codec->config.quality]);
+      CheckDlgButton(mhdlg, IDC_THREADING, codec->config.threads!=1 ? BST_CHECKED:BST_UNCHECKED);
       return true;
     }
 
@@ -429,6 +516,10 @@ INT_PTR ConfigCF::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam){
       if(IsDlgButtonChecked(mhdlg,IDC_10_BIT)) codec->config.bits = 10;
       if(IsDlgButtonChecked(mhdlg,IDC_16_BIT)) codec->config.bits = 16;
       change_bits();
+      break;
+
+    case IDC_THREADING:
+      if(IsDlgButtonChecked(mhdlg,IDC_THREADING)) codec->config.threads = 0; else codec->config.threads = 1;
       break;
     }
   }

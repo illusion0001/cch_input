@@ -410,9 +410,10 @@ BEGIN
     CONTROL         "8",IDC_8_BIT,"Button",BS_AUTORADIOBUTTON | WS_GROUP,16,46,20,10
     CONTROL         "10",IDC_10_BIT,"Button",BS_AUTORADIOBUTTON,43,46,24,10
     CONTROL         "16",IDC_16_BIT,"Button",BS_AUTORADIOBUTTON | WS_DISABLED,70,46,24,10
-    CONTROL         "",IDC_QUALITY,"msctls_trackbar32",TBS_BOTH | TBS_NOTICKS | WS_TABSTOP,7,72,139,12
-    LTEXT           "Quality (high-low)",IDC_STATIC,14,86,58,8
-    LTEXT           "Filmscan 3",IDC_QUALITY_VALUE,103,86,39,11
+    CONTROL         "",IDC_QUALITY,"msctls_trackbar32",TBS_BOTH | TBS_NOTICKS | WS_TABSTOP,7,63,139,12
+    LTEXT           "Quality (high-low)",IDC_STATIC,14,77,58,8
+    LTEXT           "Filmscan 3",IDC_QUALITY_VALUE,103,77,39,11
+    CONTROL         "Enable Multithreading",IDC_THREADING,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,7,98,85,10
 END
 
 
