@@ -153,12 +153,31 @@ struct CodecCF: public CodecClass{
   LRESULT compress_input_format(FilterModPixmapInfo* info){
     if(config.format==format_rgba){
       if(config.bits==8) return nsVDXPixmap::kPixFormat_XRGB8888;
-      //if(config.bits>8) return nsVDXPixmap::kPixFormat_XRGB64;
+      if(config.bits==16){
+        if(info){
+          int max_value = 0xFFF; // request rounding to 14 bits
+          info->ref_r = max_value;
+          info->ref_g = max_value;
+          info->ref_b = max_value;
+          info->ref_a = max_value;
+        }
+        return nsVDXPixmap::kPixFormat_XRGB64;
+      }
     }
 
     if(config.format==format_rgb){
       if(config.bits==8) return nsVDXPixmap::kPixFormat_RGB888;
       if(config.bits==10) return nsVDXPixmap::kPixFormat_R210;
+      if(config.bits==16){
+        if(info){
+          int max_value = 0xFFF; // request rounding to 14 bits
+          info->ref_r = max_value;
+          info->ref_g = max_value;
+          info->ref_b = max_value;
+          info->ref_a = max_value;
+        }
+        return nsVDXPixmap::kPixFormat_XRGB64;
+      }
     }
 
     if(config.format==format_yuv422){
@@ -244,10 +263,12 @@ struct CodecCF: public CodecClass{
       encodedFormat = CFHD_ENCODED_FORMAT_RGB_444;
       if(config.bits==8) pixelFormat = CFHD_PIXEL_FORMAT_RG24;
       if(config.bits==10) pixelFormat = CFHD_PIXEL_FORMAT_R210;
+      if(config.bits==16) pixelFormat = CFHD_PIXEL_FORMAT_B64A;
       break;
     case format_rgba:
-      pixelFormat = CFHD_PIXEL_FORMAT_BGRA;
       encodedFormat = CFHD_ENCODED_FORMAT_RGBA_4444;
+      if(config.bits==8) pixelFormat = CFHD_PIXEL_FORMAT_BGRA;
+      if(config.bits==16) pixelFormat = CFHD_PIXEL_FORMAT_B64A;
       break;
     case format_yuv422:
       if(!use709) encodingFlags |= CFHD_ENCODING_FLAGS_YUV_601;
@@ -266,18 +287,16 @@ struct CodecCF: public CodecClass{
 
     CFHD_EncodingQuality quality = quality_list[config.quality];
 
-    if(config.threads==1){
-      CFHD_Error error;
-      error = CFHD_OpenEncoder(&encRef, 0);
-      error = CFHD_PrepareToEncode(encRef, layout->w, layout->h, pixelFormat, encodedFormat, encodingFlags, quality);
-    } else {
-      int n = config.threads;
-      if(n==0){
-	      SYSTEM_INFO info;
-	      GetSystemInfo(&info);
-	      n = info.dwNumberOfProcessors;
+    if(layout->format==nsVDXPixmap::kPixFormat_XRGB64) buffer_count = 1;
+    int threads = config.threads;
+    if(threads!=1){
+      if(threads==0){
+        SYSTEM_INFO info;
+        GetSystemInfo(&info);
+        threads = info.dwNumberOfProcessors;
       }
-      buffer_count = n;
+    }
+    if(buffer_count){
       buffer = (Buffer*)malloc(sizeof(Buffer)*buffer_count);
       if(!buffer){ compress_end(); return ICERR_MEMORY; }
       memset(buffer,0,sizeof(Buffer)*buffer_count);
@@ -289,9 +308,15 @@ struct CodecCF: public CodecClass{
         if(!p){ compress_end(); return ICERR_MEMORY; }
         buffer[i].p = p;
       }}
+    }
 
+    if(config.threads==1){
       CFHD_Error error;
-      error = CFHD_CreateEncoderPool(&poolRef, n, buffer_count, 0);
+      error = CFHD_OpenEncoder(&encRef, 0);
+      error = CFHD_PrepareToEncode(encRef, layout->w, layout->h, pixelFormat, encodedFormat, encodingFlags, quality);
+    } else {
+      CFHD_Error error;
+      error = CFHD_CreateEncoderPool(&poolRef, threads, buffer_count, 0);
       error = CFHD_PrepareEncoderPool(poolRef, layout->w, layout->h, pixelFormat, encodedFormat, encodingFlags, quality);
       CFHD_StartEncoderPool(poolRef);
     }
@@ -333,13 +358,49 @@ struct CodecCF: public CodecClass{
     buf->pitch = layout->pitch;
 
     {for(int y=0; y<layout->h; y++){
-      memcpy(d,s,row_size);
+      if(layout->format==nsVDXPixmap::kPixFormat_XRGB64){
+        uint16_t* src = (uint16_t*)s;
+        uint16_t* dst = (uint16_t*)d;
+        for(int x=0; x<layout->w; x++){
+          uint16_t b = src[0];
+          uint16_t g = src[1];
+          uint16_t r = src[2];
+          uint16_t a = src[3];
+
+          dst[0] = a<<4;
+          dst[1] = r<<4;
+          dst[2] = g<<4;
+          dst[3] = b<<4;
+          
+          src += 4;
+          dst += 4;
+        }
+      } else {
+        memcpy(d,s,row_size);
+      }
       d += buf->pitch;
       s += layout->pitch;
     }}
   }
 
-  bool send_frame(char* data, VDXPixmapLayout* layout)
+  void send_frame(char* data, VDXPixmapLayout* layout)
+  {
+    ptrdiff_t pitch = layout->pitch;
+    if(buffer){
+      copy_image(buffer,data,layout);
+      data = (char*)buffer->data;
+      ptrdiff_t pitch = buffer->pitch;
+    }
+
+    if((pitch>0) ^ topdown){
+      data += pitch*(layout->h-1);
+      pitch = -pitch;
+    }
+
+    CFHD_Error error = CFHD_EncodeSample(encRef, data, pitch);
+  }
+
+  bool send_frame_async(char* data, VDXPixmapLayout* layout)
   {
     Buffer* buf = 0;
     {for(int i=0; i<buffer_count; i++)
@@ -352,6 +413,7 @@ struct CodecCF: public CodecClass{
 
     data = (char*)buf->data;
     ptrdiff_t pitch = buf->pitch;
+
     if((pitch>0) ^ topdown){
       data += pitch*(layout->h-1);
       pitch = -pitch;
@@ -368,22 +430,16 @@ struct CodecCF: public CodecClass{
     bool flush = frameNumber>=(uint32_t)frame_total;
 
     if(encRef){
-      char* data = (char*)icc->lpInput;
-      ptrdiff_t pitch = layout->pitch;
-      if((pitch>0) ^ topdown){
-        data += pitch*(layout->h-1);
-        pitch = -pitch;
-      }
-      CFHD_Error error = CFHD_EncodeSample(encRef, data, pitch);
+      send_frame((char*)icc->lpInput,layout);
       void* cdata;
       size_t csize;
-      error = CFHD_GetSampleData(encRef,&cdata,&csize);
+      CFHD_Error error = CFHD_GetSampleData(encRef,&cdata,&csize);
       memcpy(icc->lpOutput,cdata,csize);
       icc->lpbiOutput->biSizeImage = csize;
       *icc->lpdwFlags = AVIIF_KEYFRAME;
     } else {
       bool blocked = false;
-      if(!flush) blocked = !send_frame((char*)icc->lpInput,layout);
+      if(!flush) blocked = !send_frame_async((char*)icc->lpInput,layout);
       if(pool_depth){
         uint32_t frame_number;
         CFHD_SampleBufferRef sampleRef = 0;
@@ -455,6 +511,8 @@ void ConfigCF::init_format()
 void ConfigCF::change_format(int sel)
 {
   codec->config.format = sel+1;
+  if(codec->config.format==CodecCF::format_rgba && codec->config.bits==10) codec->config.bits = 16;
+  if(codec->config.format==CodecCF::format_yuv422 && codec->config.bits==16) codec->config.bits = 10;
   init_bits();
   change_bits();
 }
@@ -462,6 +520,8 @@ void ConfigCF::change_format(int sel)
 void ConfigCF::init_bits()
 {
   int format = codec->config.format;
+  EnableWindow(GetDlgItem(mhdlg,IDC_10_BIT),codec->config.format!=CodecCF::format_rgba);
+  EnableWindow(GetDlgItem(mhdlg,IDC_16_BIT),codec->config.format!=CodecCF::format_yuv422);
   CheckDlgButton(mhdlg,IDC_8_BIT,codec->config.bits==8 ? BST_CHECKED:BST_UNCHECKED);
   CheckDlgButton(mhdlg,IDC_10_BIT,codec->config.bits==10 ? BST_CHECKED:BST_UNCHECKED);
   CheckDlgButton(mhdlg,IDC_16_BIT,codec->config.bits==16 ? BST_CHECKED:BST_UNCHECKED);

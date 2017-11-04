@@ -67,12 +67,26 @@ void cfhd_set_encoded_format(AVCodecContext* avctx)
     avctx->pix_fmt = AV_PIX_FMT_YUYV422;
     break;
   case CFHD_ENCODED_FORMAT_RGB_444:
-    fmt = CFHD_PIXEL_FORMAT_RG24;
-    avctx->pix_fmt = AV_PIX_FMT_BGR24;
+    if(obj->input_depth==8){
+      fmt = CFHD_PIXEL_FORMAT_RG24;
+      avctx->pix_fmt = AV_PIX_FMT_BGR24;
+    } else {
+      fmt = CFHD_PIXEL_FORMAT_B64A;
+      avctx->pix_fmt = AV_PIX_FMT_BGRA64;
+    }
     break;
   case CFHD_ENCODED_FORMAT_RGBA_4444:
-    fmt = CFHD_PIXEL_FORMAT_BGRA;
-    avctx->pix_fmt = AV_PIX_FMT_BGRA;
+    if(obj->input_depth==8){
+      fmt = CFHD_PIXEL_FORMAT_BGRA;
+      avctx->pix_fmt = AV_PIX_FMT_BGRA;
+    } else {
+      fmt = CFHD_PIXEL_FORMAT_B64A;
+      avctx->pix_fmt = AV_PIX_FMT_BGRA64;
+    }
+    break;
+  case CFHD_ENCODED_FORMAT_BAYER:
+    fmt = CFHD_PIXEL_FORMAT_B64A;
+    avctx->pix_fmt = AV_PIX_FMT_BGRA64;
     break;
   default:
     fmt = CFHD_PIXEL_FORMAT_RG24;
@@ -183,6 +197,15 @@ bool cfhd_test_format(AVCodecContext* avctx, nsVDXPixmap::VDXPixmapFormat vdfmt)
       return true;
     }
   }
+  if(obj->encoded_format==CFHD_ENCODED_FORMAT_BAYER){
+    switch(vdfmt){
+    case nsVDXPixmap::kPixFormat_XRGB8888:
+    case nsVDXPixmap::kPixFormat_RGB888:
+    case nsVDXPixmap::kPixFormat_R210:
+    case nsVDXPixmap::kPixFormat_XRGB64:
+      return true;
+    }
+  }
 
   return false;
 }
@@ -241,8 +264,6 @@ int cfhd_decode(AVCodecContext* avctx, void* data, int* got_frame, AVPacket* avp
     COLOR_FORMAT input_format;
     header.GetInputFormat(&input_format);
     obj->input_format = input_format;
-    cfhd_set_encoded_format(avctx);
-
     obj->input_depth = 0;
     switch(format){
     case CFHD_ENCODED_FORMAT_RGB_444:
@@ -265,6 +286,7 @@ int cfhd_decode(AVCodecContext* avctx, void* data, int* got_frame, AVPacket* avp
       break;
       }
     }
+    cfhd_set_encoded_format(avctx);
   }
   if(obj->samples==0){
     CFHD_PixelFormat fmt_array[128];
@@ -273,7 +295,7 @@ int cfhd_decode(AVCodecContext* avctx, void* data, int* got_frame, AVPacket* avp
 
     int w=0;
     int h=0;
-    CFHD_PrepareToDecode(obj->dec,0,0,obj->fmt,CFHD_DECODED_RESOLUTION_FULL,0,avpkt->data,avpkt->size,&w,&h,&obj->fmt);
+    CFHD_PrepareToDecode(obj->dec,avctx->width,avctx->height,obj->fmt,CFHD_DECODED_RESOLUTION_FULL,0,avpkt->data,avpkt->size,&w,&h,&obj->fmt);
   }
   obj->samples++;
 
