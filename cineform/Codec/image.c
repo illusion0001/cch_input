@@ -1731,13 +1731,13 @@ void OutputRGB(unsigned char *outbuffer, IMAGE *waveletY, IMAGE *waveletV, IMAGE
 	if(PPM)
 	{
 		int err = 0;
-#ifdef _WINDOWS
+#ifdef CRT_S
 		sprintf_s(name, sizeof(name), "C:\\Cedoc\\Preview%dx%d.ppm", output_width, output_height);
 #else
 		sprintf(name, "C:\\Cedoc\\Preview%dx%d.ppm", output_width, output_height);
 #endif
 
-#ifdef _WINDOWS
+#ifdef CRT_S
 		err = fopen_s(&file, name, "wb");
 #else
 		file = fopen(name,"wb");
@@ -1955,13 +1955,13 @@ void DumpPGM(char *label, IMAGE *image, SUBIMAGE *subimage)
 		lumashift2 = (float)totalshifted / (float)count;
 	}
 
-#ifdef _WINDOWS
+#ifdef CRT_S
 	sprintf_s(name, sizeof(name), "C:\\Cedoc\\%s%dx%d.pgm", label, last_column - first_column + 1, last_row - first_row + 1);
 #else
 	sprintf(name, "C:\\Cedoc\\%s%dx%d.pgm", label, last_column - first_column + 1, last_row - first_row + 1);
 #endif
 
-#ifdef _WINDOWS
+#ifdef CRT_S
 	err = fopen_s(&file, name, "w");
 #else
 	file = fopen(name,"w");
@@ -2119,13 +2119,13 @@ void DumpBandPGM(char *label, IMAGE *wavelet, int band, SUBIMAGE *subimage)
 	}
 
 	//sprintf(name, "C:\\Cedoc\\%s%dx%d-l%d.pgm", label, output_width, output_height, levelshift);
-#ifdef _WINDOWS
+#ifdef CRT_S
 	sprintf_s(name, sizeof(name), "C:\\Cedoc\\%s%dx%d.pgm", label, output_width, output_height);
 #else
 	sprintf(name, "C:\\Cedoc\\%s%dx%d.pgm", label, output_width, output_height);
 #endif
 
-#ifdef _WINDOWS
+#ifdef CRT_S
 	err = fopen_s(&file, name, "w");
 #else
 	file = fopen(name, "w");
@@ -2224,13 +2224,13 @@ void DumpBandSignPGM(char *label, IMAGE *wavelet, int band, SUBIMAGE *subimage)
 	output_width = last_column - first_column + 1;
 	output_height = last_row - first_row + 1;
 
-#ifdef _WINDOWS
+#ifdef CRT_S
 	sprintf_s(name, sizeof(name), "C:\\Cedoc\\%s%dx%d.pgm", label, output_width, output_height);
 #else
 	sprintf(name, "C:\\Cedoc\\%s%dx%d.pgm", label, output_width, output_height);
 #endif
 
-#ifdef _WINDOWS
+#ifdef CRT_S
 	err = fopen_s(&file, name, "w");
 #else
 	file = fopen(name,"w");
@@ -3185,7 +3185,7 @@ void DumpWaveletBandsPGM(IMAGE *wavelet, int frame_index, int num_channels)
 			static int count = 0;
 			if (count < 20) {
 				char label[_MAX_PATH];
-#ifdef _WINDOWS
+#ifdef CRT_S
 				sprintf_s(label, sizeof(label), "Frame%dc%db%d-decode-%d-", frame_index, channel, band, count);
 #else
 				sprintf(label, "Frame%dc%db%d-decode-%d-", frame_index, channel, band, count);

@@ -119,7 +119,7 @@ CFHD_OpenEncoder(CFHD_EncoderRef *encoderRefOut,
 #endif
 #if (1 && SYSLOG)
 	if (logfile == NULL) {
-#ifdef _WINDOWS
+#ifdef CRT_S
 		int err = fopen_s(&logfile, "EncoderDLL.log", "w");
 #else
 		logfile = fopen("EncoderDLL.log", "w");

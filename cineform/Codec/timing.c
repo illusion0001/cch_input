@@ -242,7 +242,7 @@ void PrintStatistics(FILE *logfile, int frame_count, void *unused, char *results
 	if (decode_lookup_count > 0)
 		decode_search_ratio = (float)decode_search_count / (decode_lookup_count + decode_search_count);
 
-#ifdef _WINDOWS
+#ifdef CRT_S
 	// Can the results be copied to the clipboard?
 	if (hwnd != NULL)
 	{
@@ -291,7 +291,7 @@ void PrintStatistics(FILE *logfile, int frame_count, void *unused, char *results
 		FILE *csvfile;
 		int err = 0;
 
-#ifdef _WINDOWS
+#ifdef CRT_S
 		err = fopen_s(&csvfile, results, "w");
 #else
 		csvfile = fopen(results, "w");

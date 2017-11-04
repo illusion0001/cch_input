@@ -1388,7 +1388,7 @@ CFHD_SetActiveMetadata(	CFHD_DecoderRef decoderRef,
 			
 //DANREMOVE			crc = ValidateLookGenCRC((char *)data);
 
-#ifdef _WINDOWS
+#ifdef CRT_S
 			strcpy_s(lastpath, sizeof(lastpath), (char *)data);
 			_splitpath_s((char *)data, drive, sizeof(drive), dir, sizeof(dir), fname, sizeof(fname), ext, sizeof(ext));
 			_makepath_s(filename, sizeof(filename), NULL, NULL, fname, ext);
@@ -1404,7 +1404,7 @@ CFHD_SetActiveMetadata(	CFHD_DecoderRef decoderRef,
 				typesizebytes = ('c'<<24)|39;
 				metadata->AddMetaData(TAG_LOOK_FILE, typesizebytes, (void *)&filename[0]);
 
-#ifdef _WINDOWS
+#ifdef CRT_S
 				strcpy_s(lastLUTfilename, sizeof(lastLUTfilename), filename); 
 #else
 				strcpy(lastLUTfilename, filename);

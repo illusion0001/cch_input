@@ -1568,7 +1568,7 @@ CSampleDecoder::DecodeSample(void *samplePtr,
 
 			sprintf_s(tt, sizeof(tt), "C:/Cedoc/Logfiles/%04d.cfhd", fileexnum++);
 
-#ifdef _WINDOWS
+#ifdef CRT_S
 			err = fopen_s(&fp, tt, "wb");
 #else
 			fp = fopen(tt,"wb");

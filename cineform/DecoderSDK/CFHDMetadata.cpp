@@ -458,7 +458,7 @@ bool CSampleMetadata::GetClipDatabase()
 		//GetLUTPath(PathStr);
 		bool checkdiskinfo = false;
 
-#ifdef _WINDOWS
+#ifdef CRT_S
 		sprintf_s(filenameGUID, sizeof(filenameGUID), 
 #else	
 		sprintf(filenameGUID,
@@ -508,7 +508,7 @@ bool CSampleMetadata::GetClipDatabase()
 			FILE *fp;
 			int err = 0;
 
-#ifdef _WINDOWS
+#ifdef CRT_S
 			err = fopen_s(&fp, filenameGUID, "rb");
 #else
 			fp = fopen(filenameGUID, "rb");

@@ -775,7 +775,7 @@ CSampleEncoder::HandleMetadata()
 		clock = time(NULL);
 		SystemTime = localtime( &clock );
 
-#ifdef _WINDOWS
+#ifdef CRT_S
 		sprintf_s(datestr, sizeof(datestr), "%04d-%02d-%02d", SystemTime->tm_year + 1900, SystemTime->tm_mon + 1, SystemTime->tm_mday);
 		sprintf_s(timestr, sizeof(timestr), "%02d:%02d:%02d", SystemTime->tm_hour, SystemTime->tm_min, SystemTime->tm_sec);
 #else
@@ -805,7 +805,7 @@ CSampleEncoder::HandleMetadata()
 				m_last_timecode_base = 24;
 				m_last_timecode_frame = SystemTime->tm_hour * 3600 * 24 + SystemTime->tm_min * 60 * 24 + SystemTime->tm_sec * 24;
 
-#ifdef _WINDOWS
+#ifdef CRT_S
 				sprintf_s(tmpstr, sizeof(tmpstr), "%02d:%02d:%02d:00", SystemTime->tm_hour, SystemTime->tm_min, SystemTime->tm_sec);
 #else
 				sprintf(tmpstr, "%02d:%02d:%02d:00", SystemTime->tm_hour, SystemTime->tm_min, SystemTime->tm_sec);
@@ -872,7 +872,7 @@ CSampleEncoder::HandleMetadata()
 				mins = framenum % 60; framenum /= 60;
 				hours = framenum % 60; framenum /= 60;
 
-#ifdef _WINDOWS
+#ifdef CRT_S
 				sprintf_s(tmpstr, sizeof(tmpstr), "%02d:%02d:%02d:%02d", hours, mins, secs, frms);
 #else
 				sprintf(tmpstr, "%02d:%02d:%02d:%02d", hours, mins, secs, frms);

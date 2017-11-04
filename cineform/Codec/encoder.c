@@ -1332,7 +1332,7 @@ void PrintEncodingParameters(ENCODING_PARAMETERS *parameters)
 	int err = 0;
 	FILE *file;
 
-#ifdef _WINDOWS
+#ifdef CRT_S
 	err = fopen_s(&file, "parameters.log", "w+");
 #else
 	file = fopen("parameters.log", "w+");
@@ -8823,7 +8823,7 @@ void OverrideEncoderSettings(ENCODER *encoder)
 
 			if(type == 0) // preset_default an colr file for all clips.
 			{
-#ifdef _WINDOWS
+#ifdef CRT_S
 				sprintf_s(filenameGUID, sizeof(filenameGUID), "%s/%s/defaults.colr", encoder->LUTsPathStr, encoder->UserDBPathStr);
 #else
 				sprintf(filenameGUID, "%s/%s/defaults.colr", encoder->LUTsPathStr, encoder->UserDBPathStr);
@@ -8834,7 +8834,7 @@ void OverrideEncoderSettings(ENCODER *encoder)
 			}
 			else if(type == 1) // preset_override an colr file for all clips.
 			{
-#ifdef _WINDOWS
+#ifdef CRT_S
 				sprintf_s(filenameGUID, sizeof(filenameGUID), "%s/override.colr", encoder->OverridePathStr);
 #else
 				sprintf(filenameGUID, "%s/override.colr", encoder->OverridePathStr);
@@ -8850,7 +8850,7 @@ void OverrideEncoderSettings(ENCODER *encoder)
 				int err = 0;
 				FILE *fp;
 
-#ifdef _WINDOWS
+#ifdef CRT_S
 				err = fopen_s(&fp, filenameGUID, "rb");
 #else
 				fp = fopen(filenameGUID, "rb");
