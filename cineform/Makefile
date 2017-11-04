@@ -5,7 +5,7 @@ common = MessageQueue.o ThreadMessage.o ThreadPool.o
 decoder = CFHDDecoder.o CFHDMetadata.o Conversion.o ISampleDecoder.o SampleDecoder.o SampleMetadata.o
 encoder = AsyncEncoder.o CFHDEncoder.o CFHDEncoderMetadata.o CFHDEncoderPool.o EncoderPool.o EncoderQueue.o MetadataWriter.o SampleEncoder.o VideoBuffers.o
 convertlib = Bilinear.o ColorMatrix.o ConvertYUV8.o DPXConverter.o ImageConverter.o ImageScaler.o MemAlloc.o
-codec = DemoasicFrames.o exception.o lutpath.o allocator.o bandfile.o bayer.o bitstream.o buffer.o codebooks.o codec.o convert.o cpuid.o debug.o decoder.o dither.o draw.o dump.o encoder.o entropy_threading.o filter.o frame.o image.o InvertHorizontalStrip16s.o keyframes.o metadata.o quantize.o recursive.o RGB2YUV.o scanner.o spatial.o stats.o swap.o temporal.o thread.o thumbnail.o timing.o vlc.o wavelet.o 
+codec = DemoasicFrames.o exception.o lutpath.o allocator.o bandfile.o bayer.o bitstream.o buffer.o codebooks.o codec.o convert.o cpuid.o debug.o decoder.o dither.o encoder.o entropy_threading.o filter.o frame.o image.o InvertHorizontalStrip16s.o keyframes.o metadata.o quantize.o recursive.o RGB2YUV.o scanner.o spatial.o stats.o swap.o temporal.o thread.o thumbnail.o timing.o vlc.o wavelet.o 
 objects = $(common) $(decoder) $(encoder) $(convertlib) $(codec)
 
 make: $(objects)

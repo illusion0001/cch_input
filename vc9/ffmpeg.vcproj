@@ -551,15 +551,7 @@
 					>
 				</File>
 				<File
-					RelativePath="..\cineform\Codec\draw.c"
-					>
-				</File>
-				<File
 					RelativePath="..\cineform\Codec\draw.h"
-					>
-				</File>
-				<File
-					RelativePath="..\cineform\Codec\dump.c"
 					>
 				</File>
 				<File
@@ -724,10 +716,6 @@
 				</File>
 				<File
 					RelativePath="..\cineform\Codec\thumbnail.h"
-					>
-				</File>
-				<File
-					RelativePath="..\cineform\Codec\timing.c"
 					>
 				</File>
 				<File
