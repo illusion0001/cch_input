@@ -54,7 +54,6 @@
 #ifdef __cplusplus
 
 //#include <string>
-#include "ccombstr.h"
 
 #endif
 

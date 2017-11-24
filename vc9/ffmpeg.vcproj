@@ -443,14 +443,6 @@
 					>
 				</File>
 				<File
-					RelativePath="..\cineform\Codec\bandfile.c"
-					>
-				</File>
-				<File
-					RelativePath="..\cineform\Codec\bandfile.h"
-					>
-				</File>
-				<File
 					RelativePath="..\cineform\Codec\bayer.c"
 					>
 				</File>
@@ -751,10 +743,6 @@
 					>
 				</File>
 				<File
-					RelativePath="..\cineform\Common\ccombstr.h"
-					>
-				</File>
-				<File
 					RelativePath="..\cineform\Common\CFHDAllocator.h"
 					>
 				</File>
@@ -784,6 +772,10 @@
 				</File>
 				<File
 					RelativePath="..\cineform\Common\Condition.h"
+					>
+				</File>
+				<File
+					RelativePath="..\cineform\Common\fopen.h"
 					>
 				</File>
 				<File

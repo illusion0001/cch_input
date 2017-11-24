@@ -478,12 +478,11 @@ void InitLUTPaths(DECODER *decoder)
 {
 	if(decoder)
 	{
-#if 1
-#elif _WINDOWS
+#if _WINDOWS
 		USES_CONVERSION;
 
-		TCHAR defaultLUTpath[260] = "C:\\Program Files\\Common Files\\CineForm\\LUTs";
-		TCHAR defaultOverridePath[260] = "";
+		TCHAR defaultLUTpath[260] = "?";
+		TCHAR defaultOverridePath[260] = "?";
 		char DbNameStr[64] = "db";
 
 		CSettings cfg;
@@ -525,7 +524,7 @@ void InitLUTPaths(DECODER *decoder)
 						LPCTSTR pCommonPathStr = OLE2T(commonpath);
 						if(0 == strcmp(pCommonPathStr, "NONE"))
 						{
-							commonpath = cfg.GetString(_T("CommonFilesDir"), _T("C:\\Program Files\\Common Files"));
+							commonpath = cfg.GetString(_T("CommonFilesDir"), _T("?"));
 							pCommonPathStr = OLE2T(commonpath);
 						}
 						_stprintf_s(defaultLUTpath, sizeof(defaultLUTpath), _T("%s\\%s"), pCommonPathStr, _T("CineForm\\LUTs"));
@@ -647,14 +646,12 @@ void InitLUTPaths(DECODER *decoder)
 void InitLUTPathsEnc(ENCODER *encoder)
 {
 	if(encoder && encoder->LUTsPathStr[0] == 0)
-#if 1
-  ;
-#elif _WINDOWS
+#if _WINDOWS
 	{
 		USES_CONVERSION;
 
-		TCHAR defaultLUTpath[260] = "C:\\Program Files\\Common Files\\CineForm\\LUTs";
-		TCHAR defaultOverridePath[260] = "";
+		TCHAR defaultLUTpath[260] = "?";
+		TCHAR defaultOverridePath[260] = "?";
 		char DbNameStr[64] = "db";
 
 		CSettings cfg;
@@ -696,7 +693,7 @@ void InitLUTPathsEnc(ENCODER *encoder)
 						LPCTSTR pCommonPathStr = OLE2T(commonpath);
 						if(0 == strcmp(pCommonPathStr, "NONE"))
 						{
-							commonpath = cfg.GetString(_T("CommonFilesDir"), _T("C:\\Program Files\\Common Files"));
+							commonpath = cfg.GetString(_T("CommonFilesDir"), _T("?"));
 							pCommonPathStr = OLE2T(commonpath);
 						}
 						_stprintf_s(defaultLUTpath, sizeof(defaultLUTpath), _T("%s\\%s"), pCommonPathStr, _T("CineForm\\LUTs"));

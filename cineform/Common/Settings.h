@@ -22,6 +22,38 @@
 #pragma once
 #include "StdAfx.h"
 
+#include <tchar.h>
+
+class CComBSTR
+{
+public:
+	char* str;
+
+	CComBSTR()
+	{
+		str = NULL;
+	}
+
+	CComBSTR(LPCSTR pSrc)
+	{
+		str = NULL;
+		if(pSrc){
+			int size = strlen(pSrc);
+			str = (char*)malloc(size+1);
+			strcpy(str,pSrc);
+		}
+	}
+
+	~CComBSTR()
+	{
+		free(str);
+	}
+};
+
+#define USES_CONVERSION
+
+inline char* OLE2T(CComBSTR& a){ return a.str; }
+
 //-------------------------------------------------------------------------------------------
 // class CSettings
 //-------------------------------------------------------------------------------------------
@@ -33,6 +65,7 @@ public:
 
 public:
 	BOOL		Open(HKEY key, LPCTSTR pSubKey);
+	BOOL		OpenWrite(HKEY key, LPCTSTR pSubKey);
 	void		Close();
 
 	CComBSTR	GetString(LPCTSTR pName, LPCTSTR defaultValue);

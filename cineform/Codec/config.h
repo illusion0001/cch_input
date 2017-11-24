@@ -23,6 +23,7 @@
 #define _CONFIG_H
 
 #include <stdlib.h>
+#include "../common/fopen.h"
 
 // Enable overlay text and graphics using Cairo
 #ifndef _GRAPHICS

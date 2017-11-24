@@ -30,6 +30,10 @@
 #include "Settings.h"
 //#include <comdef.h>
 
+#ifndef _ASSERT
+#define _ASSERT
+#endif
+
 //-------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------
 CSettings::CSettings()
@@ -47,6 +51,16 @@ CSettings::~CSettings()
 //-------------------------------------------------------------------------------------------
 //-------------------------------------------------------------------------------------------
 BOOL CSettings::Open(HKEY key, LPCTSTR pSubKey)
+{
+	_ASSERT(m_key == 0);
+	if(ERROR_SUCCESS != ::RegOpenKeyEx(key, pSubKey, 0, KEY_READ, &m_key))
+	{
+		return FALSE;
+	}
+	return TRUE;
+}
+
+BOOL CSettings::OpenWrite(HKEY key, LPCTSTR pSubKey)
 {
 	_ASSERT(m_key == 0);
 	if(ERROR_SUCCESS != ::RegCreateKeyEx(key, pSubKey, 0, 0, 0, KEY_ALL_ACCESS, 0, &m_key, 0))
