@@ -87,7 +87,8 @@ void InitGetLUTPaths(char *pPathStr, size_t pathSize, char *pDBStr, size_t DBSiz
 
 				if(n = GetEnvironmentVariable("PUBLIC",PublicPath,79)) // Vista and Win7
 				{
-					_stprintf_s(defaultLUTpath, sizeof(defaultLUTpath), _T("%s\\%s"), PublicPath, _T("CineForm\\LUTs")); //Vista & 7 default
+					_stprintf(defaultLUTpath, _T("%s\\%s"), PublicPath, _T("CineForm\\LUTs")); //Vista & 7 default
+					//_stprintf_s(defaultLUTpath, sizeof(defaultLUTpath), _T("%s\\%s"), PublicPath, _T("CineForm\\LUTs")); //Vista & 7 default
 				}
 				else
 				{
@@ -100,7 +101,8 @@ void InitGetLUTPaths(char *pPathStr, size_t pathSize, char *pDBStr, size_t DBSiz
 							commonpath = cfg.GetString(_T("CommonFilesDir"), _T("?"));
 							pCommonPathStr = OLE2T(commonpath);
 						}
-						_stprintf_s(defaultLUTpath, sizeof(defaultLUTpath), _T("%s\\%s"), pCommonPathStr, _T("CineForm\\LUTs"));
+						_stprintf(defaultLUTpath, _T("%s\\%s"), pCommonPathStr, _T("CineForm\\LUTs"));
+						//_stprintf_s(defaultLUTpath, sizeof(defaultLUTpath), _T("%s\\%s"), pCommonPathStr, _T("CineForm\\LUTs"));
 
 						cfg.Close();
 					}
@@ -108,7 +110,8 @@ void InitGetLUTPaths(char *pPathStr, size_t pathSize, char *pDBStr, size_t DBSiz
 			}
 			else
 			{
-				strcpy_s(defaultLUTpath, sizeof(defaultLUTpath), pLUTPathStr);
+				strcpy(defaultLUTpath, pLUTPathStr);
+				//strcpy_s(defaultLUTpath, sizeof(defaultLUTpath), pLUTPathStr);
 			}
 		}
 

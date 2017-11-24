@@ -495,8 +495,8 @@ void InitLUTPaths(DECODER *decoder)
 
 			CComBSTR path(cfg.GetString(_T("DBPath"), _T("db")));
 			pDBPathStr = OLE2T(path);
-			//strcpy(DbNameStr, pDBPathStr);
-			strcpy_s(DbNameStr, sizeof(DbNameStr), pDBPathStr);
+			strcpy(DbNameStr, pDBPathStr);
+			//strcpy_s(DbNameStr, sizeof(DbNameStr), pDBPathStr);
 
 			CComBSTR path2(cfg.GetString(_T("LUTPath"), _T("NONE")));
 			pLUTPathStr = OLE2T(path2);
@@ -513,8 +513,10 @@ void InitLUTPaths(DECODER *decoder)
 
 				if(n = GetEnvironmentVariable("PUBLIC",PublicPath,79)) // Vista and Win7
 				{
-					_stprintf_s(defaultLUTpath, sizeof(defaultLUTpath), _T("%s\\%s"), PublicPath, _T("CineForm\\LUTs")); //Vista & 7 default
-					_stprintf_s(defaultOverridePath, sizeof(defaultOverridePath), _T("%s\\%s"), PublicPath, _T("CineForm\\LUTs")); //Vista & 7 default
+					_stprintf(defaultLUTpath, _T("%s\\%s"), PublicPath, _T("CineForm\\LUTs")); //Vista & 7 default
+					_stprintf(defaultOverridePath, _T("%s\\%s"), PublicPath, _T("CineForm\\LUTs")); //Vista & 7 default
+					//_stprintf_s(defaultLUTpath, sizeof(defaultLUTpath), _T("%s\\%s"), PublicPath, _T("CineForm\\LUTs")); //Vista & 7 default
+					//_stprintf_s(defaultOverridePath, sizeof(defaultOverridePath), _T("%s\\%s"), PublicPath, _T("CineForm\\LUTs")); //Vista & 7 default
 				}
 				else
 				{
@@ -527,8 +529,10 @@ void InitLUTPaths(DECODER *decoder)
 							commonpath = cfg.GetString(_T("CommonFilesDir"), _T("?"));
 							pCommonPathStr = OLE2T(commonpath);
 						}
-						_stprintf_s(defaultLUTpath, sizeof(defaultLUTpath), _T("%s\\%s"), pCommonPathStr, _T("CineForm\\LUTs"));
-						_stprintf_s(defaultOverridePath, sizeof(defaultOverridePath), _T("%s\\%s"), pCommonPathStr, _T("CineForm\\LUTs"));
+						_stprintf(defaultLUTpath, _T("%s\\%s"), pCommonPathStr, _T("CineForm\\LUTs"));
+						_stprintf(defaultOverridePath, _T("%s\\%s"), pCommonPathStr, _T("CineForm\\LUTs"));
+						//_stprintf_s(defaultLUTpath, sizeof(defaultLUTpath), _T("%s\\%s"), pCommonPathStr, _T("CineForm\\LUTs"));
+						//_stprintf_s(defaultOverridePath, sizeof(defaultOverridePath), _T("%s\\%s"), pCommonPathStr, _T("CineForm\\LUTs"));
 
 						cfg.Close();
 					}
@@ -536,20 +540,20 @@ void InitLUTPaths(DECODER *decoder)
 			}
 			else
 			{
-				//strcpy(defaultLUTpath, pLUTPathStr);
-				strcpy_s(defaultLUTpath, sizeof(defaultLUTpath), pLUTPathStr);
-				//strcpy(defaultOverridePath, pOverridePathStr);
-				strcpy_s(defaultOverridePath, sizeof(defaultOverridePath), pOverridePathStr);
+				strcpy(defaultLUTpath, pLUTPathStr);
+				//strcpy_s(defaultLUTpath, sizeof(defaultLUTpath), pLUTPathStr);
+				strcpy(defaultOverridePath, pOverridePathStr);
+				//strcpy_s(defaultOverridePath, sizeof(defaultOverridePath), pOverridePathStr);
 			}
 		}
 
 
-		//strncpy(decoder->OverridePathStr, defaultOverridePath, sizeof(decoder->OverridePathStr));
-		//strncpy(decoder->LUTsPathStr, defaultLUTpath, sizeof(decoder->LUTsPathStr));
-		//strncpy(decoder->UserDBPathStr, DbNameStr, sizeof(decoder->UserDBPathStr));
-		strncpy_s(decoder->OverridePathStr, sizeof(decoder->OverridePathStr), defaultOverridePath, sizeof(decoder->OverridePathStr));
-		strncpy_s(decoder->LUTsPathStr, sizeof(decoder->LUTsPathStr), defaultLUTpath, sizeof(decoder->LUTsPathStr));
-		strncpy_s(decoder->UserDBPathStr, sizeof(decoder->UserDBPathStr), DbNameStr, sizeof(decoder->UserDBPathStr));
+		strncpy(decoder->OverridePathStr, defaultOverridePath, sizeof(decoder->OverridePathStr));
+		strncpy(decoder->LUTsPathStr, defaultLUTpath, sizeof(decoder->LUTsPathStr));
+		strncpy(decoder->UserDBPathStr, DbNameStr, sizeof(decoder->UserDBPathStr));
+		//strncpy_s(decoder->OverridePathStr, sizeof(decoder->OverridePathStr), defaultOverridePath, sizeof(decoder->OverridePathStr));
+		//strncpy_s(decoder->LUTsPathStr, sizeof(decoder->LUTsPathStr), defaultLUTpath, sizeof(decoder->LUTsPathStr));
+		//strncpy_s(decoder->UserDBPathStr, sizeof(decoder->UserDBPathStr), DbNameStr, sizeof(decoder->UserDBPathStr));
 
 
 #elif __APPLE_REMOVE__
@@ -665,8 +669,8 @@ void InitLUTPathsEnc(ENCODER *encoder)
 
 			CComBSTR path(cfg.GetString(_T("DBPath"), _T("db")));
 			pDBPathStr = OLE2T(path);
-			//strcpy(DbNameStr, pDBPathStr);
-			strcpy_s(DbNameStr, sizeof(DbNameStr), pDBPathStr);
+			strcpy(DbNameStr, pDBPathStr);
+			//strcpy_s(DbNameStr, sizeof(DbNameStr), pDBPathStr);
 
 			CComBSTR path2(cfg.GetString(_T("LUTPath"), _T("NONE")));
 			pLUTPathStr = OLE2T(path2);
@@ -683,7 +687,8 @@ void InitLUTPathsEnc(ENCODER *encoder)
 
 				if(n = GetEnvironmentVariable("PUBLIC",PublicPath,79)) // Vista and Win7
 				{
-					_stprintf_s(defaultLUTpath, sizeof(defaultLUTpath), _T("%s\\%s"), PublicPath, _T("CineForm\\LUTs")); //Vista & 7 default
+					_stprintf(defaultLUTpath, _T("%s\\%s"), PublicPath, _T("CineForm\\LUTs")); //Vista & 7 default
+					//_stprintf_s(defaultLUTpath, sizeof(defaultLUTpath), _T("%s\\%s"), PublicPath, _T("CineForm\\LUTs")); //Vista & 7 default
 				}
 				else
 				{
@@ -696,7 +701,8 @@ void InitLUTPathsEnc(ENCODER *encoder)
 							commonpath = cfg.GetString(_T("CommonFilesDir"), _T("?"));
 							pCommonPathStr = OLE2T(commonpath);
 						}
-						_stprintf_s(defaultLUTpath, sizeof(defaultLUTpath), _T("%s\\%s"), pCommonPathStr, _T("CineForm\\LUTs"));
+						_stprintf(defaultLUTpath, _T("%s\\%s"), pCommonPathStr, _T("CineForm\\LUTs"));
+						//_stprintf_s(defaultLUTpath, sizeof(defaultLUTpath), _T("%s\\%s"), pCommonPathStr, _T("CineForm\\LUTs"));
 
 						cfg.Close();
 					}
@@ -704,19 +710,19 @@ void InitLUTPathsEnc(ENCODER *encoder)
 			}
 			else
 			{
-				//strcpy(defaultLUTpath, pLUTPathStr);
-				strcpy_s(defaultLUTpath, sizeof(defaultLUTpath), pLUTPathStr);
-				//strcpy(defaultOverridePath, pOverridePathStr);
-				strcpy_s(defaultOverridePath, sizeof(defaultOverridePath), pOverridePathStr);
+				strcpy(defaultLUTpath, pLUTPathStr);
+				//strcpy_s(defaultLUTpath, sizeof(defaultLUTpath), pLUTPathStr);
+				strcpy(defaultOverridePath, pOverridePathStr);
+				//strcpy_s(defaultOverridePath, sizeof(defaultOverridePath), pOverridePathStr);
 			}
 		}
 
-		strncpy_s(encoder->OverridePathStr, sizeof(encoder->OverridePathStr), defaultOverridePath, sizeof(encoder->OverridePathStr));
-		strncpy_s(encoder->LUTsPathStr, sizeof(encoder->LUTsPathStr), defaultLUTpath, sizeof(encoder->LUTsPathStr));
-		strncpy_s(encoder->UserDBPathStr, sizeof(encoder->UserDBPathStr), DbNameStr, sizeof(encoder->UserDBPathStr));
-		//strncpy(encoder->OverridePathStr, defaultOverridePath, sizeof(encoder->OverridePathStr));
-		//strncpy(encoder->LUTsPathStr, defaultLUTpath, sizeof(encoder->LUTsPathStr));
-		//strncpy(encoder->UserDBPathStr, DbNameStr, sizeof(encoder->UserDBPathStr));
+		//strncpy_s(encoder->OverridePathStr, sizeof(encoder->OverridePathStr), defaultOverridePath, sizeof(encoder->OverridePathStr));
+		//strncpy_s(encoder->LUTsPathStr, sizeof(encoder->LUTsPathStr), defaultLUTpath, sizeof(encoder->LUTsPathStr));
+		//strncpy_s(encoder->UserDBPathStr, sizeof(encoder->UserDBPathStr), DbNameStr, sizeof(encoder->UserDBPathStr));
+		strncpy(encoder->OverridePathStr, defaultOverridePath, sizeof(encoder->OverridePathStr));
+		strncpy(encoder->LUTsPathStr, defaultLUTpath, sizeof(encoder->LUTsPathStr));
+		strncpy(encoder->UserDBPathStr, DbNameStr, sizeof(encoder->UserDBPathStr));
 		
 	}
 #elif __APPLE_REMOVE__
