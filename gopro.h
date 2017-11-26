@@ -6,6 +6,7 @@
 struct GoproInfo{
   enum CameraEnum{
     NONE=0,
+    HERO6_Black,
     HERO5_Session,
     HERO5_Black,
     HERO4_Session,

@@ -20,11 +20,13 @@ typedef struct AVCodecTag {
 struct DecoderObj{
   void* buf;
   CFHD_DecoderRef dec;
+  CFHD_MetadataRef meta;
   CFHD_EncodedFormat encoded_format;
   COLOR_FORMAT input_format;
   int input_depth;
   CFHD_PixelFormat fmt;
   int samples;
+  bool use_am;
 };
 
 av_cold int cfhd_init_decoder(AVCodecContext* avctx)
@@ -32,12 +34,15 @@ av_cold int cfhd_init_decoder(AVCodecContext* avctx)
   DecoderObj* obj = (DecoderObj*)avctx->priv_data;
   obj->samples = 0;
   obj->dec = 0;
+  obj->meta = 0;
   obj->encoded_format = CFHD_ENCODED_FORMAT_UNKNOWN;
   obj->input_format = COLOR_FORMAT_UNKNOWN;
   obj->input_depth = 0;
   obj->fmt = CFHD_PIXEL_FORMAT_UNKNOWN;
   avctx->pix_fmt = AV_PIX_FMT_RGBA64; // hack for max size
   CFHD_OpenDecoder(&obj->dec,0);
+  CFHD_OpenMetadata(&obj->meta);
+  obj->use_am = true;
 
   return 0;
 }
@@ -46,6 +51,7 @@ av_cold int cfhd_close_decoder(AVCodecContext* avctx)
 {
   DecoderObj* obj = (DecoderObj*)avctx->priv_data;
   if(obj->dec) CFHD_CloseDecoder(obj->dec);
+  if(obj->meta) CFHD_CloseMetadata(obj->meta);
   return 0;
 }
 
@@ -53,6 +59,12 @@ void cfhd_set_buffer(AVCodecContext* avctx, void* buf)
 {
   DecoderObj* obj = (DecoderObj*)avctx->priv_data;
   obj->buf = buf;
+}
+
+void cfhd_set_use_am(AVCodecContext* avctx, bool v)
+{
+  DecoderObj* obj = (DecoderObj*)avctx->priv_data;
+  obj->use_am = v;
 }
 
 void cfhd_set_encoded_format(AVCodecContext* avctx)
@@ -296,6 +308,13 @@ int cfhd_decode(AVCodecContext* avctx, void* data, int* got_frame, AVPacket* avp
     int w=0;
     int h=0;
     CFHD_PrepareToDecode(obj->dec,avctx->width,avctx->height,obj->fmt,CFHD_DECODED_RESOLUTION_FULL,0,avpkt->data,avpkt->size,&w,&h,&obj->fmt);
+    if(!obj->use_am){
+      CFHD_InitSampleMetadata(obj->meta,METADATATYPE_ORIGINAL,0,0);
+      unsigned int processflags = PROCESSING_ALL_OFF;
+      CFHD_SetActiveMetadata(obj->dec,obj->meta,TAG_PROCESS_PATH,METADATATYPE_UINT32,&processflags,sizeof(unsigned int));
+    }
+    //unsigned int maxcpus = 1;
+    //CFHD_SetActiveMetadata(obj->dec,obj->meta,TAG_CPU_MAX,METADATATYPE_UINT32,&maxcpus,sizeof(unsigned int));
   }
   obj->samples++;
 
@@ -305,6 +324,9 @@ int cfhd_decode(AVCodecContext* avctx, void* data, int* got_frame, AVPacket* avp
   frame->pict_type = key ? AV_PICTURE_TYPE_I : AV_PICTURE_TYPE_P;
   frame->key_frame = key;
 
+  void* dst;
+  int linesize;
+
   if(obj->buf){
     frame->buf[0] = av_buffer_alloc(0); // needed to mute avcodec assert
     AVFrame pic = {0};
@@ -313,9 +335,8 @@ int cfhd_decode(AVCodecContext* avctx, void* data, int* got_frame, AVPacket* avp
       int row = (avctx->width+47)/48*128;
       pic.linesize[0] = row;
     }
-
-    CFHD_DecodeSample(obj->dec,avpkt->data,avpkt->size,obj->buf,pic.linesize[0]);
-    if(obj->fmt==CFHD_PIXEL_FORMAT_B64A) swap_b64a(avctx,obj->buf,pic.linesize[0]);
+    dst = obj->buf;
+    linesize = pic.linesize[0];
 
   } else {
     int frame_size = av_image_get_buffer_size(avctx->pix_fmt, avctx->width, avctx->height, 16);
@@ -327,10 +348,12 @@ int cfhd_decode(AVCodecContext* avctx, void* data, int* got_frame, AVPacket* avp
       int row = (avctx->width+47)/48*128;
       frame->linesize[0] = row;
     }
-
-    CFHD_DecodeSample(obj->dec,avpkt->data,avpkt->size,frame->data[0],frame->linesize[0]);
-    if(obj->fmt==CFHD_PIXEL_FORMAT_B64A) swap_b64a(avctx,frame->data[0],frame->linesize[0]);
+    dst = frame->data[0];
+    linesize = frame->linesize[0];
   }
+
+  CFHD_DecodeSample(obj->dec,avpkt->data,avpkt->size,dst,linesize);
+  if(obj->fmt==CFHD_PIXEL_FORMAT_B64A) swap_b64a(avctx,dst,linesize);
 
   if(obj->encoded_format==CFHD_ENCODED_FORMAT_YUV_422){
     int flags = CFHD_get_decoder_color_flags(obj->dec);

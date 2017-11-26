@@ -166,7 +166,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   average_fr = false;
 
   if(m_pStreamCtx->codecpar->codec_tag==CFHD_TAG && !pSource->cfg_skip_cfhd){
-    // use vfw thunk instead of internal decoder
+    // use our native thunk instead of internal decoder
     if(avcodec_find_decoder(CFHD_ID)){
       m_pStreamCtx->codecpar->codec_id = CFHD_ID;
       direct_cfhd = true;
@@ -319,6 +319,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   if(direct_cfhd){
     flip_image = true;
     if(trust_index) direct_buffer = true;
+    cfhd_set_use_am(m_pCodecCtx, !pSource->cfg_skip_cfhd_am);
   }
 
   frame = av_frame_alloc();

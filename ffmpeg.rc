@@ -109,7 +109,7 @@ BEGIN
         LEFTMARGIN, 7
         RIGHTMARGIN, 203
         TOPMARGIN, 7
-        BOTTOMMARGIN, 95
+        BOTTOMMARGIN, 115
     END
 
     IDD_ENC_X265, DIALOG
@@ -359,17 +359,18 @@ BEGIN
     LTEXT           "15",IDC_QUALITY_VALUE,117,73,25,11
 END
 
-IDD_INPUT_OPTIONS DIALOGEX 0, 0, 210, 102
+IDD_INPUT_OPTIONS DIALOGEX 0, 0, 210, 122
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_VISIBLE | WS_CAPTION | WS_SYSMENU
 CAPTION "Input Driver Options"
 FONT 8, "MS Shell Dlg", 400, 0, 0x1
 BEGIN
-    DEFPUSHBUTTON   "OK",IDOK,77,81,50,14
+    DEFPUSHBUTTON   "OK",IDOK,77,101,50,14
     CONTROL         "Disable cache",IDC_DISABLE_CACHE,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,16,14,59,10
     CONTROL         "Use native decoder for Cineform HD",IDC_DECODE_CFHD,
                     "Button",BS_AUTOCHECKBOX | WS_TABSTOP,16,37,131,10
-    PUSHBUTTON      "System options",IDC_SYS_OPTIONS,7,58,59,14
-    LTEXT           "System options are not associated with specific files.",IDC_STATIC,73,56,130,19
+    CONTROL         "Enable Active Metadata",IDC_DECODE_CFHD_AM,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,25,53,92,10
+    PUSHBUTTON      "System options",IDC_SYS_OPTIONS,7,76,59,14
+    LTEXT           "System options are not associated with specific files.",IDC_STATIC,73,74,130,19
 END
 
 IDD_ENC_X265 DIALOGEX 0, 0, 316, 119

@@ -305,6 +305,8 @@ INT_PTR FileConfigureDialog::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
   switch(msg){
   case WM_INITDIALOG:
     CheckDlgButton(mhdlg, IDC_DECODE_CFHD, !data->skip_native_cfhd ? BST_CHECKED:BST_UNCHECKED);
+    CheckDlgButton(mhdlg, IDC_DECODE_CFHD_AM, !data->skip_cfhd_am ? BST_CHECKED:BST_UNCHECKED);
+    EnableWindow(GetDlgItem(mhdlg, IDC_DECODE_CFHD_AM), !data->skip_native_cfhd);
     CheckDlgButton(mhdlg, IDC_DISABLE_CACHE, data->disable_cache ? BST_CHECKED:BST_UNCHECKED);
     return TRUE;
   case WM_COMMAND:
@@ -315,6 +317,11 @@ INT_PTR FileConfigureDialog::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
 
     case IDC_DECODE_CFHD:
       data->skip_native_cfhd = !IsDlgButtonChecked(mhdlg,IDC_DECODE_CFHD)!=0;
+      EnableWindow(GetDlgItem(mhdlg, IDC_DECODE_CFHD_AM), !data->skip_native_cfhd);
+      return TRUE;
+
+    case IDC_DECODE_CFHD_AM:
+      data->skip_cfhd_am = !IsDlgButtonChecked(mhdlg,IDC_DECODE_CFHD_AM)!=0;
       return TRUE;
 
     case IDC_DISABLE_CACHE:
@@ -380,6 +387,7 @@ VDFFInputFile::VDFFInputFile(const VDXInputDriverContext& context)
 
   cfg_frame_buffers = 0;
   cfg_skip_cfhd = false;
+  cfg_skip_cfhd_am = false;
   cfg_disable_cache = false;
 }
 
@@ -407,6 +415,7 @@ void VDFFInputFile::Init(const wchar_t *szFile, IVDXInputOptions *in_opts)
   if(in_opts){
     VDFFInputFileOptions* opt = (VDFFInputFileOptions*)in_opts;
     if(opt->data.skip_native_cfhd) cfg_skip_cfhd = true;
+    if(opt->data.skip_cfhd_am) cfg_skip_cfhd_am = true;
     if(opt->data.disable_cache) cfg_disable_cache = true;
   }
 

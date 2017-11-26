@@ -19,6 +19,7 @@ const unsigned CFHD_TAG = MKTAG('C', 'F', 'H', 'D');
 
 void av_register_cfhd();
 void cfhd_set_buffer(AVCodecContext* avctx, void* buf);
+void cfhd_set_use_am(AVCodecContext* avctx, bool v);
 void cfhd_set_format(AVCodecContext* avctx, nsVDXPixmap::VDXPixmapFormat fmt);
 bool cfhd_test_format(AVCodecContext* avctx, nsVDXPixmap::VDXPixmapFormat fmt);
 void cfhd_get_info(AVCodecContext* avctx, FilterModPixmapInfo& info);

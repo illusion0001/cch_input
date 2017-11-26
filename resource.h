@@ -90,6 +90,7 @@
 #define IDC_QUALITY                     1047
 #define IDC_FORCE_THREAD2               1047
 #define IDC_DISABLE_CACHE2              1047
+#define IDC_DECODE_CFHD_AM              1047
 #define IDC_QUALITY_VALUE               1048
 #define IDC_STEREO                      1049
 #define IDC_CBR                         1050
