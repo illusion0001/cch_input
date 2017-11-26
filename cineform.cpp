@@ -80,8 +80,10 @@ void cfhd_set_encoded_format(AVCodecContext* avctx)
     break;
   case CFHD_ENCODED_FORMAT_RGB_444:
     if(obj->input_depth==8){
-      fmt = CFHD_PIXEL_FORMAT_RG24;
-      avctx->pix_fmt = AV_PIX_FMT_BGR24;
+      //fmt = CFHD_PIXEL_FORMAT_RG24;
+      //avctx->pix_fmt = AV_PIX_FMT_BGR24;
+      fmt = CFHD_PIXEL_FORMAT_BGRA;
+      avctx->pix_fmt = AV_PIX_FMT_BGRA;
     } else {
       fmt = CFHD_PIXEL_FORMAT_B64A;
       avctx->pix_fmt = AV_PIX_FMT_BGRA64;
@@ -101,8 +103,10 @@ void cfhd_set_encoded_format(AVCodecContext* avctx)
     avctx->pix_fmt = AV_PIX_FMT_BGRA64;
     break;
   default:
-    fmt = CFHD_PIXEL_FORMAT_RG24;
-    avctx->pix_fmt = AV_PIX_FMT_BGR24;
+    //fmt = CFHD_PIXEL_FORMAT_RG24;
+    //avctx->pix_fmt = AV_PIX_FMT_BGR24;
+    fmt = CFHD_PIXEL_FORMAT_BGRA;
+    avctx->pix_fmt = AV_PIX_FMT_BGRA;
   }
 
   if(fmt!=obj->fmt){
@@ -122,8 +126,10 @@ void cfhd_set_format(AVCodecContext* avctx, nsVDXPixmap::VDXPixmapFormat vdfmt)
     avctx->pix_fmt = AV_PIX_FMT_RGB24; // best match
     break;
   case nsVDXPixmap::kPixFormat_RGB888:
-    fmt = CFHD_PIXEL_FORMAT_RG24;
-    avctx->pix_fmt = AV_PIX_FMT_BGR24;
+    //fmt = CFHD_PIXEL_FORMAT_RG24;
+    //avctx->pix_fmt = AV_PIX_FMT_BGR24;
+    fmt = CFHD_PIXEL_FORMAT_BGRA;
+    avctx->pix_fmt = AV_PIX_FMT_BGRA;
     break;
   case nsVDXPixmap::kPixFormat_XRGB8888:
     fmt = CFHD_PIXEL_FORMAT_BGRA;
@@ -185,7 +191,7 @@ bool cfhd_test_format(AVCodecContext* avctx, nsVDXPixmap::VDXPixmapFormat vdfmt)
     switch(vdfmt){
     case nsVDXPixmap::kPixFormat_YUV422_YUYV:
     case nsVDXPixmap::kPixFormat_YUV422_V210:
-    case nsVDXPixmap::kPixFormat_RGB888:
+    //case nsVDXPixmap::kPixFormat_RGB888:
     case nsVDXPixmap::kPixFormat_XRGB8888:
     case nsVDXPixmap::kPixFormat_XRGB64:
       return true;
@@ -193,7 +199,7 @@ bool cfhd_test_format(AVCodecContext* avctx, nsVDXPixmap::VDXPixmapFormat vdfmt)
   }
   if(obj->encoded_format==CFHD_ENCODED_FORMAT_RGB_444){
     switch(vdfmt){
-    case nsVDXPixmap::kPixFormat_RGB888:
+    //case nsVDXPixmap::kPixFormat_RGB888:
     case nsVDXPixmap::kPixFormat_XRGB8888:
     case nsVDXPixmap::kPixFormat_R210:
     case nsVDXPixmap::kPixFormat_XRGB64:
@@ -203,7 +209,7 @@ bool cfhd_test_format(AVCodecContext* avctx, nsVDXPixmap::VDXPixmapFormat vdfmt)
   if(obj->encoded_format==CFHD_ENCODED_FORMAT_RGBA_4444){
     switch(vdfmt){
     case nsVDXPixmap::kPixFormat_XRGB8888:
-    case nsVDXPixmap::kPixFormat_RGB888:
+    //case nsVDXPixmap::kPixFormat_RGB888:
     case nsVDXPixmap::kPixFormat_R210:
     case nsVDXPixmap::kPixFormat_XRGB64:
       return true;
@@ -212,7 +218,7 @@ bool cfhd_test_format(AVCodecContext* avctx, nsVDXPixmap::VDXPixmapFormat vdfmt)
   if(obj->encoded_format==CFHD_ENCODED_FORMAT_BAYER){
     switch(vdfmt){
     case nsVDXPixmap::kPixFormat_XRGB8888:
-    case nsVDXPixmap::kPixFormat_RGB888:
+    //case nsVDXPixmap::kPixFormat_RGB888:
     case nsVDXPixmap::kPixFormat_R210:
     case nsVDXPixmap::kPixFormat_XRGB64:
       return true;
