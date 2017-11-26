@@ -9,7 +9,7 @@
 
 #include <string>
 
-static const char* vsnstr = "Version 2.0";
+static const char* vsnstr = "Version 2.1";
 
 extern HINSTANCE hInstance;
  

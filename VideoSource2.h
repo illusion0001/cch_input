@@ -122,7 +122,7 @@ public:
     }
   } convertInfo;
 
-  ErrorMode CurrentDecoderErrorMode;
+  ErrorMode errorMode;
 
   struct BufferPage{
     enum {
@@ -175,6 +175,7 @@ public:
   bool decode_mode;
   bool small_cache_mode;
   bool enable_prefetch;
+  int small_buffer_count;
   int64_t dead_range_start;
   int64_t dead_range_end;
 

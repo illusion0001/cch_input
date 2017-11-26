@@ -29,7 +29,7 @@ VDFFVideoSource::VDFFVideoSource(const VDXInputDriverContext& context)
   direct_format_len = 0;
   frame = 0;
   memset(&copy_pkt,0,sizeof(copy_pkt));
-  CurrentDecoderErrorMode = kErrorModeReportAll;
+  errorMode = kErrorModeReportAll; // still not supported by host anyway
   m_pixmap_data = 0;
   m_pixmap_frame = -1;
   last_request = -1;
@@ -37,6 +37,7 @@ VDFFVideoSource::VDFFVideoSource(const VDXInputDriverContext& context)
   last_seek_frame = -1;
   buffer = 0;
   buffer_count = 0;
+  small_buffer_count = 0;
   buffer_reserve = 0;
   frame_array = 0;
   frame_type = 0;
@@ -136,7 +137,15 @@ int VDFFVideoSource::init_duration(const AVRational fr)
     if(start_pts==AV_NOPTS_VALUE) start_pts = 0;
     int64_t duration = m_pStreamCtx->duration - start_pts;
     //! above idea fails on Hilary.0000.ts
-    if(duration<=0) duration = m_pStreamCtx->duration;
+
+    bool mts = false;
+    AVInputFormat* mts_format = av_find_input_format("mpegts");
+    if(m_pFormatCtx->iformat==mts_format) mts = true;
+
+    if(mts || duration<=0){
+      duration = m_pStreamCtx->duration;
+      start_pts = 0; // ignore count_error
+    }
     sample_count = (int)((duration * time_base.num + rndd) / time_base.den);
     int e = (int)((start_pts * time_base.num + rndd) / time_base.den);
     e = abs(e);
@@ -145,7 +154,8 @@ int VDFFVideoSource::init_duration(const AVRational fr)
 
   if(sample_count==0){
     // found in 1-frame nut
-    sample_count = 1;
+    AVInputFormat* nut_format = av_find_input_format("nut");
+    if(m_pFormatCtx->iformat==nut_format) sample_count = 1;
   }
 
   m_streamInfo.mInfo.mSampleRate.mNumerator = fr.num;
@@ -598,6 +608,13 @@ void VDFFVideoSource::setCacheMode(bool v)
   if(!v){
     enable_prefetch = false;
     int buffer_max = m_pSource->cfg_frame_buffers;
+    // 1 required +1 to handle dups
+    // and somewhere 10 to soften display triple-buffering, filter process-ahead or whatever
+    // (not strictly required but helps to recover from mode switching)
+    if(buffer_max<16) buffer_max = 16;
+    if(buffer_max>buffer_count) buffer_max = buffer_count;
+    small_buffer_count = buffer_max;
+
     if(mem && used_frames>buffer_max){
       free_buffers();
       CloseHandle(mem);
@@ -622,20 +639,17 @@ void VDFFVideoSource::setCacheMode(bool v)
 
 IVDXStreamSource::ErrorMode VDFFVideoSource::GetDecodeErrorMode() 
 {
-  return CurrentDecoderErrorMode;
-  return IVDXStreamSource::kErrorModeReportAll;
+  return errorMode;
 }
 
 void VDFFVideoSource::SetDecodeErrorMode(IVDXStreamSource::ErrorMode mode) 
 {
-  //if ( mode != ErrorMode::kErrorModeCount )
-    CurrentDecoderErrorMode = mode;
+  errorMode = mode;
 }
 
 bool VDFFVideoSource::IsDecodeErrorModeSupported(IVDXStreamSource::ErrorMode mode)
 {
   return mode == kErrorModeReportAll || mode == kErrorModeDecodeAnyway;
-  return mode == kErrorModeReportAll;
 }
 
 void VDFFVideoSource::GetVideoSourceInfo(VDXVideoSourceInfo& info)
@@ -2042,7 +2056,7 @@ void VDFFVideoSource::alloc_page(int pos)
 {
   BufferPage* r = 0;
   int buffer_max = buffer_count;
-  if(small_cache_mode) buffer_max = m_pSource->cfg_frame_buffers;
+  if(small_cache_mode) buffer_max = small_buffer_count;
 
   if(used_frames>=buffer_max) r = remove_page(pos);
   if(!r){for(int i=0; i<buffer_count; i++){
