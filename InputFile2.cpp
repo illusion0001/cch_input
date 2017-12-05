@@ -752,6 +752,7 @@ bool VDFFInputFile::GetAudioSource(int index, IVDXAudioSource **ppAS)
   }
 
   if(s_index < 0) return false;
+  if(m_pFormatCtx->streams[s_index]->codecpar->codec_id==AV_CODEC_ID_NONE) return false;
 
   VDFFAudioSource *pAS = new VDFFAudioSource(mContext);
 

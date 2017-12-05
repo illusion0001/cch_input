@@ -184,8 +184,8 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   }
   AVCodec* pDecoder = avcodec_find_decoder(m_pStreamCtx->codecpar->codec_id);
   if(!pDecoder){
-    char buf[80];
-    av_get_codec_tag_string(buf,80,m_pStreamCtx->codecpar->codec_tag);
+    char buf[AV_FOURCC_MAX_STRING_SIZE];
+    av_fourcc_make_string(buf,m_pStreamCtx->codecpar->codec_tag);
     mContext.mpCallbacks->SetError("FFMPEG: Unsupported codec (%s)", buf);
     return -1;
   }
@@ -196,7 +196,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   avcodec_parameters_to_context(m_pCodecCtx,m_pStreamCtx->codecpar);
 
   AVRational r_fr = av_stream_get_r_frame_rate(m_pStreamCtx);
-  if(m_pStreamCtx->codec->field_order>AV_FIELD_PROGRESSIVE){
+  if(m_pStreamCtx->codecpar->field_order>AV_FIELD_PROGRESSIVE){
     // interlaced seems to double r_framerate
     // example: 00005.MTS
     // however other samples do not show this
@@ -1846,12 +1846,9 @@ bool VDFFVideoSource::read_frame(sint64 desired_frame, bool init)
       pkt.stream_index = m_streamIndex;
       while(1){
         if(direct_buffer) alloc_direct_buffer();
-        //avcodec_send_packet(m_pCodecCtx, &pkt);
-        //int f = avcodec_receive_frame(m_pCodecCtx, frame);
-        //if(f!=0) return false;
-        int got_frame = 0;
-        avcodec_decode_video2(m_pCodecCtx, frame, &got_frame, &pkt);
-        if(!got_frame) return false;
+        avcodec_send_packet(m_pCodecCtx, &pkt);
+        int f = avcodec_receive_frame(m_pCodecCtx, frame);
+        if(f!=0) return false;
         if(init){
           init = false;
           set_start_time();
@@ -1862,38 +1859,26 @@ bool VDFFVideoSource::read_frame(sint64 desired_frame, bool init)
       }
 
     } else {
-      AVPacket orig_pkt = pkt;
       int done_frames = 0;
-      do {
-        int s = pkt.size;
-        if(pkt.stream_index == m_streamIndex){
-          if(direct_buffer) alloc_direct_buffer();
-          //!new api fails with cfhd
-          //avcodec_send_packet(m_pCodecCtx, &pkt);
-          //int f = avcodec_receive_frame(m_pCodecCtx, frame);
-          int got_frame = 0;
-          int used = avcodec_decode_video2(m_pCodecCtx, frame, &got_frame, &pkt);
-          if(used<0) break;
-          s = used;
-          if(got_frame){
-            if(init){
-              init = false;
-              set_start_time();
-            }
-            int pos = handle_frame();
-            av_frame_unref(frame);
-            done_frames++;
-            if(copy_mode && pos==desired_frame){
-              av_packet_unref(&copy_pkt);
-              av_packet_ref(&copy_pkt,&orig_pkt);
-            }
+      if(pkt.stream_index == m_streamIndex){
+        if(direct_buffer) alloc_direct_buffer();
+        avcodec_send_packet(m_pCodecCtx, &pkt);
+        int f = avcodec_receive_frame(m_pCodecCtx, frame);
+        if(f==0){
+          if(init){
+            init = false;
+            set_start_time();
+          }
+          int pos = handle_frame();
+          av_frame_unref(frame);
+          done_frames++;
+          if(copy_mode && pos==desired_frame){
+            av_packet_unref(&copy_pkt);
+            av_packet_ref(&copy_pkt,&pkt);
           }
         }
-
-        pkt.data += s;
-        pkt.size -= s;
-      } while (pkt.size > 0);
-      av_packet_unref(&orig_pkt);
+      }
+      av_packet_unref(&pkt);
       if(done_frames>0) return true;
     }
   }
@@ -1901,7 +1886,7 @@ bool VDFFVideoSource::read_frame(sint64 desired_frame, bool init)
 
 void VDFFVideoSource::set_start_time()
 {
-  int64_t ts = frame->pkt_pts;
+  int64_t ts = frame->pts;
   if(ts==AV_NOPTS_VALUE) ts = frame->pkt_dts;
   start_time = ts;
   if(frame_fmt==-1) init_format();
@@ -1932,7 +1917,7 @@ int VDFFVideoSource::handle_frame_num(int64_t pts, int64_t dts)
 int VDFFVideoSource::handle_frame()
 {
   decoded_count++;
-  int pos = handle_frame_num(frame->pkt_pts,frame->pkt_dts);
+  int pos = handle_frame_num(frame->pts,frame->pkt_dts);
   if(pos==-1) return -1;
 
   if(next_frame>0 && pos>next_frame){

@@ -24,7 +24,7 @@ VDFFAudioSource::VDFFAudioSource(const VDXInputDriverContext& context)
 VDFFAudioSource::~VDFFAudioSource()
 {
   if(frame) av_frame_free(&frame);
-  if(m_pCodecCtx) avcodec_close(m_pCodecCtx);
+  if(m_pCodecCtx) avcodec_free_context(&m_pCodecCtx);
   if(swr) swr_free(&swr);
   if(m_pFormatCtx) avformat_close_input(&m_pFormatCtx);
   if(buffer){for(int i=0; i<buffer_size; i++) free(buffer[i].p); }
@@ -57,15 +57,19 @@ int	VDFFAudioSource::initStream(VDFFInputFile* pSource, int streamIndex)
   m_pSource = pSource;
   m_streamIndex = streamIndex;
   m_pStreamCtx = m_pFormatCtx->streams[m_streamIndex];
-  m_pCodecCtx = m_pStreamCtx->codec;
 
-  AVCodec* pDecoder = avcodec_find_decoder(m_pCodecCtx->codec_id);
+  AVCodec* pDecoder = avcodec_find_decoder(m_pStreamCtx->codecpar->codec_id);
   if(!pDecoder){
-    char buf[80];
-    av_get_codec_tag_string(buf,80,m_pCodecCtx->codec_tag);
+    char buf[AV_FOURCC_MAX_STRING_SIZE];
+    av_fourcc_make_string(buf,m_pCodecCtx->codec_tag);
     mContext.mpCallbacks->SetError("FFMPEG: Unsupported codec (%s)", buf);
     return -1;
   }
+  m_pCodecCtx = avcodec_alloc_context3(pDecoder);
+  if(!m_pCodecCtx){
+    return -1;
+  }
+  avcodec_parameters_to_context(m_pCodecCtx,m_pStreamCtx->codecpar);
   m_pCodecCtx->thread_count = 1;
   if(avcodec_open2(m_pCodecCtx, pDecoder, 0)<0){
     mContext.mpCallbacks->SetError("FFMPEG: Decoder error.");
@@ -321,7 +325,7 @@ bool VDFFAudioSource::Read(int64_t start, uint32_t count, void *lpBuffer, uint32
 
   if(start>next_sample+m_pCodecCtx->sample_rate || start<next_sample){
     // required to seek
-    discard_samples = start>=4096 ? 4096 : start;
+    discard_samples = int(start>=4096 ? 4096 : start);
     int64_t pos = (start-discard_samples) * time_base.den / time_base.num - time_adjust;
     if(start==0 && pos>0) pos = 0;
     avcodec_flush_buffers(m_pCodecCtx);
@@ -439,12 +443,12 @@ void VDFFAudioSource::invalidate(int64_t start, uint32_t count)
 
 int VDFFAudioSource::read_packet(AVPacket& pkt, ReadInfo& ri)
 {
-  int got_frame;
-  int ret = avcodec_decode_audio4(m_pCodecCtx, frame, &got_frame, &pkt);
-  if(ret<0) return ret;
-  if(got_frame){
+  int r = avcodec_send_packet(m_pCodecCtx, &pkt);
+  if(r==AVERROR(EAGAIN)) return 0;
+  int f = avcodec_receive_frame(m_pCodecCtx, frame);
+  if(f==0){
     reset_swr();
-    int64_t start = (frame->pkt_pts + time_adjust) * time_base.num / time_base.den;
+    int64_t start = (frame->pts + time_adjust) * time_base.num / time_base.den;
     int count = frame->nb_samples;
     if(next_sample!=AV_NOPTS_VALUE && start!=next_sample){
       trust_sample_pos = false;
@@ -532,7 +536,8 @@ int VDFFAudioSource::read_packet(AVPacket& pkt, ReadInfo& ri)
     // so create gap to force to continue decoding
     if(!trust_sample_pos) invalidate(next_sample,1);
   }
-  return FFMIN(ret, pkt.size);
+
+  return pkt.size;
 }
 
 void VDFFAudioSource::reset_cache()
