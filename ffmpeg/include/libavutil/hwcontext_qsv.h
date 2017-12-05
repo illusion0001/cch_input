@@ -16,36 +16,38 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#ifndef AVUTIL_HWCONTEXT_QSV_H
+#define AVUTIL_HWCONTEXT_QSV_H
 
-#ifndef AVUTIL_HWCONTEXT_CUDA_H
-#define AVUTIL_HWCONTEXT_CUDA_H
-
-#ifndef CUDA_VERSION
-#include <cuda.h>
-#endif
-
-#include "pixfmt.h"
+#include <mfx/mfxvideo.h>
 
 /**
  * @file
- * An API-specific header for AV_HWDEVICE_TYPE_CUDA.
+ * An API-specific header for AV_HWDEVICE_TYPE_QSV.
  *
- * This API supports dynamic frame pools. AVHWFramesContext.pool must return
- * AVBufferRefs whose data pointer is a CUdeviceptr.
+ * This API does not support dynamic frame pools. AVHWFramesContext.pool must
+ * contain AVBufferRefs whose data pointer points to an mfxFrameSurface1 struct.
  */
-
-typedef struct AVCUDADeviceContextInternal AVCUDADeviceContextInternal;
 
 /**
  * This struct is allocated as AVHWDeviceContext.hwctx
  */
-typedef struct AVCUDADeviceContext {
-    CUcontext cuda_ctx;
-    AVCUDADeviceContextInternal *internal;
-} AVCUDADeviceContext;
+typedef struct AVQSVDeviceContext {
+    mfxSession session;
+} AVQSVDeviceContext;
 
 /**
- * AVHWFramesContext.hwctx is currently not used
+ * This struct is allocated as AVHWFramesContext.hwctx
  */
+typedef struct AVQSVFramesContext {
+    mfxFrameSurface1 *surfaces;
+    int            nb_surfaces;
 
-#endif /* AVUTIL_HWCONTEXT_CUDA_H */
+    /**
+     * A combination of MFX_MEMTYPE_* describing the frame pool.
+     */
+    int frame_type;
+} AVQSVFramesContext;
+
+#endif /* AVUTIL_HWCONTEXT_QSV_H */
+
