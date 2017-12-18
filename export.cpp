@@ -579,14 +579,15 @@ void FFOutputFile::SetAudio(uint32 index, const VDXStreamInfo& si, const void *p
   import_wav(st,pFormat,cbFormat);
   adjust_codec_tag(st);
 
-  st->time_base = av_make_q(asi.dwScale,asi.dwRate);
-
   if(si.avcodec_version){
     st->codec->block_align = si.block_align;
     st->codec->frame_size = si.frame_size;
     st->codec->initial_padding = si.initial_padding;
     st->codec->trailing_padding = si.trailing_padding;
   }
+  avcodec_parameters_from_context(st->codecpar,st->codec);
+
+  st->time_base = av_make_q(asi.dwScale,asi.dwRate);
 
   s.st = st;
   s.time_base = st->time_base;
@@ -693,9 +694,71 @@ void FFOutputFile::import_wav(AVStream *st, const void *pFormat, int cbFormat)
 void FFOutputFile::adjust_codec_tag(AVStream *st)
 {
   ::adjust_codec_tag(ofmt->oformat,st);
+}
 
-  //if(ofmt->oformat->flags & AVFMT_GLOBALHEADER)
-  //  st->codec->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+bool FFOutputFile::test_header()
+{
+  {for(int i=0; i<(int)stream.size(); i++){
+    StreamInfo& si = stream[i];
+    AVCodecID codec_id = si.st->codecpar->codec_id;
+
+    IOWBuffer io;
+    int buf_size = 4096;
+    void* buf = av_malloc(buf_size);
+    AVIOContext* avio_ctx = avio_alloc_context((unsigned char*)buf,buf_size,1,&io,0,&IOWBuffer::Write,&IOWBuffer::Seek);
+    AVFormatContext* ofmt = avformat_alloc_context();
+    ofmt->pb = avio_ctx;
+    ofmt->oformat = this->ofmt->oformat;
+    AVStream* st = avformat_new_stream(ofmt, 0);
+    avcodec_parameters_copy(st->codecpar, si.st->codecpar);
+    st->sample_aspect_ratio = si.st->sample_aspect_ratio;
+    st->avg_frame_rate = si.st->avg_frame_rate;
+    av_stream_set_r_frame_rate(st,st->avg_frame_rate);
+    st->time_base = si.st->time_base;
+
+    if(st->codecpar->codec_type==AVMEDIA_TYPE_AUDIO){
+      if(ofmt->oformat==av_guess_format("mp4", 0, 0)){
+        st->codecpar->codec_tag = 0;
+      }
+    }
+
+    bool failed = true;
+    if(avformat_write_header(ofmt, 0)<0) goto cleanup;
+    if(av_write_trailer(ofmt)<0) goto cleanup;
+    failed = false;
+
+  cleanup:
+    av_free(avio_ctx->buffer);
+    av_free(avio_ctx);
+    avformat_free_context(ofmt);
+    if(failed){
+      std::string msg;
+      msg += avcodec_get_name(codec_id);
+      msg += ": codec not currently supported in container";
+      mContext.mpCallbacks->SetError(msg.c_str());
+      return false;
+    }
+  }}
+
+  /*
+  if(!ofmt->oformat->codec_tag) return true;
+
+  {for(int i=0; i<(int)stream.size(); i++){
+    StreamInfo& si = stream[i];
+    AVCodecID codec_id = si.st->codecpar->codec_id;
+
+    unsigned int codec_tag2;
+    int have_codec_tag2 = av_codec_get_tag2(ofmt->oformat->codec_tag, codec_id, &codec_tag2);
+    if(!have_codec_tag2){
+      std::string msg;
+      msg += avcodec_get_name(codec_id);
+      msg += ": codec not currently supported in container";
+      mContext.mpCallbacks->SetError(msg.c_str());
+      return false;
+    }
+  }}
+  */
+  return true;
 }
 
 void FFOutputFile::Write(uint32 index, const void *pBuffer, uint32 cbBuffer, PacketInfo& info)
@@ -703,6 +766,11 @@ void FFOutputFile::Write(uint32 index, const void *pBuffer, uint32 cbBuffer, Pac
   if(!ofmt) return;
 
   if(!header){
+    if(!test_header()){
+      Finalize();
+      return;
+    }
+
     int err = 0;
     if(!(ofmt->oformat->flags & AVFMT_NOFILE)){
       err = avio_open(&ofmt->pb, out_ff_path.c_str(), AVIO_FLAG_WRITE);

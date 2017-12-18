@@ -1,4 +1,5 @@
 #include "a_compress.h"
+#include "export.h"
 #include <string>
 #include <Ks.h>
 #include <KsMedia.h>
@@ -8,41 +9,6 @@
 
 void init_av();
 extern HINSTANCE hInstance;
-
-struct IOWBuffer{
-  uint8_t* data;
-  int64_t size;
-  int64_t pos;
-
-  IOWBuffer(){
-    data=0; size=0; pos=0; 
-  }
-
-  ~IOWBuffer(){
-    free(data);
-  }
-
-  static int Write(void* obj, uint8_t* buf, int buf_size){
-    IOWBuffer* t = (IOWBuffer*)obj;
-    int64_t pos = t->pos;
-    if(t->size<pos+buf_size){
-      t->data = (uint8_t*)realloc(t->data,size_t(pos+buf_size));
-      t->size = pos+buf_size;
-    }
-    memcpy(t->data+pos,buf,buf_size);
-    t->pos += buf_size;
-    return buf_size;
-  }
-
-  static int64_t Seek(void* obj, int64_t offset, int whence){
-    IOWBuffer* t = (IOWBuffer*)obj;
-    if(whence==AVSEEK_SIZE) return t->size;
-    if(whence==SEEK_CUR){ t->pos+=offset; return t->pos; }
-    if(whence==SEEK_SET){ t->pos=offset; return t->pos; }
-    if(whence==SEEK_END){ t->pos=t->size+offset; return t->pos; }
-    return -1;
-  }
-};
 
 VDFFAudio::VDFFAudio(const VDXInputDriverContext &pContext)
   :mContext(pContext)
