@@ -1384,6 +1384,15 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   }
   if((desc->flags & AV_PIX_FMT_FLAG_ALPHA) && (out_desc->flags & AV_PIX_FMT_FLAG_ALPHA)){
     m_pixmap_info.alpha_type = FilterModPixmapInfo::kAlphaMask;
+    switch(m_pCodecCtx->codec_id){
+    case AV_CODEC_ID_GIF:
+    case AV_CODEC_ID_PNG:
+    case AV_CODEC_ID_TARGA:
+    case AV_CODEC_ID_WEBP:
+    case AV_CODEC_ID_PSD:
+      m_pixmap_info.alpha_type = FilterModPixmapInfo::kAlphaOpacity;
+      break;
+    }
   }
   if(direct_cfhd) cfhd_get_info(m_pCodecCtx,m_pixmap_info);
 
