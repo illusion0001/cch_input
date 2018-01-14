@@ -60,18 +60,30 @@ bool logoOpenImage(HWND hwnd, wchar_t* path, int max_path) {
   video.resize(video.length()+1,0);
   int x2 = video.find('|');
   video[x2] = 0;
+  std::wstring all = L"All files (*.*)";
+  all.resize(all.length()+1,0);
+  all += L"*.*";
+  all.resize(all.length()+1,0);
 
   std::wstring s;
   s += video;
   s += image;
-  s += L"All files (*.*)\0*.*\0";
+  s += all;
   ofn.lpstrFilter = s.c_str();
   ofn.nFilterIndex = 2;
   ofn.lpstrFile = szFile;
-  ofn.nMaxFile = sizeof szFile;
+  ofn.nMaxFile = MAX_PATH;
   ofn.Flags = OFN_EXPLORER | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY | OFN_ENABLESIZING | OFN_ENABLETEMPLATE;
 
-  if (GetOpenFileNameW(&ofn)){
+  BOOL result = GetOpenFileNameW(&ofn);
+
+  if(!result && CommDlgExtendedError()){
+    szFile[0] = 0;
+    ofn.lpstrInitialDir = NULL;
+    result = GetOpenFileNameW(&ofn);
+  }
+
+  if(result){
     wcscpy(path,szFile);
     return true;
   }
@@ -131,6 +143,14 @@ INT_PTR LogoDialog::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam){
       if(logoOpenImage(mhdlg, filter->param.path, MAX_PATH)){
         init_path();
         filter->update_file();
+        if(filter->video){
+          const FilterModPixmapInfo& layerInfo = filter->video->GetFrameBufferInfo();
+          if(layerInfo.alpha_type){
+            filter->param.blendMode = LogoParam::blend_alpha;
+            if(layerInfo.alpha_type==FilterModPixmapInfo::kAlphaOpacity_pm)
+              filter->param.blendMode = LogoParam::blend_alpha_pm;
+          }
+        }
         init_buttons();
         redo_frame();
       }

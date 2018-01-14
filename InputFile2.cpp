@@ -556,6 +556,17 @@ AVFormatContext* VDFFInputFile::open_file(AVMediaType type, int streamIndex)
     return 0;
   }
 
+  if(type==AVMEDIA_TYPE_VIDEO){
+    // I absolutely do not want index getting condensed
+    fmt->max_index_size = 512 * 1024 * 1024;
+  }
+
+  err = avformat_find_stream_info(fmt, 0);
+  if(err<0){
+    mContext.mpCallbacks->SetError("FFMPEG: Couldn't find stream information of file.");
+    return 0;
+  }
+
   is_image = false;
   is_image_list = false;
   is_anim_image = false;
@@ -586,7 +597,6 @@ AVFormatContext* VDFFInputFile::open_file(AVMediaType type, int streamIndex)
   AVInputFormat* fmt_image2 = av_find_input_format("image2");
 
   if(is_image && fmt_image2 && !single_file_mode){
-    avformat_find_stream_info(fmt, 0);
     AVRational r_fr = av_stream_get_r_frame_rate(fmt->streams[0]);
     wchar_t list_path[MAX_PATH];
     char start_number[MAX_PATH];
@@ -610,18 +620,6 @@ AVFormatContext* VDFFInputFile::open_file(AVMediaType type, int streamIndex)
       }
     }
   }
-
-  if(type==AVMEDIA_TYPE_VIDEO){
-    // I absolutely do not want index getting condensed
-    fmt->max_index_size = 512 * 1024 * 1024;
-  }
-
-  err = avformat_find_stream_info(fmt, 0);
-  if(err<0){
-    mContext.mpCallbacks->SetError("FFMPEG: Couldn't find stream information of file.");
-    return 0;
-  }
-
 
   int st = streamIndex;
   if(st==-1) st = find_stream(fmt,type);
