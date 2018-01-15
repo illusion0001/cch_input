@@ -592,7 +592,8 @@ AVFormatContext* VDFFInputFile::open_file(AVMediaType type, int streamIndex)
   if(strcmp(fmt->iformat->name,"sunrast_pipe")==0) is_image=true;
   if(strcmp(fmt->iformat->name,"tiff_pipe")==0) is_image=true;
   if(strcmp(fmt->iformat->name,"webp_pipe")==0) is_image=true;
-  if(strcmp(fmt->iformat->name,"apng")==0) is_anim_image=true;
+  if(strcmp(fmt->iformat->name,"apng")==0){ is_image=true; single_file_mode=true; }
+  if(strcmp(fmt->iformat->name,"gif")==0){ is_image=true; single_file_mode=true; }
 
   AVInputFormat* fmt_image2 = av_find_input_format("image2");
 
@@ -616,6 +617,11 @@ AVFormatContext* VDFFInputFile::open_file(AVMediaType type, int streamIndex)
       av_dict_free(&options);
       if(err!=0){
         mContext.mpCallbacks->SetError("FFMPEG: Unable to open image sequence.");
+        return 0;
+      }
+      err = avformat_find_stream_info(fmt, 0);
+      if(err<0){
+        mContext.mpCallbacks->SetError("FFMPEG: Couldn't find stream information of file.");
         return 0;
       }
     }
