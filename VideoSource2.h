@@ -98,7 +98,7 @@ public:
 
   AVFrame* frame;
   SwsContext* m_pSwsCtx;
-  VDXPixmap	m_pixmap;
+  VDXPixmapAlpha m_pixmap;
   FilterModPixmapInfo m_pixmap_info;
   uint8_t* m_pixmap_data;
   int m_pixmap_frame;

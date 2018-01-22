@@ -183,6 +183,11 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
     }
   }
   AVCodec* pDecoder = avcodec_find_decoder(m_pStreamCtx->codecpar->codec_id);
+  if(m_pStreamCtx->codecpar->codec_id==AV_CODEC_ID_VP8){
+    // on2 vp8 does not extract alpha
+    AVCodec* pDecoder2 = avcodec_find_decoder_by_name("libvpx");
+    if(pDecoder2) pDecoder = pDecoder2;
+  }
   if(!pDecoder){
     char buf[AV_FOURCC_MAX_STRING_SIZE];
     av_fourcc_make_string(buf,m_pStreamCtx->codecpar->codec_tag);
@@ -814,9 +819,11 @@ const void* VDFFVideoSource::DecodeFrame(const void* inputBuffer, uint32_t data_
     pic2.data[0] = (uint8_t*)m_pixmap.data;
     pic2.data[1] = (uint8_t*)m_pixmap.data2;
     pic2.data[2] = (uint8_t*)m_pixmap.data3;
+    pic2.data[3] = (uint8_t*)m_pixmap.data4;
     pic2.linesize[0] = int(m_pixmap.pitch);
     pic2.linesize[1] = int(m_pixmap.pitch2);
     pic2.linesize[2] = int(m_pixmap.pitch3);
+    pic2.linesize[3] = int(m_pixmap.pitch4);
     sws_scale(m_pSwsCtx, pic.data, pic.linesize, 0, h, pic2.data, pic2.linesize);
     return align_buf(m_pixmap_data);
   }
@@ -948,12 +955,52 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     perfect_bitexact = true;
     break;
 
+  case AV_PIX_FMT_YUVA444P:
+    perfect_format = kPixFormat_YUV444_Alpha_Planar;
+    perfect_av_fmt = AV_PIX_FMT_YUVA444P;
+    trigger = kPixFormat_YUV444_Planar;
+    perfect_bitexact = true;
+    break;
+
+  case AV_PIX_FMT_YUVA422P:
+    perfect_format = kPixFormat_YUV422_Alpha_Planar;
+    perfect_av_fmt = AV_PIX_FMT_YUVA422P;
+    trigger = kPixFormat_YUV422_Planar;
+    perfect_bitexact = true;
+    break;
+
+  case AV_PIX_FMT_YUVA420P:
+    perfect_format = kPixFormat_YUV420_Alpha_Planar;
+    perfect_av_fmt = AV_PIX_FMT_YUVA420P;
+    trigger = kPixFormat_YUV420_Planar;
+    perfect_bitexact = true;
+    break;
+
   case AV_PIX_FMT_YUVA444P9LE:
   case AV_PIX_FMT_YUVA444P10LE:
   case AV_PIX_FMT_YUVA444P16LE:
-    perfect_format = kPixFormat_XYUV64;
-    perfect_av_fmt = AV_PIX_FMT_AYUV64LE;
-    trigger = kPixFormat_XYUV64;
+    perfect_format = kPixFormat_YUV444_Alpha_Planar16;
+    perfect_av_fmt = AV_PIX_FMT_YUVA444P16LE;
+    trigger = kPixFormat_YUV444_Planar16;
+    perfect_bitexact = true;
+    break;
+
+  case AV_PIX_FMT_YUVA422P9LE:
+  case AV_PIX_FMT_YUVA422P10LE:
+  case AV_PIX_FMT_YUVA422P16LE:
+    perfect_format = kPixFormat_YUV422_Alpha_Planar16;
+    perfect_av_fmt = AV_PIX_FMT_YUVA422P16LE;
+    trigger = kPixFormat_YUV422_Planar16;
+    perfect_bitexact = true;
+    break;
+
+  case AV_PIX_FMT_YUVA420P9LE:
+  case AV_PIX_FMT_YUVA420P10LE:
+  case AV_PIX_FMT_YUVA420P16LE:
+    perfect_format = kPixFormat_YUV420_Alpha_Planar16;
+    perfect_av_fmt = AV_PIX_FMT_YUVA420P16LE;
+    trigger = kPixFormat_YUV420_Planar16;
+    perfect_bitexact = true;
     break;
 
   case AV_PIX_FMT_YUV420P9LE:
@@ -1375,8 +1422,18 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   case kPixFormat_YUV422_Planar16:
   case kPixFormat_YUV444_Planar16:
   case kPixFormat_XYUV64:
+  case kPixFormat_YUV420_Alpha_Planar:
+  case kPixFormat_YUV422_Alpha_Planar:
+  case kPixFormat_YUV444_Alpha_Planar:
+  case kPixFormat_YUV420_Alpha_Planar16:
+  case kPixFormat_YUV422_Alpha_Planar16:
+  case kPixFormat_YUV444_Alpha_Planar16:
     m_pixmap_info.ref_r = 0xFFFF;
-    if(convertInfo.direct_copy) m_pixmap_info.ref_r = src_max_value;
+    m_pixmap_info.ref_a = 0xFFFF;
+    if(convertInfo.direct_copy){
+      m_pixmap_info.ref_r = src_max_value;
+      m_pixmap_info.ref_a = src_max_value;
+    }
     if(m_pCodecCtx->colorspace==AVCOL_SPC_BT709) m_pixmap_info.colorSpaceMode = kColorSpaceMode_709;
     if(m_pCodecCtx->color_range==AVCOL_RANGE_MPEG) m_pixmap_info.colorRangeMode = kColorRangeMode_Limited;
     if(m_pCodecCtx->color_range==AVCOL_RANGE_JPEG) m_pixmap_info.colorRangeMode = kColorRangeMode_Full;
@@ -1390,6 +1447,7 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     case AV_CODEC_ID_TARGA:
     case AV_CODEC_ID_WEBP:
     case AV_CODEC_ID_PSD:
+    case AV_CODEC_ID_VP8:
       m_pixmap_info.alpha_type = FilterModPixmapInfo::kAlphaOpacity;
       break;
     }
@@ -1548,9 +1606,11 @@ void VDFFVideoSource::set_pixmap_layout(uint8_t* p)
   m_pixmap.data = pic.data[0];
   m_pixmap.data2 = pic.data[1];
   m_pixmap.data3 = pic.data[2];
+  m_pixmap.data4 = pic.data[3];
   m_pixmap.pitch = pic.linesize[0];
   m_pixmap.pitch2 = pic.linesize[1];
   m_pixmap.pitch3 = pic.linesize[2];
+  m_pixmap.pitch4 = pic.linesize[3];
 
   if(convertInfo.req_dib^flip_image){
     switch(m_pixmap.format){

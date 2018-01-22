@@ -112,6 +112,24 @@ void copy_yuv(AVFrame* frame, const VDXPixmapLayout* layout, const void* data, i
     uint8* d = frame->data[2] + frame->linesize[2]*y;
     memcpy(d,s,w2*bpp);
   }}
+
+  switch(layout->format){
+  case nsVDXPixmap::kPixFormat_YUV420_Alpha_Planar:
+  case nsVDXPixmap::kPixFormat_YUV422_Alpha_Planar:
+  case nsVDXPixmap::kPixFormat_YUV444_Alpha_Planar:
+  case nsVDXPixmap::kPixFormat_YUV420_Alpha_Planar16:
+  case nsVDXPixmap::kPixFormat_YUV422_Alpha_Planar16:
+  case nsVDXPixmap::kPixFormat_YUV444_Alpha_Planar16:
+    {
+      const VDXPixmapLayoutAlpha* layout2 = (const VDXPixmapLayoutAlpha*)layout;
+      {for(int y=0; y<layout->h; y++){
+        uint8* s = (uint8*)data + layout2->data4 + layout2->pitch4*y;
+        uint8* d = frame->data[3] + frame->linesize[3]*y;
+        memcpy(d,s,layout->w*bpp);
+      }}
+      break;
+    }
+  }
 }
 
 struct CodecBase: public CodecClass{
@@ -121,6 +139,9 @@ struct CodecBase: public CodecClass{
     format_yuv420 = 3,
     format_yuv422 = 4,
     format_yuv444 = 5,
+    format_yuva420 = 6,
+    format_yuva422 = 7,
+    format_yuva444 = 8,
   };
 
   struct Config{
@@ -236,6 +257,24 @@ struct CodecBase: public CodecClass{
       if(bits==14) return test_av_format(AV_PIX_FMT_YUV444P14LE);
       if(bits==16) return test_av_format(AV_PIX_FMT_YUV444P16LE);
       break;
+    case format_yuva420:
+      if(bits==8) return test_av_format(AV_PIX_FMT_YUVA420P);
+      if(bits==9) return test_av_format(AV_PIX_FMT_YUVA420P9LE);
+      if(bits==10) return test_av_format(AV_PIX_FMT_YUVA420P10LE);
+      if(bits==16) return test_av_format(AV_PIX_FMT_YUVA420P16LE);
+      break;
+    case format_yuva422:
+      if(bits==8) return test_av_format(AV_PIX_FMT_YUVA422P);
+      if(bits==9) return test_av_format(AV_PIX_FMT_YUVA422P9LE);
+      if(bits==10) return test_av_format(AV_PIX_FMT_YUVA422P10LE);
+      if(bits==16) return test_av_format(AV_PIX_FMT_YUVA422P16LE);
+      break;
+    case format_yuva444:
+      if(bits==8) return test_av_format(AV_PIX_FMT_YUVA444P);
+      if(bits==9) return test_av_format(AV_PIX_FMT_YUVA444P9LE);
+      if(bits==10) return test_av_format(AV_PIX_FMT_YUVA444P10LE);
+      if(bits==16) return test_av_format(AV_PIX_FMT_YUVA444P16LE);
+      break;
     }
     return false;
   }
@@ -303,6 +342,45 @@ struct CodecBase: public CodecClass{
           info->ref_r = max_value;
         }
         return nsVDXPixmap::kPixFormat_YUV444_Planar16;
+      }
+    }
+
+    if(config->format==format_yuva420){
+      if(config->bits==8){
+        return nsVDXPixmap::kPixFormat_YUV420_Alpha_Planar;
+      }
+      if(config->bits>8){
+        int max_value = (1 << config->bits)-1;
+        if(info){
+          info->ref_r = max_value;
+        }
+        return nsVDXPixmap::kPixFormat_YUV420_Alpha_Planar16;
+      }
+    }
+
+    if(config->format==format_yuva422){
+      if(config->bits==8){
+        return nsVDXPixmap::kPixFormat_YUV422_Alpha_Planar;
+      }
+      if(config->bits>8){
+        int max_value = (1 << config->bits)-1;
+        if(info){
+          info->ref_r = max_value;
+        }
+        return nsVDXPixmap::kPixFormat_YUV422_Alpha_Planar16;
+      }
+    }
+
+    if(config->format==format_yuva444){
+      if(config->bits==8){
+        return nsVDXPixmap::kPixFormat_YUV444_Alpha_Planar;
+      }
+      if(config->bits>8){
+        int max_value = (1 << config->bits)-1;
+        if(info){
+          info->ref_r = max_value;
+        }
+        return nsVDXPixmap::kPixFormat_YUV444_Alpha_Planar16;
       }
     }
 
@@ -501,6 +579,57 @@ struct CodecBase: public CodecClass{
       }
     }
 
+    if(config->format==format_yuva420){
+      switch(config->bits){
+      case 16:
+        ctx->pix_fmt = AV_PIX_FMT_YUVA420P16LE;
+        break;
+      case 10:
+        ctx->pix_fmt = AV_PIX_FMT_YUVA420P10LE;
+        break;
+      case 9:
+        ctx->pix_fmt = AV_PIX_FMT_YUVA420P9LE;
+        break;
+      case 8:
+        ctx->pix_fmt = AV_PIX_FMT_YUVA420P;
+        break;
+      }
+    }
+
+    if(config->format==format_yuva422){
+      switch(config->bits){
+      case 16:
+        ctx->pix_fmt = AV_PIX_FMT_YUVA422P16LE;
+        break;
+      case 10:
+        ctx->pix_fmt = AV_PIX_FMT_YUVA422P10LE;
+        break;
+      case 9:
+        ctx->pix_fmt = AV_PIX_FMT_YUVA422P9LE;
+        break;
+      case 8:
+        ctx->pix_fmt = AV_PIX_FMT_YUVA422P;
+        break;
+      }
+    }
+
+    if(config->format==format_yuva444){
+      switch(config->bits){
+      case 16:
+        ctx->pix_fmt = AV_PIX_FMT_YUVA444P16LE;
+        break;
+      case 10:
+        ctx->pix_fmt = AV_PIX_FMT_YUVA444P10LE;
+        break;
+      case 9:
+        ctx->pix_fmt = AV_PIX_FMT_YUVA444P9LE;
+        break;
+      case 8:
+        ctx->pix_fmt = AV_PIX_FMT_YUVA444P;
+        break;
+      }
+    }
+
     ctx->bit_rate = 400000;
     ctx->width = layout->w;
     ctx->height = layout->h;
@@ -613,11 +742,17 @@ struct CodecBase: public CodecClass{
       case nsVDXPixmap::kPixFormat_YUV420_Planar:
       case nsVDXPixmap::kPixFormat_YUV422_Planar:
       case nsVDXPixmap::kPixFormat_YUV444_Planar:
+      case nsVDXPixmap::kPixFormat_YUV420_Alpha_Planar:
+      case nsVDXPixmap::kPixFormat_YUV422_Alpha_Planar:
+      case nsVDXPixmap::kPixFormat_YUV444_Alpha_Planar:
         copy_yuv(frame,layout,icc->lpInput,1);
         break;
       case nsVDXPixmap::kPixFormat_YUV420_Planar16:
       case nsVDXPixmap::kPixFormat_YUV422_Planar16:
       case nsVDXPixmap::kPixFormat_YUV444_Planar16:
+      case nsVDXPixmap::kPixFormat_YUV420_Alpha_Planar16:
+      case nsVDXPixmap::kPixFormat_YUV422_Alpha_Planar16:
+      case nsVDXPixmap::kPixFormat_YUV444_Alpha_Planar16:
         copy_yuv(frame,layout,icc->lpInput,2);
         break;
       }
@@ -700,14 +835,17 @@ void ConfigBase::init_format()
 {
   const char* color_names[] = {
     "RGB", 
-    "RGB with Alpha",
+    "RGB + Alpha",
     "YUV 4:2:0",
     "YUV 4:2:2",
     "YUV 4:4:4",
+    "YUV 4:2:0 + Alpha",
+    "YUV 4:2:2 + Alpha",
+    "YUV 4:4:4 + Alpha",
   };
 
   SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_RESETCONTENT, 0, 0);
-  for(int i=0; i<5; i++)
+  for(int i=0; i<8; i++)
     SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_ADDSTRING, 0, (LPARAM)color_names[i]);
   SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_SETCURSEL, codec->config->format-1, 0);
 }
@@ -899,6 +1037,12 @@ struct CodecFFV1: public CodecBase{
     case nsVDXPixmap::kPixFormat_YUV420_Planar16:
     case nsVDXPixmap::kPixFormat_YUV422_Planar16:
     case nsVDXPixmap::kPixFormat_YUV444_Planar16:
+    case nsVDXPixmap::kPixFormat_YUV420_Alpha_Planar:
+    case nsVDXPixmap::kPixFormat_YUV422_Alpha_Planar:
+    case nsVDXPixmap::kPixFormat_YUV444_Alpha_Planar:
+    case nsVDXPixmap::kPixFormat_YUV420_Alpha_Planar16:
+    case nsVDXPixmap::kPixFormat_YUV422_Alpha_Planar16:
+    case nsVDXPixmap::kPixFormat_YUV444_Alpha_Planar16:
       return 1;
     }
     return 0;
@@ -1083,6 +1227,12 @@ struct CodecHUFF: public CodecBase{
     case nsVDXPixmap::kPixFormat_YUV420_Planar16:
     case nsVDXPixmap::kPixFormat_YUV422_Planar16:
     case nsVDXPixmap::kPixFormat_YUV444_Planar16:
+    case nsVDXPixmap::kPixFormat_YUV420_Alpha_Planar:
+    case nsVDXPixmap::kPixFormat_YUV422_Alpha_Planar:
+    case nsVDXPixmap::kPixFormat_YUV444_Alpha_Planar:
+    case nsVDXPixmap::kPixFormat_YUV420_Alpha_Planar16:
+    case nsVDXPixmap::kPixFormat_YUV422_Alpha_Planar16:
+    case nsVDXPixmap::kPixFormat_YUV444_Alpha_Planar16:
       return 1;
     }
     return 0;
@@ -1146,6 +1296,7 @@ public:
   INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam);
   virtual void init_format();
   virtual void change_format(int sel);
+  void init_profile();
 };
 
 enum {
@@ -1186,6 +1337,7 @@ struct CodecProres: public CodecBase{
     switch(src->format){
     case nsVDXPixmap::kPixFormat_YUV422_Planar16:
     case nsVDXPixmap::kPixFormat_YUV444_Planar16:
+    case nsVDXPixmap::kPixFormat_YUV444_Alpha_Planar16:
       return 1;
     }
     return 0;
@@ -1202,6 +1354,9 @@ struct CodecProres: public CodecBase{
   {
     ctx->thread_count = 0;
     av_opt_set_int(ctx->priv_data, "profile", codec_config.profile, 0);
+    if(codec_config.format==format_yuva444){
+      av_opt_set_int(ctx->priv_data, "alpha_bits", 16, 0);
+    }
     ctx->flags |= AV_CODEC_FLAG_QSCALE;
     ctx->global_quality = FF_QP2LAMBDA * codec_config.qscale;
     return true;
@@ -1220,20 +1375,8 @@ INT_PTR ConfigProres::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
   switch(msg){
   case WM_INITDIALOG:
     {
-      const char* profile_names[] = {
-        "proxy", 
-        "lt",
-        "standard",
-        "high quality",
-        "4444",
-        "4444XQ",
-      };
-
-      SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_RESETCONTENT, 0, 0);
-      for(int i=0; i<6; i++)
-        SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_ADDSTRING, 0, (LPARAM)profile_names[i]);
+      init_profile();
       CodecProres::Config* config = (CodecProres::Config*)codec->config;
-      SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_SETCURSEL, config->profile, 0);
       SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMIN, FALSE, 2);
       SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMAX, TRUE, 31);
       SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETPOS, TRUE, config->qscale);
@@ -1255,7 +1398,12 @@ INT_PTR ConfigProres::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
     case IDC_PROFILE:
       if(HIWORD(wParam)==LBN_SELCHANGE){
         CodecProres::Config* config = (CodecProres::Config*)codec->config;
-        config->profile = (int)SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_GETCURSEL, 0, 0);
+        int v = (int)SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_GETCURSEL, 0, 0);
+        if(config->format==CodecBase::format_yuva444){
+          config->profile = v+4;
+        } else {
+          config->profile = v;
+        }
         return TRUE;
       }
       break;
@@ -1264,18 +1412,53 @@ INT_PTR ConfigProres::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
   return ConfigBase::DlgProc(msg,wParam,lParam);
 }
 
+void ConfigProres::init_profile()
+{
+  CodecProres::Config* config = (CodecProres::Config*)codec->config;
+  if(config->format==CodecBase::format_yuva444){
+    if(config->profile<4) config->profile=4;
+
+    const char* profile_names[] = {
+      "4444",
+      "4444XQ",
+    };
+
+    SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_RESETCONTENT, 0, 0);
+    for(int i=0; i<2; i++)
+      SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_ADDSTRING, 0, (LPARAM)profile_names[i]);
+    SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_SETCURSEL, config->profile-4, 0);
+
+  } else {
+    const char* profile_names[] = {
+      "proxy", 
+      "lt",
+      "standard",
+      "high quality",
+      "4444",
+      "4444XQ",
+    };
+
+    SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_RESETCONTENT, 0, 0);
+    for(int i=0; i<6; i++)
+      SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_ADDSTRING, 0, (LPARAM)profile_names[i]);
+    SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_SETCURSEL, config->profile, 0);
+  }
+}
+
 void ConfigProres::init_format()
 {
   const char* color_names[] = {
     "YUV 4:2:2",
     "YUV 4:4:4",
+    "YUV 4:4:4 + Alpha",
   };
 
   SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_RESETCONTENT, 0, 0);
-  for(int i=0; i<2; i++)
+  for(int i=0; i<3; i++)
     SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_ADDSTRING, 0, (LPARAM)color_names[i]);
   int sel = 0;
   if(codec->config->format==CodecBase::format_yuv444) sel = 1;
+  if(codec->config->format==CodecBase::format_yuva444) sel = 2;
   SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_SETCURSEL, sel, 0);
 }
 
@@ -1283,7 +1466,9 @@ void ConfigProres::change_format(int sel)
 {
   int format = CodecBase::format_yuv422;
   if(sel==1) format = CodecBase::format_yuv444;
+  if(sel==2) format = CodecBase::format_yuva444;
   codec->config->format = format;
+  init_profile();
 }
 
 //---------------------------------------------------------------------------
@@ -1555,6 +1740,7 @@ public:
   ConfigVP8(){ dialog_id = IDD_ENC_VP8; }
   INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam);
   virtual void init_format();
+  virtual void change_format(int sel);
 };
 
 struct CodecVP8: public CodecBase{
@@ -1583,6 +1769,7 @@ struct CodecVP8: public CodecBase{
   virtual int compress_input_info(VDXPixmapLayout* src){
     switch(src->format){
     case nsVDXPixmap::kPixFormat_YUV420_Planar:
+    case nsVDXPixmap::kPixFormat_YUV420_Alpha_Planar:
       return 1;
     }
     return 0;
@@ -1604,6 +1791,8 @@ struct CodecVP8: public CodecBase{
 
     av_opt_set_double(ctx->priv_data, "crf", codec_config.crf, 0);
     av_opt_set_int(ctx->priv_data, "max-intra-rate", 0, 0);
+    if(codec_config.format==format_yuva420)
+      av_opt_set_int(ctx->priv_data, "auto-alt-ref", 0, 0);
     ctx->qmin = codec_config.crf;
     ctx->qmax = codec_config.crf;
     return true;
@@ -1645,14 +1834,23 @@ void ConfigVP8::init_format()
 {
   const char* color_names[] = {
     "YUV 4:2:0",
+    "YUV 4:2:0 + Alpha",
   };
 
   SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_RESETCONTENT, 0, 0);
-  for(int i=0; i<1; i++)
+  for(int i=0; i<2; i++)
     SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_ADDSTRING, 0, (LPARAM)color_names[i]);
   int sel = 0;
-  SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_SETCURSEL, 0, 0);
-  EnableWindow(GetDlgItem(mhdlg, IDC_COLORSPACE),false);
+  if(codec->config->format==CodecBase::format_yuva420) sel = 1;
+  SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_SETCURSEL, sel, 0);
+  EnableWindow(GetDlgItem(mhdlg, IDC_COLORSPACE),false); //! need to pass side_data
+}
+
+void ConfigVP8::change_format(int sel)
+{
+  int format = CodecBase::format_yuv420;
+  if(sel==1) format = CodecBase::format_yuva420;
+  codec->config->format = format;
 }
 
 //---------------------------------------------------------------------------
