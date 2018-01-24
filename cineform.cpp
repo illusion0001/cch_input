@@ -125,6 +125,10 @@ void cfhd_set_format(AVCodecContext* avctx, nsVDXPixmap::VDXPixmapFormat vdfmt)
     fmt = CFHD_PIXEL_FORMAT_V210;
     avctx->pix_fmt = AV_PIX_FMT_RGB24; // best match
     break;
+  case nsVDXPixmap::kPixFormat_YUV422_YU64:
+    fmt = CFHD_PIXEL_FORMAT_YU64;
+    avctx->pix_fmt = AV_PIX_FMT_RGB32; // best match
+    break;
   case nsVDXPixmap::kPixFormat_RGB888:
     //fmt = CFHD_PIXEL_FORMAT_RG24;
     //avctx->pix_fmt = AV_PIX_FMT_BGR24;
@@ -182,6 +186,9 @@ void cfhd_get_info(AVCodecContext* avctx, FilterModPixmapInfo& info)
       }
     }
   }
+  if(obj->fmt==CFHD_PIXEL_FORMAT_YU64){
+    info.ref_r = 0xFFFF;
+  }
 }
 
 bool cfhd_test_format(AVCodecContext* avctx, nsVDXPixmap::VDXPixmapFormat vdfmt)
@@ -191,6 +198,7 @@ bool cfhd_test_format(AVCodecContext* avctx, nsVDXPixmap::VDXPixmapFormat vdfmt)
     switch(vdfmt){
     case nsVDXPixmap::kPixFormat_YUV422_YUYV:
     case nsVDXPixmap::kPixFormat_YUV422_V210:
+    case nsVDXPixmap::kPixFormat_YUV422_YU64:
     //case nsVDXPixmap::kPixFormat_RGB888:
     case nsVDXPixmap::kPixFormat_XRGB8888:
     case nsVDXPixmap::kPixFormat_XRGB64:

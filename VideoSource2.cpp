@@ -949,10 +949,10 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
 
   switch(frame_fmt){
   case AV_PIX_FMT_AYUV64LE:
-    perfect_format = kPixFormat_XYUV64;
-    perfect_av_fmt = AV_PIX_FMT_AYUV64LE;
-    trigger = kPixFormat_XYUV64;
-    perfect_bitexact = true;
+  case AV_PIX_FMT_AYUV64BE:
+    perfect_format = kPixFormat_YUV444_Alpha_Planar;
+    perfect_av_fmt = AV_PIX_FMT_YUVA444P;
+    trigger = kPixFormat_YUV444_Planar;
     break;
 
   case AV_PIX_FMT_YUVA444P:
@@ -1170,11 +1170,20 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
       return false;
 
     case kPixFormat_YUV422_V210:
-    case kPixFormat_YUV422_Planar16:
       if(cfhd_test_format(m_pCodecCtx,kPixFormat_YUV422_V210)){
         base_format = kPixFormat_YUV422_V210;
         ext_format = kPixFormat_YUV422_V210;
         convertInfo.av_fmt = AV_PIX_FMT_BGR24;
+        convertInfo.direct_copy = true;
+        break;
+      }
+      return false;
+
+    case kPixFormat_YUV422_Planar16:
+      if(cfhd_test_format(m_pCodecCtx,kPixFormat_YUV422_YU64)){
+        base_format = kPixFormat_YUV422_YU64;
+        ext_format = kPixFormat_YUV422_YU64;
+        convertInfo.av_fmt = AV_PIX_FMT_BGR32;
         convertInfo.direct_copy = true;
         break;
       }
@@ -1418,10 +1427,10 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     m_pixmap_info.ref_a = 0xFFFF;
     break;
   case kPixFormat_YUV422_V210:
+  case kPixFormat_YUV422_YU64:
   case kPixFormat_YUV420_Planar16:
   case kPixFormat_YUV422_Planar16:
   case kPixFormat_YUV444_Planar16:
-  case kPixFormat_XYUV64:
   case kPixFormat_YUV420_Alpha_Planar:
   case kPixFormat_YUV422_Alpha_Planar:
   case kPixFormat_YUV444_Alpha_Planar:

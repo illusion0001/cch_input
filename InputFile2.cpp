@@ -122,6 +122,7 @@ int detect_avi(VDXMediaInfo& info, const void *pHeader, int32_t nHeaderSize)
       if(h1==MKTAG('Y', '8', '0', '0')) return 0;
       if(h1==MKTAG('H', 'D', 'Y', 'C')) return 0;
       if(h1==MKTAG('N', 'V', '1', '2')) return 0;
+      if(h1==MKTAG('v', '3', '0', '8')) return 0;
 
       if(h1==MKTAG('v', '2', '1', '0')) return 0;
       if(h1==MKTAG('b', '6', '4', 'a')) return 0;
@@ -134,6 +135,7 @@ int detect_avi(VDXMediaInfo& info, const void *pHeader, int32_t nHeaderSize)
       if(h1==MKTAG('R', '1', '0', 'k')) return 0;
       if(h1==MKTAG('v', '4', '1', '0')) return 0;
       if(h1==MKTAG('Y', '4', '1', '0')) return 0;
+      if(h1==MKTAG('Y', '4', '1', '6')) return 0;
     }
 
     if(!have_codec){

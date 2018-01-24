@@ -335,11 +335,11 @@ namespace nsVDXPixmap {
 		kPixFormat_YUV422_Planar16	= 59,
 		kPixFormat_YUV420_Planar16	= 60,
 		kPixFormat_Y16				= 61,
-		kPixFormat_XYUV64			= 62,
-		kPixFormat_YUV444_V410 = 63,
-		kPixFormat_YUV444_Y410 = 64,
-		kPixFormat_R210 = 65,
-		kPixFormat_R10K = 66,
+		kPixFormat_YUVA444_Y416	= 62,
+		kPixFormat_YUV444_V410	= 63,
+		kPixFormat_YUV444_Y410	= 64,
+		kPixFormat_R210			= 65,
+		kPixFormat_R10K			= 66,
 		kPixFormat_YUV444_V308	= 67,
 		kPixFormat_YUV422_P210	= 68,
 		kPixFormat_YUV420_P010	= 69,
@@ -352,6 +352,8 @@ namespace nsVDXPixmap {
 		kPixFormat_YUV444_Alpha_Planar16 = 75,
 		kPixFormat_YUV422_Alpha_Planar16 = 76,
 		kPixFormat_YUV420_Alpha_Planar16 = 77,
+
+		kPixFormat_YUV422_YU64 = 78,
 
 		kPixFormat_VDXA_RGB			= 0x10001,
 		kPixFormat_VDXA_YUV			= 0x10002

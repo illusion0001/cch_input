@@ -143,8 +143,7 @@ struct CodecCF: public CodecClass{
     case nsVDXPixmap::kPixFormat_XRGB64:
     case nsVDXPixmap::kPixFormat_YUV422_YUYV:
     case nsVDXPixmap::kPixFormat_YUV422_V210:
-    //case nsVDXPixmap::kPixFormat_YUV422_Planar:
-    //case nsVDXPixmap::kPixFormat_YUV422_Planar16:
+    case nsVDXPixmap::kPixFormat_YUV422_YU64:
       return 1;
     }
     return 0;
@@ -183,7 +182,10 @@ struct CodecCF: public CodecClass{
     if(config.format==format_yuv422){
       if(config.bits==8) return nsVDXPixmap::kPixFormat_YUV422_YUYV;
       if(config.bits==10) return nsVDXPixmap::kPixFormat_YUV422_V210;
-      //if(config.bits>8) return nsVDXPixmap::kPixFormat_YUV422_Planar16;
+      if(config.bits==16){
+        if(info) info->ref_r = 0xFFFF;
+        return nsVDXPixmap::kPixFormat_YUV422_YU64;
+      }
     }
 
     return 0;
@@ -275,6 +277,7 @@ struct CodecCF: public CodecClass{
       encodedFormat = CFHD_ENCODED_FORMAT_YUV_422;
       if(config.bits==8) pixelFormat = CFHD_PIXEL_FORMAT_YUY2;
       if(config.bits==10) pixelFormat = CFHD_PIXEL_FORMAT_V210;
+      if(config.bits==16) pixelFormat = CFHD_PIXEL_FORMAT_YU64;
       break;
     }
 
@@ -513,7 +516,6 @@ void ConfigCF::change_format(int sel)
 {
   codec->config.format = sel+1;
   if(codec->config.format==CodecCF::format_rgba && codec->config.bits==10) codec->config.bits = 16;
-  if(codec->config.format==CodecCF::format_yuv422 && codec->config.bits==16) codec->config.bits = 10;
   init_bits();
   change_bits();
 }
@@ -522,7 +524,7 @@ void ConfigCF::init_bits()
 {
   int format = codec->config.format;
   EnableWindow(GetDlgItem(mhdlg,IDC_10_BIT),codec->config.format!=CodecCF::format_rgba);
-  EnableWindow(GetDlgItem(mhdlg,IDC_16_BIT),codec->config.format!=CodecCF::format_yuv422);
+  EnableWindow(GetDlgItem(mhdlg,IDC_16_BIT),true);
   CheckDlgButton(mhdlg,IDC_8_BIT,codec->config.bits==8 ? BST_CHECKED:BST_UNCHECKED);
   CheckDlgButton(mhdlg,IDC_10_BIT,codec->config.bits==10 ? BST_CHECKED:BST_UNCHECKED);
   CheckDlgButton(mhdlg,IDC_16_BIT,codec->config.bits==16 ? BST_CHECKED:BST_UNCHECKED);
