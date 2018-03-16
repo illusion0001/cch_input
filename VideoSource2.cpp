@@ -116,7 +116,11 @@ int VDFFVideoSource::init_duration(const AVRational fr)
 
   int sample_count_error = 2;
 
-  if(m_pStreamCtx->duration == AV_NOPTS_VALUE){
+  if(m_pSource->is_image_list){
+    sample_count = (int)m_pStreamCtx->nb_frames;
+    sample_count_error = 0;
+
+  } else if(m_pStreamCtx->duration == AV_NOPTS_VALUE){
     if(m_pFormatCtx->duration == AV_NOPTS_VALUE){
       if(m_pSource->is_image){
         sample_count = 1;

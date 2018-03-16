@@ -602,14 +602,14 @@ AVFormatContext* VDFFInputFile::open_file(AVMediaType type, int streamIndex)
   if(is_image && fmt_image2 && !single_file_mode){
     AVRational r_fr = av_stream_get_r_frame_rate(fmt->streams[0]);
     wchar_t list_path[MAX_PATH];
-    char start_number[MAX_PATH];
-    if(detect_image_list(list_path,MAX_PATH,start_number,MAX_PATH)){
+    int start,count;
+    if(detect_image_list(list_path,MAX_PATH,&start,&count)){
       is_image_list = true;
       auto_append = false;
       avformat_close_input(&fmt);
       widechar_to_utf8(ff_path, ff_path_size, list_path);
       AVDictionary* options = 0;
-      av_dict_set(&options, "start_number", start_number, 0);
+      av_dict_set_int(&options, "start_number", start, 0);
       if(r_fr.num!=0){
         char buf[80];
         sprintf(buf,"%d/%d",r_fr.num,r_fr.den);
@@ -626,6 +626,9 @@ AVFormatContext* VDFFInputFile::open_file(AVMediaType type, int streamIndex)
         mContext.mpCallbacks->SetError("FFMPEG: Couldn't find stream information of file.");
         return 0;
       }
+
+      AVStream& st = *fmt->streams[0];
+      st.nb_frames = count;
     }
   }
 
@@ -648,7 +651,7 @@ AVFormatContext* VDFFInputFile::open_file(AVMediaType type, int streamIndex)
   return fmt;
 }
 
-bool VDFFInputFile::detect_image_list(wchar_t* dst, int dst_count, char* start, int start_count)
+bool VDFFInputFile::detect_image_list(wchar_t* dst, int dst_count, int* start, int* count)
 {
   wchar_t* p = wcsrchr(path,'.');
   if(!p) return false;
@@ -670,7 +673,8 @@ bool VDFFInputFile::detect_image_list(wchar_t* dst, int dst_count, char* start, 
 
   if(digit0==-1) return false;
 
-  char* s = start;
+  char start_buf[128];
+  char* s = start_buf;
   {for(int i=digit0; i<=digit1; i++){
     int c = path[i];
     *s = c;
@@ -685,6 +689,18 @@ bool VDFFInputFile::detect_image_list(wchar_t* dst, int dst_count, char* start, 
   dst[digit0] = 0;
   wcscat(dst,buf);
   wcscat(dst,path+digit1+1);
+
+  sscanf(start_buf,"%d",start);
+  int n = 0;
+
+  wchar_t test[MAX_PATH];
+  while(1){
+    swprintf(test,MAX_PATH,dst,*start+n);
+    if(GetFileAttributesW(test)==(DWORD)-1) break;
+	  n++;
+  }
+
+  *count = n;
 
   return true;
 }
