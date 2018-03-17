@@ -442,7 +442,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
     outhdr->biSize        = sizeof(BITMAPINFOHEADER);
     outhdr->biWidth       = m_pCodecCtx->width;
     outhdr->biHeight      = m_pCodecCtx->height;
-    outhdr->biCompression = m_pCodecCtx->codec_tag;
+    outhdr->biCompression = m_streamInfo.mfccHandler;
     memcpy(((uint8*)direct_format)+sizeof(BITMAPINFOHEADER),m_pCodecCtx->extradata,m_pCodecCtx->extradata_size);
   }
 
@@ -1090,6 +1090,15 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     // examples: 444 jpeg by photoshop (FR)
     break;
 
+  case AV_PIX_FMT_YUV411P:
+    src_fmt = AV_PIX_FMT_YUV411P;
+    perfect_format = kPixFormat_YUV411_Planar;
+    perfect_av_fmt = AV_PIX_FMT_YUV411P;
+    trigger = kPixFormat_YUV411_Planar;
+    perfect_bitexact = true;
+    // examples: DV
+    break;
+
   case AV_PIX_FMT_BGR24:
     perfect_format = kPixFormat_RGB888;
     trigger = kPixFormat_RGB888;
@@ -1220,6 +1229,7 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     switch(opt_format){
     case kPixFormat_YUV420_Planar:
     case kPixFormat_YUV422_Planar:
+    case kPixFormat_YUV411_Planar:
     case kPixFormat_YUV422_UYVY:
     case kPixFormat_YUV422_YUYV:
       if(opt_format==trigger){

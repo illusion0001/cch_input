@@ -50,6 +50,8 @@ uint32 export_avi_fcc(AVStream* src)
   AVOutputFormat* format = av_guess_format("avi", 0, 0);
   adjust_codec_tag(format,st);
   uint32 r = st->codec->codec_tag;
+  // missing tag in type1 avi
+  if(!r) r = av_codec_get_tag(format->codec_tag, src->codec->codec_id);
   avformat_free_context(ctx);
   return r;
 }
