@@ -301,6 +301,7 @@ struct CodecBase: public CodecClass{
           info->ref_r = max_value;
           info->ref_g = max_value;
           info->ref_b = max_value;
+          info->ref_a = max_value;
         }
         return nsVDXPixmap::kPixFormat_XRGB64;
       }
@@ -353,6 +354,7 @@ struct CodecBase: public CodecClass{
         int max_value = (1 << config->bits)-1;
         if(info){
           info->ref_r = max_value;
+          info->ref_a = max_value;
         }
         return nsVDXPixmap::kPixFormat_YUV420_Alpha_Planar16;
       }
@@ -366,6 +368,7 @@ struct CodecBase: public CodecClass{
         int max_value = (1 << config->bits)-1;
         if(info){
           info->ref_r = max_value;
+          info->ref_a = max_value;
         }
         return nsVDXPixmap::kPixFormat_YUV422_Alpha_Planar16;
       }
@@ -379,6 +382,7 @@ struct CodecBase: public CodecClass{
         int max_value = (1 << config->bits)-1;
         if(info){
           info->ref_r = max_value;
+          info->ref_a = max_value;
         }
         return nsVDXPixmap::kPixFormat_YUV444_Alpha_Planar16;
       }
