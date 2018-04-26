@@ -61,9 +61,36 @@ void copy_rgb32(AVFrame* frame, const VDXPixmapLayout* layout, const void* data)
   }}
 }
 
+bool planar_rgb16(int format){
+  switch(format){
+  case AV_PIX_FMT_GBRP16LE:
+  case AV_PIX_FMT_GBRP14LE:
+  case AV_PIX_FMT_GBRP12LE:
+  case AV_PIX_FMT_GBRP10LE:
+  case AV_PIX_FMT_GBRP9LE:
+    return true;
+  }
+  return false;
+}
+
+bool planar_rgba16(int format){
+  switch(format){
+  case AV_PIX_FMT_GBRAP16LE:
+  case AV_PIX_FMT_GBRAP12LE:
+  case AV_PIX_FMT_GBRAP10LE:
+    return true;
+  }
+  return false;
+}
+
 void copy_rgb64(AVFrame* frame, const VDXPixmapLayout* layout, const void* data)
 {
-  {for(int y=0; y<layout->h; y++){
+  if(frame->format==AV_PIX_FMT_BGRA64){for(int y=0; y<layout->h; y++){
+    uint16* s = (uint16*)data + layout->data + layout->pitch*y/2;
+    uint16* d = (uint16*)frame->data[0] + frame->linesize[0]*y/2;
+    memcpy(d,s,layout->w*8);
+  }}
+  if(planar_rgb16(frame->format)){for(int y=0; y<layout->h; y++){
     uint16* s = (uint16*)data + layout->data/2 + layout->pitch*y/2;
 
     uint16* g = (uint16*)frame->data[0] + frame->linesize[0]*y/2;
@@ -76,6 +103,24 @@ void copy_rgb64(AVFrame* frame, const VDXPixmapLayout* layout, const void* data)
       r[0] = s[2];
 
       r++; g++; b++;
+      s+=4;
+    }}
+  }}
+  if(planar_rgba16(frame->format)){for(int y=0; y<layout->h; y++){
+    uint16* s = (uint16*)data + layout->data/2 + layout->pitch*y/2;
+
+    uint16* g = (uint16*)frame->data[0] + frame->linesize[0]*y/2;
+    uint16* b = (uint16*)frame->data[1] + frame->linesize[1]*y/2;
+    uint16* r = (uint16*)frame->data[2] + frame->linesize[2]*y/2;
+    uint16* a = (uint16*)frame->data[3] + frame->linesize[3]*y/2;
+
+    {for(int x=0; x<layout->w; x++){
+      b[0] = s[0];
+      g[0] = s[1];
+      r[0] = s[2];
+      a[0] = s[3];
+
+      r++; g++; b++; a++;
       s+=4;
     }}
   }}
@@ -224,6 +269,9 @@ struct CodecBase: public CodecClass{
     switch(format){
     case format_rgba:
       if(bits==8) return test_av_format(AV_PIX_FMT_RGB32);
+      if(bits==10) return test_av_format(AV_PIX_FMT_GBRAP10LE);
+      if(bits==12) return test_av_format(AV_PIX_FMT_GBRAP12LE);
+      if(bits==16) return test_av_format(AV_PIX_FMT_BGRA64) || test_av_format(AV_PIX_FMT_GBRAP16LE);
       break;
     case format_rgb:
       if(bits==8) return test_av_format(AV_PIX_FMT_0RGB32) || test_av_format(AV_PIX_FMT_RGB24) || test_av_format(AV_PIX_FMT_GBRP);
@@ -285,7 +333,19 @@ struct CodecBase: public CodecClass{
 
   LRESULT compress_input_format(FilterModPixmapInfo* info){
     if(config->format==format_rgba){
-      return nsVDXPixmap::kPixFormat_XRGB8888;
+      if(config->bits==8){
+        return nsVDXPixmap::kPixFormat_XRGB8888;
+      }
+      if(config->bits>8){
+        int max_value = (1 << config->bits)-1;
+        if(info){
+          info->ref_r = max_value;
+          info->ref_g = max_value;
+          info->ref_b = max_value;
+          info->ref_a = max_value;
+        }
+        return nsVDXPixmap::kPixFormat_XRGB64;
+      }
     }
 
     if(config->format==format_rgb){
@@ -474,6 +534,15 @@ struct CodecBase: public CodecClass{
 
     if(config->format==format_rgba){
       switch(config->bits){
+      case 16:
+        ctx->pix_fmt = AV_PIX_FMT_GBRAP16LE;
+        break;
+      case 12:
+        ctx->pix_fmt = AV_PIX_FMT_GBRAP12LE;
+        break;
+      case 10:
+        ctx->pix_fmt = AV_PIX_FMT_GBRAP10LE;
+        break;
       case 8:
         ctx->pix_fmt = AV_PIX_FMT_RGB32;
         break;
@@ -1016,6 +1085,29 @@ struct CodecFFV1: public CodecBase{
 
   virtual bool test_av_format(AVPixelFormat format){
     switch(format){
+    case AV_PIX_FMT_GRAY9:
+    case AV_PIX_FMT_YUV444P9:
+    case AV_PIX_FMT_YUV422P9:
+    case AV_PIX_FMT_YUV420P9:
+    case AV_PIX_FMT_YUVA444P9:
+    case AV_PIX_FMT_YUVA422P9:
+    case AV_PIX_FMT_YUVA420P9:
+    case AV_PIX_FMT_GRAY10:
+    case AV_PIX_FMT_YUV444P10:
+    case AV_PIX_FMT_YUV440P10:
+    case AV_PIX_FMT_YUV420P10:
+    case AV_PIX_FMT_YUV422P10:
+    case AV_PIX_FMT_YUVA444P10:
+    case AV_PIX_FMT_YUVA422P10:
+    case AV_PIX_FMT_YUVA420P10:
+    case AV_PIX_FMT_GRAY12:
+    case AV_PIX_FMT_YUV444P12:
+    case AV_PIX_FMT_YUV440P12:
+    case AV_PIX_FMT_YUV420P12:
+    case AV_PIX_FMT_YUV422P12:
+    case AV_PIX_FMT_YUV444P14:
+    case AV_PIX_FMT_YUV420P14:
+    case AV_PIX_FMT_YUV422P14:
     case AV_PIX_FMT_GRAY16:
     case AV_PIX_FMT_YUV444P16:
     case AV_PIX_FMT_YUV422P16:
@@ -1024,7 +1116,15 @@ struct CodecFFV1: public CodecBase{
     case AV_PIX_FMT_YUVA422P16:
     case AV_PIX_FMT_YUVA420P16:
     case AV_PIX_FMT_RGB48:
+    case AV_PIX_FMT_RGBA64:
+    case AV_PIX_FMT_GBRP9:
+    case AV_PIX_FMT_GBRP10:
+    case AV_PIX_FMT_GBRAP10:
+    case AV_PIX_FMT_GBRP12:
+    case AV_PIX_FMT_GBRAP12:
+    case AV_PIX_FMT_GBRP14:
     case AV_PIX_FMT_GBRP16:
+    case AV_PIX_FMT_GBRAP16:
       if(codec_config.level<1) return false;
     }
     return CodecBase::test_av_format(format);
