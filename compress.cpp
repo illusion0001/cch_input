@@ -1704,7 +1704,7 @@ const char* x265_preset_names[] = {
 };
 
 struct CodecH265: public CodecBase{
-  enum{ tag=MKTAG('h', 'e', 'v', '1') };
+  enum{ id_tag=MKTAG('h', 'e', 'v', '1') };
   struct Config: public CodecBase::Config{
     int preset;
     int crf; // 0-51
@@ -1722,14 +1722,14 @@ struct CodecH265: public CodecBase{
   CodecH265(){
     config = &codec_config;
     codec_name = "libx265";
-    codec_tag = tag;
+    codec_tag = MKTAG('H', 'E', 'V', 'C');
   }
 
   int config_size(){ return sizeof(Config); }
   void reset_config(){ codec_config.clear(); }
 
   void getinfo(ICINFO& info){
-    info.fccHandler = codec_tag;
+    info.fccHandler = id_tag;
     info.dwFlags = VIDCF_COMPRESSFRAMES | VIDCF_FASTTEMPORALC;
     wcscpy(info.szName, L"x265");
     wcscpy(info.szDescription, L"FFMPEG / x265");
@@ -1765,6 +1765,33 @@ struct CodecH265: public CodecBase{
   LRESULT configure(HWND parent)
   {
     ConfigH265 dlg;
+    dlg.Show(parent,this);
+    return ICERR_OK;
+  }
+};
+
+struct CodecH265LS: public CodecH265{
+  enum{ id_tag=MKTAG('h', 'e', 'v', '0') };
+  void reset_config(){ codec_config.clear(); codec_config.crf=0; }
+
+  bool init_ctx(VDXPixmapLayout* layout)
+  {
+    if(!CodecH265::init_ctx(layout)) return false;
+    av_opt_set(ctx->priv_data, "x265-params", "lossless=1", 0);
+    return true;
+  }
+
+  void getinfo(ICINFO& info){
+    info.fccHandler = id_tag;
+    info.dwFlags = VIDCF_COMPRESSFRAMES | VIDCF_FASTTEMPORALC;
+    wcscpy(info.szName, L"x265 lossless");
+    wcscpy(info.szDescription, L"FFMPEG / x265 lossless");
+  }
+
+  LRESULT configure(HWND parent)
+  {
+    ConfigH265 dlg;
+    dlg.dialog_id = IDD_ENC_X265LS;
     dlg.Show(parent,this);
     return ICERR_OK;
   }
@@ -1985,7 +2012,8 @@ extern "C" LRESULT WINAPI DriverProc(DWORD_PTR dwDriverId, HDRVR hDriver, UINT u
       if(icopen->fccHandler==CodecHUFF::tag) codec = new CodecHUFF;
       if(icopen->fccHandler==CodecProres::tag) codec = new CodecProres;
       if(icopen->fccHandler==CodecVP8::tag) codec = new CodecVP8;
-      if(icopen->fccHandler==CodecH265::tag) codec = new CodecH265;
+      if(icopen->fccHandler==CodecH265::id_tag) codec = new CodecH265;
+      if(icopen->fccHandler==CodecH265LS::id_tag) codec = new CodecH265LS;
       if(icopen->fccHandler==CodecH264::tag) codec = new CodecH264;
       if(icopen->fccHandler==CFHD_TAG) return DriverProc_CF(dwDriverId, hDriver, uMsg, lParam1, lParam2);
       if(codec){
@@ -2067,10 +2095,15 @@ extern "C" LRESULT WINAPI VDDriverProc(DWORD_PTR dwDriverId, HDRVR hDriver, UINT
     if(lParam1==CodecFFV1::tag) return CodecHUFF::tag;
     if(lParam1==CodecHUFF::tag) return CodecProres::tag;
     if(lParam1==CodecProres::tag) return CodecVP8::tag;
-    if(lParam1==CodecVP8::tag) return CodecH265::tag;
-    if(lParam1==CodecH265::tag) return CFHD_TAG;
+    if(lParam1==CodecVP8::tag) return CodecH265::id_tag;
+    if(lParam1==CodecH265::id_tag) return CodecH265LS::id_tag;
+    if(lParam1==CodecH265LS::id_tag) return CFHD_TAG;
     //if(lParam1==CFHD_TAG) return CodecH264::tag;
     return 0;
+
+  case VDICM_GETHANDLER:
+    if(codec) return codec->codec_tag;
+    return ICERR_UNSUPPORTED;
 
   case VDICM_COMPRESS_INPUT_FORMAT:
     return codec->compress_input_format((FilterModPixmapInfo*)lParam1);

@@ -2003,11 +2003,13 @@ int VDFFVideoSource::handle_frame_num(int64_t pts, int64_t dts)
   if(!trust_index && !is_image_list){
     if(ts==AV_NOPTS_VALUE && pos==-1) return -1;
 
-    // guess where we are
-    // timestamp to frame number is at times unreliable
-    ts -= start_time;
-    int rndd = time_base.den/2;
-    pos = int((ts*time_base.num + rndd) / time_base.den);
+    if(ts!=AV_NOPTS_VALUE){
+      // guess where we are
+      // timestamp to frame number is at times unreliable
+      ts -= start_time;
+      int rndd = time_base.den/2;
+      pos = int((ts*time_base.num + rndd) / time_base.den);
+    }
   }
 
   if(pos>last_seek_frame) last_seek_frame = -1;
