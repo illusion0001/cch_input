@@ -20,6 +20,7 @@
 #define IDD_ENC_X265                    113
 #define IDD_ENC_CINEFORM                114
 #define IDD_ENC_X265LS                  115
+#define IDD_ENC_VP9                     116
 #define IDC_FORMATNAME                  1004
 #define IDC_VIDEO_PIXFMT                1006
 #define IDC_VIDEO_WXH                   1007

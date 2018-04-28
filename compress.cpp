@@ -1986,6 +1986,137 @@ void ConfigVP8::change_format(int sel)
 
 //---------------------------------------------------------------------------
 
+class ConfigVP9: public ConfigBase{
+public:
+  ConfigVP9(){ dialog_id = IDD_ENC_VP9; }
+  INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam);
+  virtual void init_format();
+  virtual void change_format(int sel);
+};
+
+struct CodecVP9: public CodecBase{
+  enum{ tag=MKTAG('V', 'P', '9', '0') };
+  struct Config: public CodecBase::Config{
+    int crf; // 0-63
+    int profile;
+
+    Config(){ set_default(); }
+    void clear(){ CodecBase::Config::clear(); set_default(); }
+    void set_default(){
+      crf = 15;
+      format = format_yuv420;
+      bits = 8;
+    }
+  } codec_config;
+
+  CodecVP9(){
+    config = &codec_config;
+    codec_name = "libvpx-vp9";
+    codec_tag = tag;
+  }
+
+  int config_size(){ return sizeof(Config); }
+  void reset_config(){ codec_config.clear(); }
+
+  virtual int compress_input_info(VDXPixmapLayout* src){
+    switch(src->format){
+    case nsVDXPixmap::kPixFormat_YUV420_Planar:
+    case nsVDXPixmap::kPixFormat_YUV422_Planar:
+    case nsVDXPixmap::kPixFormat_YUV444_Planar:
+    case nsVDXPixmap::kPixFormat_YUV420_Planar16:
+    case nsVDXPixmap::kPixFormat_YUV422_Planar16:
+    case nsVDXPixmap::kPixFormat_YUV444_Planar16:
+    case nsVDXPixmap::kPixFormat_XRGB8888:
+    case nsVDXPixmap::kPixFormat_XRGB64:
+      return 1;
+    }
+    return 0;
+  }
+
+  void getinfo(ICINFO& info){
+    info.fccHandler = codec_tag;
+    info.dwFlags = VIDCF_COMPRESSFRAMES | VIDCF_FASTTEMPORALC;
+    wcscpy(info.szName, L"vp9");
+    wcscpy(info.szDescription, L"FFMPEG / VP9");
+  }
+
+  bool init_ctx(VDXPixmapLayout* layout)
+  {
+    ctx->thread_count = 0;
+    ctx->gop_size = -1;
+    ctx->max_b_frames = -1;
+    ctx->bit_rate = 0;
+
+    av_opt_set_double(ctx->priv_data, "crf", codec_config.crf, 0);
+    av_opt_set_int(ctx->priv_data, "max-intra-rate", 0, 0);
+    ctx->qmin = codec_config.crf;
+    ctx->qmax = codec_config.crf;
+    return true;
+  }
+
+  LRESULT configure(HWND parent)
+  {
+    ConfigVP9 dlg;
+    dlg.Show(parent,this);
+    return ICERR_OK;
+  }
+};
+
+INT_PTR ConfigVP9::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
+{
+  CodecVP9::Config* config = (CodecVP9::Config*)codec->config;
+  switch(msg){
+  case WM_INITDIALOG:
+    {
+      SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMIN, FALSE, 0);
+      SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMAX, TRUE, 63);
+      SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETPOS, TRUE, config->crf);
+      SetDlgItemInt(mhdlg, IDC_QUALITY_VALUE, config->crf, false);
+      break;
+    }
+
+  case WM_HSCROLL:
+    if((HWND)lParam==GetDlgItem(mhdlg,IDC_QUALITY)){
+      config->crf = SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_GETPOS, 0, 0);
+      SetDlgItemInt(mhdlg, IDC_QUALITY_VALUE, config->crf, false);
+      break;
+    }
+    return false;
+  }
+  return ConfigBase::DlgProc(msg,wParam,lParam);
+}
+
+void ConfigVP9::init_format()
+{
+  const char* color_names[] = {
+    "RGB",
+    "YUV 4:2:0",
+    "YUV 4:2:2",
+    "YUV 4:4:4",
+  };
+
+  SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_RESETCONTENT, 0, 0);
+  for(int i=0; i<4; i++)
+    SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_ADDSTRING, 0, (LPARAM)color_names[i]);
+  int sel = 0;
+  if(codec->config->format==CodecBase::format_yuv420) sel = 1;
+  if(codec->config->format==CodecBase::format_yuv422) sel = 2;
+  if(codec->config->format==CodecBase::format_yuv444) sel = 3;
+  SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_SETCURSEL, sel, 0);
+}
+
+void ConfigVP9::change_format(int sel)
+{
+  int format = CodecBase::format_rgb;
+  if(sel==1) format = CodecBase::format_yuv420;
+  if(sel==2) format = CodecBase::format_yuv422;
+  if(sel==3) format = CodecBase::format_yuv444;
+  codec->config->format = format;
+  init_bits();
+}
+
+//---------------------------------------------------------------------------
+
 extern "C" LRESULT WINAPI DriverProc(DWORD_PTR dwDriverId, HDRVR hDriver, UINT uMsg, LPARAM lParam1, LPARAM lParam2)
 {
   CodecClass* cs = (CodecClass*)dwDriverId;
@@ -2012,6 +2143,7 @@ extern "C" LRESULT WINAPI DriverProc(DWORD_PTR dwDriverId, HDRVR hDriver, UINT u
       if(icopen->fccHandler==CodecHUFF::tag) codec = new CodecHUFF;
       if(icopen->fccHandler==CodecProres::tag) codec = new CodecProres;
       if(icopen->fccHandler==CodecVP8::tag) codec = new CodecVP8;
+      if(icopen->fccHandler==CodecVP9::tag) codec = new CodecVP9;
       if(icopen->fccHandler==CodecH265::id_tag) codec = new CodecH265;
       if(icopen->fccHandler==CodecH265LS::id_tag) codec = new CodecH265LS;
       if(icopen->fccHandler==CodecH264::tag) codec = new CodecH264;
@@ -2095,7 +2227,8 @@ extern "C" LRESULT WINAPI VDDriverProc(DWORD_PTR dwDriverId, HDRVR hDriver, UINT
     if(lParam1==CodecFFV1::tag) return CodecHUFF::tag;
     if(lParam1==CodecHUFF::tag) return CodecProres::tag;
     if(lParam1==CodecProres::tag) return CodecVP8::tag;
-    if(lParam1==CodecVP8::tag) return CodecH265::id_tag;
+    if(lParam1==CodecVP8::tag) return CodecVP9::tag;
+    if(lParam1==CodecVP9::tag) return CodecH265::id_tag;
     if(lParam1==CodecH265::id_tag) return CodecH265LS::id_tag;
     if(lParam1==CodecH265LS::id_tag) return CFHD_TAG;
     //if(lParam1==CFHD_TAG) return CodecH264::tag;
