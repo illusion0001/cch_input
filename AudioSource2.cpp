@@ -300,6 +300,8 @@ bool VDFFAudioSource::Read(int64_t start, uint32_t count, void *lpBuffer, uint32
     return false;
   }
 
+  if(count*mRawFormat.Format.nBlockAlign>cbBuffer) count = cbBuffer/mRawFormat.Format.nBlockAlign;
+
   if(count==0){
     *lBytesRead = 0;
     *lSamplesRead = 0;
