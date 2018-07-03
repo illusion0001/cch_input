@@ -224,6 +224,7 @@ struct CodecCF: public CodecClass{
     int iHeight = layout->h;
 
     if(iWidth <= 0 || iHeight <= 0) return ICERR_BADFORMAT;
+    if((iWidth % 16)!=0) return ICERR_BADPARAM;
 
     if(!lpbiOutput) return ICERR_OK;
 
@@ -315,16 +316,17 @@ struct CodecCF: public CodecClass{
       }}
     }
 
+    CFHD_Error error;
     if(threads==1){
-      CFHD_Error error;
       error = CFHD_OpenEncoder(&encRef, 0);
       error = CFHD_PrepareToEncode(encRef, layout->w, layout->h, pixelFormat, encodedFormat, encodingFlags, quality);
     } else {
-      CFHD_Error error;
       error = CFHD_CreateEncoderPool(&poolRef, threads, buffer_count, 0);
       error = CFHD_PrepareEncoderPool(poolRef, layout->w, layout->h, pixelFormat, encodedFormat, encodingFlags, quality);
       CFHD_StartEncoderPool(poolRef);
     }
+    if(error) return ICERR_BADPARAM;
+
     frameNumber = 0;
     pool_depth = 0;
 
