@@ -192,6 +192,11 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
     AVCodec* pDecoder2 = avcodec_find_decoder_by_name("libvpx");
     if(pDecoder2) pDecoder = pDecoder2;
   }
+  if(m_pStreamCtx->codecpar->codec_id==AV_CODEC_ID_VP9){
+    // on2 vp9 does not extract alpha
+    AVCodec* pDecoder2 = avcodec_find_decoder_by_name("libvpx-vp9");
+    if(pDecoder2) pDecoder = pDecoder2;
+  }
   if(!pDecoder){
     char buf[AV_FOURCC_MAX_STRING_SIZE];
     av_fourcc_make_string(buf,m_pStreamCtx->codecpar->codec_tag);
@@ -1471,6 +1476,7 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     case AV_CODEC_ID_WEBP:
     case AV_CODEC_ID_PSD:
     case AV_CODEC_ID_VP8:
+    case AV_CODEC_ID_VP9:
       m_pixmap_info.alpha_type = FilterModPixmapInfo::kAlphaOpacity;
       break;
     }
