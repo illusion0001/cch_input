@@ -1122,7 +1122,14 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   case AV_PIX_FMT_BGRA64:
     perfect_format = (VDXPixmapFormat)kPixFormat_XRGB64;
     perfect_av_fmt = AV_PIX_FMT_BGRA64;
-    trigger = (VDXPixmapFormat)kPixFormat_XRGB64;
+    trigger = kPixFormat_XRGB64;
+    perfect_bitexact = true;
+    break;
+
+  case AV_PIX_FMT_GRAY16:
+    perfect_format = (VDXPixmapFormat)kPixFormat_Y16;
+    perfect_av_fmt = AV_PIX_FMT_GRAY16;
+    trigger = kPixFormat_Y16;
     perfect_bitexact = true;
     break;
 
@@ -1222,6 +1229,18 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
         base_format = kPixFormat_XRGB64;
         ext_format = kPixFormat_XRGB64;
         convertInfo.av_fmt = AV_PIX_FMT_BGRA64;
+        convertInfo.direct_copy = true;
+        break;
+      }
+      return false;
+
+    case kPixFormat_Y8:
+    case kPixFormat_Y8_FR:
+    case kPixFormat_Y16:
+      if(cfhd_test_format(m_pCodecCtx,kPixFormat_Y16)){
+        base_format = kPixFormat_Y16;
+        ext_format = kPixFormat_Y16;
+        convertInfo.av_fmt = AV_PIX_FMT_GRAY16;
         convertInfo.direct_copy = true;
         break;
       }
@@ -1444,6 +1463,9 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     m_pixmap_info.ref_g = 0xFFFF;
     m_pixmap_info.ref_b = 0xFFFF;
     m_pixmap_info.ref_a = 0xFFFF;
+    break;
+  case kPixFormat_Y16:
+    m_pixmap_info.ref_r = 0xFFFF;
     break;
   case kPixFormat_YUV422_V210:
   case kPixFormat_YUV422_YU64:

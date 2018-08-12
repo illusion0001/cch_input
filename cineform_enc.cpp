@@ -61,6 +61,7 @@ struct CodecCF: public CodecClass{
     format_rgb = 1,
     format_rgba = 2,
     format_yuv422 = 3,
+    format_bayer = 4,
   };
 
   struct Config{
@@ -144,6 +145,7 @@ struct CodecCF: public CodecClass{
     case nsVDXPixmap::kPixFormat_YUV422_YUYV:
     case nsVDXPixmap::kPixFormat_YUV422_V210:
     case nsVDXPixmap::kPixFormat_YUV422_YU64:
+    case nsVDXPixmap::kPixFormat_Y16:
       return 1;
     }
     return 0;
@@ -186,6 +188,11 @@ struct CodecCF: public CodecClass{
         if(info) info->ref_r = 0xFFFF;
         return nsVDXPixmap::kPixFormat_YUV422_YU64;
       }
+    }
+
+    if(config.format==format_bayer){
+      if(info) info->ref_r = 0xFFFF;
+      return nsVDXPixmap::kPixFormat_Y16;
     }
 
     return 0;
@@ -279,6 +286,10 @@ struct CodecCF: public CodecClass{
       if(config.bits==8) pixelFormat = CFHD_PIXEL_FORMAT_YUY2;
       if(config.bits==10) pixelFormat = CFHD_PIXEL_FORMAT_V210;
       if(config.bits==16) pixelFormat = CFHD_PIXEL_FORMAT_YU64;
+      break;
+    case format_bayer:
+      encodedFormat = CFHD_ENCODED_FORMAT_BAYER;
+      pixelFormat = CFHD_PIXEL_FORMAT_BYR4;
       break;
     }
 
@@ -506,10 +517,11 @@ void ConfigCF::init_format()
     "RGB 12-bit", 
     "RGBA 12-bit",
     "YUV 4:2:2 10-bit",
+    "bayer 12-bit",
   };
 
   SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_RESETCONTENT, 0, 0);
-  for(int i=0; i<3; i++)
+  for(int i=0; i<4; i++)
     SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_ADDSTRING, 0, (LPARAM)color_names[i]);
   SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_SETCURSEL, codec->config.format-1, 0);
 }
@@ -518,6 +530,7 @@ void ConfigCF::change_format(int sel)
 {
   codec->config.format = sel+1;
   if(codec->config.format==CodecCF::format_rgba && codec->config.bits==10) codec->config.bits = 16;
+  if(codec->config.format==CodecCF::format_bayer) codec->config.bits = 16;
   init_bits();
   change_bits();
 }
@@ -525,8 +538,21 @@ void ConfigCF::change_format(int sel)
 void ConfigCF::init_bits()
 {
   int format = codec->config.format;
-  EnableWindow(GetDlgItem(mhdlg,IDC_10_BIT),codec->config.format!=CodecCF::format_rgba);
-  EnableWindow(GetDlgItem(mhdlg,IDC_16_BIT),true);
+  bool use8 = true;
+  bool use10 = true;
+  bool use16 = true;
+  switch(codec->config.format){
+  case CodecCF::format_rgba:
+    use10 = false;
+    break;
+  case CodecCF::format_bayer:
+    use8 = false;
+    use10 = false;
+    break;
+  }
+  EnableWindow(GetDlgItem(mhdlg,IDC_8_BIT),use8);
+  EnableWindow(GetDlgItem(mhdlg,IDC_10_BIT),use10);
+  EnableWindow(GetDlgItem(mhdlg,IDC_16_BIT),use16);
   CheckDlgButton(mhdlg,IDC_8_BIT,codec->config.bits==8 ? BST_CHECKED:BST_UNCHECKED);
   CheckDlgButton(mhdlg,IDC_10_BIT,codec->config.bits==10 ? BST_CHECKED:BST_UNCHECKED);
   CheckDlgButton(mhdlg,IDC_16_BIT,codec->config.bits==16 ? BST_CHECKED:BST_UNCHECKED);

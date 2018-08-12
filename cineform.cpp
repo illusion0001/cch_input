@@ -150,6 +150,10 @@ void cfhd_set_format(AVCodecContext* avctx, nsVDXPixmap::VDXPixmapFormat vdfmt)
     fmt = CFHD_PIXEL_FORMAT_B64A;
     avctx->pix_fmt = AV_PIX_FMT_BGRA64;
     break;
+  case nsVDXPixmap::kPixFormat_Y16:
+    fmt = CFHD_PIXEL_FORMAT_BYR4;
+    avctx->pix_fmt = AV_PIX_FMT_GRAY16;
+    break;
   default:
     cfhd_set_encoded_format(avctx);
     return;
@@ -166,6 +170,7 @@ void cfhd_get_info(AVCodecContext* avctx, FilterModPixmapInfo& info)
 {
   DecoderObj* obj = (DecoderObj*)avctx->priv_data;
   info.alpha_type = FilterModPixmapInfo::kAlphaInvalid;
+  info.colorRangeMode = nsVDXPixmap::kColorRangeMode_None;
   if(obj->encoded_format==CFHD_ENCODED_FORMAT_RGBA_4444) info.alpha_type = FilterModPixmapInfo::kAlphaMask;
   if(obj->fmt==CFHD_PIXEL_FORMAT_B64A){
     info.ref_r = 0xFFF0;
@@ -188,6 +193,10 @@ void cfhd_get_info(AVCodecContext* avctx, FilterModPixmapInfo& info)
   }
   if(obj->fmt==CFHD_PIXEL_FORMAT_YU64){
     info.ref_r = 0xFFFF;
+  }
+  if(obj->fmt==CFHD_PIXEL_FORMAT_BYR4){
+    info.ref_r = 0xFFFF;
+    info.colorRangeMode = nsVDXPixmap::kColorRangeMode_Full;
   }
 }
 
@@ -229,6 +238,8 @@ bool cfhd_test_format(AVCodecContext* avctx, nsVDXPixmap::VDXPixmapFormat vdfmt)
     //case nsVDXPixmap::kPixFormat_RGB888:
     case nsVDXPixmap::kPixFormat_R210:
     case nsVDXPixmap::kPixFormat_XRGB64:
+      return true;
+    case nsVDXPixmap::kPixFormat_Y16:
       return true;
     }
   }
@@ -300,17 +311,26 @@ int cfhd_decode(AVCodecContext* avctx, void* data, int* got_frame, AVPacket* avp
       case COLOR_FORMAT_RGB32_INVERTED:
       case COLOR_FORMAT_BGRA32:
       case COLOR_FORMAT_QT32:
-      obj->input_depth = 8;
-      break;
+        obj->input_depth = 8;
+        break;
       case COLOR_FORMAT_R210:
       case COLOR_FORMAT_RGB10:
       case COLOR_FORMAT_RG30:
       case COLOR_FORMAT_AR10:
       case COLOR_FORMAT_AB10:
       case COLOR_FORMAT_DPX0:
-      obj->input_depth = 10;
-      break;
+        obj->input_depth = 10;
+        break;
       }
+      break;
+    case CFHD_ENCODED_FORMAT_BAYER:
+      {
+        int w,h;
+        CFHD_PrepareToDecode(obj->dec,0,0,CFHD_PIXEL_FORMAT_BYR4,CFHD_DECODED_RESOLUTION_FULL,0,avpkt->data,avpkt->size,&w,&h,0);
+        avctx->width = w;
+        avctx->height = h;
+      }
+      break;
     }
     cfhd_set_encoded_format(avctx);
   }
