@@ -646,6 +646,21 @@ INT_PTR ConfigCF::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam){
       if(IsDlgButtonChecked(mhdlg,IDC_THREADING)) codec->config.threads = 0; else codec->config.threads = 1;
       break;
     }
+    break;
+
+  case WM_NOTIFY:
+    {
+      NMHDR* nm = (NMHDR*)lParam;
+      if(nm->idFrom==IDC_LINK) switch (nm->code){
+      case NM_CLICK:
+      case NM_RETURN:
+        {
+          NMLINK* link = (NMLINK*)lParam;
+          ShellExecuteW(NULL, L"open", link->item.szUrl, NULL, NULL, SW_SHOW);
+        }
+      }
+    }
+    break;
   }
 
   return FALSE;

@@ -1032,6 +1032,21 @@ INT_PTR ConfigBase::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam){
       change_bits();
       break;
     }
+    break;
+
+  case WM_NOTIFY:
+    {
+      NMHDR* nm = (NMHDR*)lParam;
+      if(nm->idFrom==IDC_LINK) switch (nm->code){
+      case NM_CLICK:
+      case NM_RETURN:
+        {
+          NMLINK* link = (NMLINK*)lParam;
+          ShellExecuteW(NULL, L"open", link->item.szUrl, NULL, NULL, SW_SHOW);
+        }
+      }
+    }
+    break;
   }
 
   return FALSE;
