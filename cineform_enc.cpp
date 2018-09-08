@@ -4,6 +4,8 @@
 
 #include "cineform/common/CFHDEncoder.h"
 #include "cineform/common/ver.h"
+#include "cineform/common/metadatatags.h"
+#include "cineform/common/aviextendedheader.h"
 #include "vd2\plugin\vdinputdriver.h"
 #include <vd2/VDXFrame/VideoFilterDialog.h>
 #include <commctrl.h>
@@ -61,7 +63,10 @@ struct CodecCF: public CodecClass{
     format_rgb = 1,
     format_rgba = 2,
     format_yuv422 = 3,
-    format_bayer = 4,
+    format_bayer_rg = 4,
+    format_bayer_gr = 5,
+    format_bayer_gb = 6,
+    format_bayer_bg = 7,
   };
 
   struct Config{
@@ -89,6 +94,7 @@ struct CodecCF: public CodecClass{
 
   CFHD_EncoderRef encRef;
   CFHD_EncoderPoolRef poolRef;
+  CFHD_MetadataRef metadataRef;
   uint32_t frameNumber;
   uint32_t pool_depth;
 
@@ -107,6 +113,7 @@ struct CodecCF: public CodecClass{
     keyint=1;
     encRef=0;
     poolRef=0;
+    metadataRef=0;
     use709=true;
     buffer=0;
     buffer_count=0;
@@ -190,7 +197,7 @@ struct CodecCF: public CodecClass{
       }
     }
 
-    if(config.format==format_bayer){
+    if(config.format>=format_bayer_rg){
       if(info) info->ref_r = 0xFFFF;
       return nsVDXPixmap::kPixFormat_Y16;
     }
@@ -287,7 +294,10 @@ struct CodecCF: public CodecClass{
       if(config.bits==10) pixelFormat = CFHD_PIXEL_FORMAT_V210;
       if(config.bits==16) pixelFormat = CFHD_PIXEL_FORMAT_YU64;
       break;
-    case format_bayer:
+    case format_bayer_rg:
+    case format_bayer_gr:
+    case format_bayer_bg:
+    case format_bayer_gb:
       encodedFormat = CFHD_ENCODED_FORMAT_BAYER;
       pixelFormat = CFHD_PIXEL_FORMAT_BYR4;
       break;
@@ -301,6 +311,17 @@ struct CodecCF: public CodecClass{
     }
 
     CFHD_EncodingQuality quality = quality_list[config.quality];
+
+    CFHD_MetadataOpen(&metadataRef);
+    if(encodedFormat==CFHD_ENCODED_FORMAT_BAYER){
+      uint32_t bayer_format = BAYER_FORMAT_RED_GRN + config.format - format_bayer_rg;
+      CFHD_MetadataAdd(metadataRef, TAG_BAYER_FORMAT, METADATATYPE_UINT32, 4, &bayer_format, false);
+
+      //CFHD_MetadataAdd(metadataRef, TAG_COLOR_MATRIX, METADATATYPE_FLOAT, 48, (uint32*)matrix, false);
+      //uint32_t curve = CURVE_LINEAR;
+      //CFHD_MetadataAdd(metadataRef, TAG_ENCODE_CURVE, METADATATYPE_UINT32, 4, &curve, false);
+      //CFHD_MetadataAdd(metadataRef, TAG_DECODE_CURVE, METADATATYPE_UINT32, 4, &curve, false);
+    }
 
     int threads = config.threads;
     if(threads!=1){
@@ -331,9 +352,11 @@ struct CodecCF: public CodecClass{
     if(threads==1){
       error = CFHD_OpenEncoder(&encRef, 0);
       error = CFHD_PrepareToEncode(encRef, layout->w, layout->h, pixelFormat, encodedFormat, encodingFlags, quality);
+      CFHD_MetadataAttach(encRef, metadataRef);
     } else {
       error = CFHD_CreateEncoderPool(&poolRef, threads, buffer_count, 0);
       error = CFHD_PrepareEncoderPool(poolRef, layout->w, layout->h, pixelFormat, encodedFormat, encodingFlags, quality);
+      CFHD_AttachEncoderPoolMetadata(poolRef, metadataRef);
       CFHD_StartEncoderPool(poolRef);
     }
     if(error) return ICERR_BADPARAM;
@@ -353,6 +376,10 @@ struct CodecCF: public CodecClass{
     if(poolRef){
       CFHD_ReleaseEncoderPool(poolRef);
       poolRef = 0;
+    }
+    if(metadataRef){
+      CFHD_MetadataClose(metadataRef);
+      metadataRef = 0;
     }
     if(buffer){
       for(int i=0; i<buffer_count; i++) free(buffer[i].p);
@@ -517,11 +544,14 @@ void ConfigCF::init_format()
     "RGB 12-bit", 
     "RGBA 12-bit",
     "YUV 4:2:2 10-bit",
-    "bayer 12-bit",
+    "bayer 12-bit : RG",
+    "bayer 12-bit : GR",
+    "bayer 12-bit : GB",
+    "bayer 12-bit : BG",
   };
 
   SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_RESETCONTENT, 0, 0);
-  for(int i=0; i<4; i++)
+  for(int i=0; i<7; i++)
     SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_ADDSTRING, 0, (LPARAM)color_names[i]);
   SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_SETCURSEL, codec->config.format-1, 0);
 }
@@ -530,7 +560,7 @@ void ConfigCF::change_format(int sel)
 {
   codec->config.format = sel+1;
   if(codec->config.format==CodecCF::format_rgba && codec->config.bits==10) codec->config.bits = 16;
-  if(codec->config.format==CodecCF::format_bayer) codec->config.bits = 16;
+  if(codec->config.format>=CodecCF::format_bayer_rg) codec->config.bits = 16;
   init_bits();
   change_bits();
 }
@@ -545,7 +575,10 @@ void ConfigCF::init_bits()
   case CodecCF::format_rgba:
     use10 = false;
     break;
-  case CodecCF::format_bayer:
+  case CodecCF::format_bayer_rg:
+  case CodecCF::format_bayer_gr:
+  case CodecCF::format_bayer_bg:
+  case CodecCF::format_bayer_gb:
     use8 = false;
     use10 = false;
     break;
