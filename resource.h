@@ -95,6 +95,7 @@
 #define IDC_DECODE_CFHD_AM              1047
 #define IDC_QUALITY_VALUE               1048
 #define IDC_STEREO                      1049
+#define IDC_TUNE                        1049
 #define IDC_CBR                         1050
 #define IDC_QUALITY_LABEL               1051
 #define IDC_CODER0                      1052

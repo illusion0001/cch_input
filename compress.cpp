@@ -1703,19 +1703,33 @@ const char* x265_preset_names[] = {
   "placebo",
 };
 
+const char* x265_tune_names[] = {
+  "none",
+  "psnr",
+  "ssim",
+  "grain",
+  "fastdecode",
+  "zerolatency", 
+};
+
 struct CodecH265: public CodecBase{
   enum{ id_tag=MKTAG('h', 'e', 'v', '1') };
   struct Config: public CodecBase::Config{
     int preset;
     int crf; // 0-51
+    int tune;
+    int flags; // reserved
 
     Config(){ set_default(); }
     void clear(){ CodecBase::Config::clear(); set_default(); }
     void set_default(){
+      version = 1;
       preset = 4;
       crf = 28;
       format = format_yuv420;
       bits = 8;
+      tune = 0;
+      flags = 0;
     }
   } codec_config;
 
@@ -1727,6 +1741,16 @@ struct CodecH265: public CodecBase{
 
   int config_size(){ return sizeof(Config); }
   void reset_config(){ codec_config.clear(); }
+
+  virtual bool load_config(void* data, size_t size){
+    if(size<4) return false;
+    int src_version = *(int*)data;
+    if(src_version>1) return false;
+
+    codec_config.set_default();
+    memcpy(&codec_config, data, size);
+    return true;
+  }
 
   void getinfo(ICINFO& info){
     info.fccHandler = id_tag;
@@ -1758,6 +1782,7 @@ struct CodecH265: public CodecBase{
     ctx->bit_rate = -1;
 
     av_opt_set(ctx->priv_data, "preset", x265_preset_names[codec_config.preset], 0);
+    if(codec_config.tune) av_opt_set(ctx->priv_data, "tune", x265_tune_names[codec_config.tune], 0);
     av_opt_set_double(ctx->priv_data, "crf", codec_config.crf, 0);
     return true;
   }
@@ -1799,7 +1824,7 @@ struct CodecH265LS: public CodecH265{
 
 INT_PTR ConfigH265::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
 {
-  CodecH264::Config* config = (CodecH264::Config*)codec->config;
+  CodecH265::Config* config = (CodecH265::Config*)codec->config;
   switch(msg){
   case WM_INITDIALOG:
     {
@@ -1807,6 +1832,12 @@ INT_PTR ConfigH265::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
       for(int i=0; i<10; i++)
         SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_ADDSTRING, 0, (LPARAM)x265_preset_names[i]);
       SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_SETCURSEL, config->preset, 0);
+
+      SendDlgItemMessage(mhdlg, IDC_TUNE, CB_RESETCONTENT, 0, 0);
+      for(int i=0; i<6; i++)
+        SendDlgItemMessage(mhdlg, IDC_TUNE, CB_ADDSTRING, 0, (LPARAM)x265_tune_names[i]);
+      SendDlgItemMessage(mhdlg, IDC_TUNE, CB_SETCURSEL, config->tune, 0);
+
       SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMIN, FALSE, 0);
       SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMAX, TRUE, 51);
       SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETPOS, TRUE, config->crf);
@@ -1827,6 +1858,12 @@ INT_PTR ConfigH265::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
     case IDC_PROFILE:
       if(HIWORD(wParam)==LBN_SELCHANGE){
         config->preset = (int)SendDlgItemMessage(mhdlg, IDC_PROFILE, CB_GETCURSEL, 0, 0);
+        return TRUE;
+      }
+      break;
+    case IDC_TUNE:
+      if(HIWORD(wParam)==LBN_SELCHANGE){
+        config->tune = (int)SendDlgItemMessage(mhdlg, IDC_TUNE, CB_GETCURSEL, 0, 0);
         return TRUE;
       }
       break;
