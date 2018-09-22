@@ -1126,6 +1126,13 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     perfect_bitexact = true;
     break;
 
+  case AV_PIX_FMT_GRAY8:
+    perfect_format = (VDXPixmapFormat)kPixFormat_Y8;
+    perfect_av_fmt = AV_PIX_FMT_GRAY8;
+    trigger = kPixFormat_Y8;
+    perfect_bitexact = true;
+    break;
+
   case AV_PIX_FMT_GRAY16:
     perfect_format = (VDXPixmapFormat)kPixFormat_Y16;
     perfect_av_fmt = AV_PIX_FMT_GRAY16;
@@ -1388,6 +1395,9 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
   case kPixFormat_YUV422_YUYV:
     format = kPixFormat_YUV422_YUYV_FR;
     break;
+  case kPixFormat_Y8:
+    format = kPixFormat_Y8_FR;
+    break;
   }
 
   if(!skip_colorspace && m_pCodecCtx->colorspace==AVCOL_SPC_BT709) switch(format){
@@ -1466,6 +1476,8 @@ bool VDFFVideoSource::SetTargetFormat(nsVDXPixmap::VDXPixmapFormat opt_format, b
     break;
   case kPixFormat_Y16:
     m_pixmap_info.ref_r = 0xFFFF;
+    if(m_pCodecCtx->color_range==AVCOL_RANGE_MPEG) m_pixmap_info.colorRangeMode = kColorRangeMode_Limited;
+    if(m_pCodecCtx->color_range==AVCOL_RANGE_JPEG) m_pixmap_info.colorRangeMode = kColorRangeMode_Full;
     break;
   case kPixFormat_YUV422_V210:
   case kPixFormat_YUV422_YU64:
