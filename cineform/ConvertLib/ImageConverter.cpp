@@ -31,13 +31,17 @@
 #include "ImageConverter.h"
 //#include "ConvertLib.h"
 
-//#if !defined(_WIN64) // certain SIMD instructions are NOT supported in Win64...
+#if defined(_WIN64) && defined(_MSC_VER)
+#define NO_MMX
+#endif
+
+#if !defined(NO_MMX) // certain SIMD instructions are NOT supported in Win64...
 #ifndef _XMMOPT
 #define _XMMOPT 1					// Use SIMD instructions in this program
 #endif
 
 #define XMMOPT (1 && _XMMOPT)		// Use SIMD instructions in this module
-//#endif
+#endif
 
 #if XMMOPT
 #include <emmintrin.h>				// Include support for SSE2 intrinsics

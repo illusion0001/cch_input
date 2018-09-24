@@ -9,12 +9,3 @@ run msys64\msys2_shell.cmd -full-path -mingw64
 paste commands:
 cd E:/work/ffmpeg_build/build/ffmpeg-git/build-static-64bit
 make install
-
-//--------------------------------
-
-FFMpeg changes:
-
-riff.c
-    { AV_CODEC_ID_H265,         MKTAG('H', 'E', 'V', 'C') },
-
-ffv1_enc.c etc updated to head

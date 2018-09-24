@@ -2,9 +2,9 @@
 <VisualStudioProject
 	ProjectType="Visual C++"
 	Version="9.00"
-	Name="ffmpeg"
+	Name="avlib"
 	ProjectGUID="{F9A8C873-74FF-4AE6-8F55-F94136F8B716}"
-	RootNamespace="ffmpeg"
+	RootNamespace="avlib"
 	Keyword="Win32Proj"
 	TargetFrameworkVersion="131072"
 	>
@@ -67,11 +67,11 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				OutputFile=".\..\bin\cch_input.vdf"
+				OutputFile=".\..\bin\avlib-1.vdplugin"
 				LinkIncremental="2"
 				AdditionalLibraryDirectories="..\ffmpeg\win32\lib"
 				IgnoreDefaultLibraryNames=""
-				ModuleDefinitionFile="..\ffmpeg.def"
+				ModuleDefinitionFile="..\avlib.def"
 				DelayLoadDLLs=""
 				GenerateDebugInformation="true"
 				SubSystem="2"
@@ -151,11 +151,11 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				OutputFile=".\..\bin64\cch_input.vdf"
+				OutputFile=".\..\bin64\avlib-1.vdplugin"
 				LinkIncremental="2"
 				AdditionalLibraryDirectories="..\ffmpeg\x64\lib"
 				IgnoreDefaultLibraryNames=""
-				ModuleDefinitionFile="..\ffmpeg.def"
+				ModuleDefinitionFile="..\avlib.def"
 				GenerateDebugInformation="true"
 				SubSystem="2"
 				RandomizedBaseAddress="1"
@@ -238,11 +238,11 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				OutputFile=".\..\bin\cch_input.vdf"
+				OutputFile=".\..\bin\avlib-1.vdplugin"
 				LinkIncremental="1"
 				AdditionalLibraryDirectories="..\ffmpeg\win32\lib"
 				IgnoreDefaultLibraryNames=""
-				ModuleDefinitionFile="..\ffmpeg.def"
+				ModuleDefinitionFile="..\avlib.def"
 				GenerateDebugInformation="true"
 				SubSystem="2"
 				OptimizeReferences="2"
@@ -328,11 +328,11 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				OutputFile=".\..\bin64\cch_input.vdf"
+				OutputFile=".\..\bin64\avlib-1.vdplugin"
 				LinkIncremental="1"
 				AdditionalLibraryDirectories="..\ffmpeg\x64\lib"
 				IgnoreDefaultLibraryNames=""
-				ModuleDefinitionFile="..\ffmpeg.def"
+				ModuleDefinitionFile="..\avlib.def"
 				GenerateDebugInformation="true"
 				SubSystem="2"
 				OptimizeReferences="2"
@@ -1089,6 +1089,14 @@
 			>
 		</File>
 		<File
+			RelativePath="..\avlib.def"
+			>
+		</File>
+		<File
+			RelativePath="..\avlib.rc"
+			>
+		</File>
+		<File
 			RelativePath="..\cineform.bmp"
 			>
 		</File>
@@ -1122,14 +1130,6 @@
 		</File>
 		<File
 			RelativePath="..\ffmpeg.bmp"
-			>
-		</File>
-		<File
-			RelativePath="..\ffmpeg.def"
-			>
-		</File>
-		<File
-			RelativePath="..\ffmpeg.rc"
 			>
 		</File>
 		<File
