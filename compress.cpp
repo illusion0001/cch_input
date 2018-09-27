@@ -474,7 +474,7 @@ struct CodecBase: public CodecClass{
     if(layout->format==nsVDXPixmap::kPixFormat_XRGB64) outhdr->biBitCount = 48;
     outhdr->biCompression = codec_tag;
     if(ctx && ctx->codec_tag) outhdr->biCompression = ctx->codec_tag;
-    outhdr->biSizeImage   = iWidth*iHeight*6;
+    outhdr->biSizeImage   = iWidth*iHeight*8;
     if(ctx){
       uint8* p = ((uint8*)outhdr)+sizeof(BITMAPINFOHEADER);
       memset(p,0,extra_size);
@@ -507,7 +507,7 @@ struct CodecBase: public CodecClass{
 
   LRESULT compress_get_size(BITMAPINFO *lpbiOutput)
   {
-    return lpbiOutput->bmiHeader.biWidth*lpbiOutput->bmiHeader.biHeight*6 + 4096;
+    return lpbiOutput->bmiHeader.biWidth*lpbiOutput->bmiHeader.biHeight*8 + 4096;
   }
 
   LRESULT compress_frames_info(ICCOMPRESSFRAMES *icf)

@@ -4,7 +4,7 @@
 @set log=build.log
 
 @echo compile sources
-@windres %src%\ffmpeg.rc %out%\rc.o 2>%log%
+@windres %src%\avlib.rc %out%\rc.o 2>%log%
 
 @set param=-I%src% -I%src%\cineform\codec -I%include% -D_WINDOWS -D__STDC_CONSTANT_MACROS -Wno-deprecated-declarations -Wno-multichar -O2
 
@@ -33,4 +33,4 @@
 @set syslib=-lvfw32 -lcomdlg32 -lz -lopus -lvorbis -lvorbisenc -llzma -liconv -lbz2 -lws2_32 -lgmp -lsecur32 -logg -lksguid
 
 @echo linking
-@g++ -O2 -static-libgcc -mdll -s -Wl,--enable-stdcall-fixup %src%\ffmpeg.def -L%lib% %objlist% %fflib% %syslib% %libcfhd% -lole32 -o %out%\avlib-1.vdplugin 2>>%log%
+@g++ -O2 -static-libgcc -mdll -s -Wl,--enable-stdcall-fixup %src%\avlib.def -L%lib% %objlist% %fflib% %syslib% %libcfhd% -lole32 -o %out%\avlib-1.vdplugin 2>>%log%
