@@ -463,6 +463,9 @@ void VDFFAudio_mp3::InitContext()
 {
   VDFFAudio::InitContext();
   av_opt_set_int(ctx->priv_data, "joint_stereo", codec_config.flags & flag_jointstereo, 0);
+
+  // this estimate is fake, but leaving bit_rate=0 is worse
+  if(!(codec_config.flags & VDFFAudio::flag_constant_rate)) ctx->bit_rate = ctx->sample_rate*4;
 }
 
 class AConfigMp3: public AConfigBase{
