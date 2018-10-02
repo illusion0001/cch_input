@@ -121,7 +121,24 @@ public:
   virtual void ShowConfig(VDXHWND parent);
 };
 
+class VDFFAudio_flac: public VDFFAudio{
+public:
+  struct Config:public VDFFAudio::Config{
+  } codec_config;
+
+  VDFFAudio_flac(const VDXInputDriverContext &pContext):VDFFAudio(pContext){
+    config = &codec_config;
+    reset_config();
+  }
+  virtual void CreateCodec();
+  virtual void InitContext();
+  virtual size_t GetConfigSize(){ return sizeof(Config); }
+  virtual void reset_config();
+  virtual bool HasConfig(){ return false; }
+};
+
 extern VDXPluginInfo ff_aacenc_info;
 extern VDXPluginInfo ff_mp3enc_info;
+extern VDXPluginInfo ff_flacenc_info;
 
 #endif

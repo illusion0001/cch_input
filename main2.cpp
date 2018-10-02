@@ -231,6 +231,7 @@ VDPluginInfo* kPlugins[]={
   &ff_output_info,
   &ff_mp3enc_info,
   &ff_aacenc_info,
+  &ff_flacenc_info,
   &ff_plugin_video,
   &ff_plugin_image,
   &ff_plugin_audio,

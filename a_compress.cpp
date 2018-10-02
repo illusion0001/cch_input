@@ -256,21 +256,21 @@ void VDFFAudio::UnlockOutputBuffer(unsigned bytes){
 }
 
 unsigned VDFFAudio::CopyOutput(void *dst, unsigned bytes, sint64& duration){
+  // output is delayed, need more input
   if(!pkt.size){
     duration = -1;
     return 0;
   }
-  /*
-  //! not supported by host
+
+  // host must resize buffer
   if(int(bytes)<pkt.size){
     duration = pkt.duration;
-    return 0;
+    return pkt.size;
   }
-  */
 
   total_out += pkt.duration;
   duration = pkt.duration;
-  if(bytes>unsigned(pkt.size)) bytes = pkt.size;
+  bytes = pkt.size;
   memcpy(dst,pkt.data,bytes);
   av_packet_unref(&pkt);
   return bytes;
@@ -591,3 +591,56 @@ VDXPluginInfo ff_mp3enc_info={
   kVDXPlugin_AudioEncAPIVersion,
   &ff_mp3enc
 };
+//-----------------------------------------------------------------------------------
+
+void VDFFAudio_flac::reset_config()
+{
+  codec_config.clear();
+  codec_config.version = 1;
+  codec_config.flags = 0;
+  codec_config.bitrate = 0;
+}
+
+void VDFFAudio_flac::CreateCodec()
+{
+  codec = avcodec_find_encoder(AV_CODEC_ID_FLAC);
+}
+
+void VDFFAudio_flac::InitContext()
+{
+}
+
+//-----------------------------------------------------------------------------------
+
+bool VDXAPIENTRY ff_create_flacenc(const VDXInputDriverContext *pContext, IVDXAudioEnc **ppDriver)
+{
+  VDFFAudio *p = new VDFFAudio_flac(*pContext);
+  if(!p) return false;
+  *ppDriver = p;
+  p->AddRef();
+  return true;
+}
+
+VDXAudioEncDefinition ff_flacenc={
+  sizeof(VDXAudioEncDefinition),
+  0, //flags
+  L"FFMpeg FLAC lossless",
+  "ffmpeg_flac",
+  ff_create_flacenc
+};
+
+VDXPluginInfo ff_flacenc_info={
+  sizeof(VDXPluginInfo),
+  L"FFMpeg FLAC",
+  L"Anton Shekhovtsov",
+  L"Encode audio to FLAC format.",
+  1,
+  kVDXPluginType_AudioEnc,
+  0,
+  12, // min api version
+  kVDXPlugin_APIVersion,
+  kVDXPlugin_AudioEncAPIVersion,  // min output api version
+  kVDXPlugin_AudioEncAPIVersion,
+  &ff_flacenc
+};
+
