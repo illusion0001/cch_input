@@ -120,40 +120,46 @@ int VDFFVideoSource::init_duration(const AVRational fr)
     sample_count = (int)m_pStreamCtx->nb_frames;
     sample_count_error = 0;
 
-  } else if(m_pStreamCtx->duration == AV_NOPTS_VALUE){
-    if(m_pFormatCtx->duration == AV_NOPTS_VALUE){
+  } else {
+    int64_t duration = m_pStreamCtx->duration;
+
+    if(m_pStreamCtx->duration == AV_NOPTS_VALUE){
+      if(m_pFormatCtx->duration != AV_NOPTS_VALUE){
+        duration = av_rescale_q_rnd(m_pFormatCtx->duration, av_make_q(1,AV_TIME_BASE), m_pStreamCtx->time_base, AV_ROUND_NEAR_INF);
+      }
+    }
+
+    if(duration != AV_NOPTS_VALUE){
+      int rndd = time_base.den/2;
+      //! stream duration really means last timestamp
+      // found on "10 bit.mp4"
+      // also works with mkv (derived from file duration)
+      int64_t start_pts = m_pStreamCtx->start_time;
+      if(start_pts==AV_NOPTS_VALUE) start_pts = 0;
+      duration = duration - start_pts;
+      //! above idea fails on Hilary.0000.ts
+
+      bool mts = false;
+      AVInputFormat* mts_format = av_find_input_format("mpegts");
+      if(m_pFormatCtx->iformat==mts_format) mts = true;
+
+      if(mts || duration<=0){
+        duration = m_pStreamCtx->duration;
+        start_pts = 0; // ignore count_error
+      }
+      sample_count = (int)((duration * time_base.num + rndd) / time_base.den);
+      int e = (int)((start_pts * time_base.num + rndd) / time_base.den);
+      e = abs(e);
+      if(e>sample_count_error) sample_count_error = e;
+
+    } else {
       if(m_pSource->is_image){
         sample_count = 1;
       } else {
         mContext.mpCallbacks->SetError("FFMPEG: Cannot figure stream duration. Unsupported.");
         return -1;
       }
-    } else {
-      AVRational m;
-      av_reduce(&m.num, &m.den, fr.num, int64_t(fr.den)*AV_TIME_BASE, INT_MAX);
-      sample_count = (int)(m_pFormatCtx->duration * m.num/m.den);
     }
-  } else {
-    int rndd = time_base.den/2;
-    //! stream duration really means last timestamp
-    // found on "10 bit.mp4"
-    int64_t start_pts = m_pStreamCtx->start_time;
-    if(start_pts==AV_NOPTS_VALUE) start_pts = 0;
-    int64_t duration = m_pStreamCtx->duration - start_pts;
-    //! above idea fails on Hilary.0000.ts
-
-    bool mts = false;
-    AVInputFormat* mts_format = av_find_input_format("mpegts");
-    if(m_pFormatCtx->iformat==mts_format) mts = true;
-
-    if(mts || duration<=0){
-      duration = m_pStreamCtx->duration;
-      start_pts = 0; // ignore count_error
-    }
-    sample_count = (int)((duration * time_base.num + rndd) / time_base.den);
-    int e = (int)((start_pts * time_base.num + rndd) / time_base.den);
-    e = abs(e);
-    if(e>sample_count_error) sample_count_error = e;
   }
 
   if(sample_count==0){
@@ -468,7 +474,6 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   // looks like ffmpeg will save first packet pts as start_time
   // this is bullshit if the packet belongs to reordered frame (example: BBI frame sequence)
   read_frame(0,true);
-  pSource->video_start_time = start_time;
   if(frame_fmt!=m_pCodecCtx->pix_fmt){
     init_format();
   }
@@ -2026,9 +2031,16 @@ bool VDFFVideoSource::read_frame(sint64 desired_frame, bool init)
 
 void VDFFVideoSource::set_start_time()
 {
-  int64_t ts = frame->pts;
-  if(ts==AV_NOPTS_VALUE) ts = frame->pkt_dts;
-  start_time = ts;
+  // this is used for audio sync
+  int64_t t1 = frame->pts;
+  if(t1==AV_NOPTS_VALUE) t1 = m_pStreamCtx->start_time;
+  if(t1!=AV_NOPTS_VALUE) 
+    m_pSource->video_start_time = t1;
+
+  // this is used for seeking etc
+  int64_t t2 = frame->pts;
+  if(t2==AV_NOPTS_VALUE) t2 = frame->pkt_dts;
+  start_time = t2;
   if(frame_fmt==-1) init_format();
 }
 
