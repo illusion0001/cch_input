@@ -456,11 +456,14 @@ FFOutputFile::FFOutputFile(const VDXInputDriverContext &pContext)
 {
   ofmt = 0;
   header = false;
+  a_buf = 0;
+  a_buf_size = 0;
 }
 
 FFOutputFile::~FFOutputFile()
 {
   Finalize();
+  free(a_buf);
 }
 
 void FFOutputFile::av_error(int err)
@@ -488,7 +491,16 @@ bool VDXAPIENTRY VDFFOutputFileDriver::GetStreamControl(const wchar_t *path, con
   if(!oformat) oformat = av_guess_format(0, out_ff_path, 0);
   if(!oformat) return false;
 
+  if(sc.version<2) return true;
+
   if(oformat->flags & AVFMT_GLOBALHEADER) sc.global_header = true;
+  if(oformat==av_guess_format("matroska", 0, 0)) sc.use_offsets = true;
+  if(oformat==av_guess_format("webm", 0, 0)) sc.use_offsets = true;
+  if(oformat==av_guess_format("mov", 0, 0))  sc.use_offsets = true;
+  if(oformat==av_guess_format("mp4", 0, 0))  sc.use_offsets = true;
+  if(oformat==av_guess_format("ipod", 0, 0)) sc.use_offsets = true;
+  if(oformat==av_guess_format("nut", 0, 0))  sc.use_offsets = true;
+
   return true;
 }
 
@@ -579,6 +591,18 @@ void FFOutputFile::SetAudio(uint32 index, const VDXStreamInfo& si, const void *p
   st->codec->codec_type = AVMEDIA_TYPE_AUDIO;
 
   import_wav(st,pFormat,cbFormat);
+
+  if(ofmt->oformat==av_guess_format("aiff", 0, 0)){
+    if(st->codec->codec_id==AV_CODEC_ID_PCM_S16LE){
+      st->codec->codec_id = AV_CODEC_ID_PCM_S16BE;
+      s.bswap_pcm = true;
+    }
+    if(st->codec->codec_id==AV_CODEC_ID_PCM_F32LE){
+      st->codec->codec_id = AV_CODEC_ID_PCM_F32BE;
+      s.bswap_pcm = true;
+    }
+  }
+
   adjust_codec_tag(st);
 
   if(si.avcodec_version){
@@ -587,12 +611,70 @@ void FFOutputFile::SetAudio(uint32 index, const VDXStreamInfo& si, const void *p
     st->codec->initial_padding = si.initial_padding;
     st->codec->trailing_padding = si.trailing_padding;
   }
+
   avcodec_parameters_from_context(st->codecpar,st->codec);
 
   st->time_base = av_make_q(asi.dwScale,asi.dwRate);
 
+  if(si.version>=2){
+    s.offset_num = si.start_num;
+    s.offset_den = si.start_den;
+  }
+
   s.st = st;
   s.time_base = st->time_base;
+}
+
+void* FFOutputFile::bswap_pcm(uint32 index, const void *pBuffer, uint32 cbBuffer)
+{
+  if(a_buf_size<cbBuffer){
+    a_buf = realloc(a_buf,cbBuffer);
+    a_buf_size = cbBuffer;
+  }
+
+  StreamInfo& s = stream[index];
+  switch(s.st->codec->codec_id){
+  case AV_CODEC_ID_PCM_S16LE:
+  case AV_CODEC_ID_PCM_S16BE:
+  case AV_CODEC_ID_PCM_U16LE:
+  case AV_CODEC_ID_PCM_U16BE:
+    {
+      const uint16* a = (const uint16*)pBuffer;
+      uint16* b = (uint16*)a_buf;
+      {for(uint32 i=0; i<cbBuffer/2; i++){
+        b[i] = _byteswap_ushort(a[i]);
+      }}
+    }
+    break;
+  case AV_CODEC_ID_PCM_F32LE:
+  case AV_CODEC_ID_PCM_F32BE:
+  case AV_CODEC_ID_PCM_S32LE:
+  case AV_CODEC_ID_PCM_S32BE:
+  case AV_CODEC_ID_PCM_U32LE:
+  case AV_CODEC_ID_PCM_U32BE:
+    {
+      const uint32* a = (const uint32*)pBuffer;
+      uint32* b = (uint32*)a_buf;
+      {for(uint32 i=0; i<cbBuffer/4; i++){
+        b[i] = _byteswap_ulong(a[i]);
+      }}
+    }
+    break;
+  case AV_CODEC_ID_PCM_F64LE:
+  case AV_CODEC_ID_PCM_F64BE:
+  case AV_CODEC_ID_PCM_S64LE:
+  case AV_CODEC_ID_PCM_S64BE:
+    {
+      const uint64* a = (const uint64*)pBuffer;
+      uint64* b = (uint64*)a_buf;
+      {for(uint32 i=0; i<cbBuffer/8; i++){
+        b[i] = _byteswap_uint64(a[i]);
+      }}
+    }
+    break;
+  }
+
+  return a_buf;
 }
 
 void FFOutputFile::import_bmp(AVStream *st, const void *pFormat, int cbFormat)
@@ -799,6 +881,7 @@ void FFOutputFile::Write(uint32 index, const void *pBuffer, uint32 cbBuffer, Pac
   av_init_packet(&pkt);
   pkt.data = (uint8*)pBuffer;
   pkt.size = cbBuffer;
+  if(s.bswap_pcm) pkt.data = (uint8*)bswap_pcm(index,pBuffer,cbBuffer);
 
   if(info.flags & AVIIF_KEYFRAME) pkt.flags = AV_PKT_FLAG_KEY;
 
@@ -809,6 +892,7 @@ void FFOutputFile::Write(uint32 index, const void *pBuffer, uint32 cbBuffer, Pac
     pkt.pts = info.pts;
     pkt.dts = info.dts;
   }
+
   int64_t samples = info.samples;
   if(info.pcm_samples!=-1){
     samples = info.pcm_samples;
@@ -816,6 +900,10 @@ void FFOutputFile::Write(uint32 index, const void *pBuffer, uint32 cbBuffer, Pac
   }
   pkt.duration = samples;
   av_packet_rescale_ts(&pkt, s.time_base, s.st->time_base);
+
+  if(s.offset_num!=0){
+    pkt.pts += av_rescale_q_rnd(s.offset_num, av_make_q(1,(int)s.offset_den), s.st->time_base, AV_ROUND_NEAR_INF);
+  }
 
   s.frame += samples;
 
@@ -830,6 +918,101 @@ void FFOutputFile::Finalize()
   if(ofmt && !(ofmt->oformat->flags & AVFMT_NOFILE)) avio_closep(&ofmt->pb);
   avformat_free_context(ofmt);
   ofmt = 0;
+}
+
+enum {
+  f_avi,
+  f_mkv,
+  f_mka,
+  f_webm,
+  f_mov,
+  f_mp4,
+  f_m4a,
+  f_aiff,
+  f_nut,
+  f_ext,
+  f_exta,
+};
+
+uint32 VDXAPIENTRY VDFFOutputFileDriver::GetFormatCaps(int i)
+{
+  switch(i){
+  case f_avi:
+    return kFormatCaps_UseVideo|kFormatCaps_UseAudio;
+  case f_mkv:
+  case f_webm:
+  case f_mov:
+  case f_mp4:
+  case f_nut:
+    return kFormatCaps_UseVideo|kFormatCaps_UseAudio|kFormatCaps_OffsetStreams;
+  case f_mka:
+  case f_m4a:
+  case f_aiff:
+    return kFormatCaps_UseAudio;
+  case f_ext:
+    return kFormatCaps_UseVideo|kFormatCaps_UseAudio|kFormatCaps_Wildcard;
+  case f_exta:
+    return kFormatCaps_UseAudio|kFormatCaps_Wildcard;
+  }
+  return 0;
+}
+
+bool VDXAPIENTRY VDFFOutputFileDriver::EnumFormats(int i, wchar_t* filter, wchar_t* ext, char* name)
+{
+  switch(i){
+  case f_avi:
+    wcscpy(filter,L"AVI handled by FFMPEG (*.avi)");
+    wcscpy(ext,L"*.avi");
+    strcpy(name,"avi");
+    return true;
+  case f_mkv:
+    wcscpy(filter,L"Matroska (*.mkv)");
+    wcscpy(ext,L"*.mkv");
+    strcpy(name,"matroska");
+    return true;
+  case f_mka:
+    wcscpy(filter,L"Matroska Audio (*.mka)");
+    wcscpy(ext,L"*.mkv");
+    strcpy(name,"matroska");
+    return true;
+  case f_webm:
+    wcscpy(filter,L"WebM (*.webm)");
+    wcscpy(ext,L"*.webm");
+    strcpy(name,"webm");
+    return true;
+  case f_mov:
+    wcscpy(filter,L"QuickTime / MOV (*.mov)");
+    wcscpy(ext,L"*.mov");
+    strcpy(name,"mov");
+    return true;
+  case f_mp4:
+    wcscpy(filter,L"MP4 (MPEG-4 Part 14) (*.mp4)");
+    wcscpy(ext,L"*.mp4");
+    strcpy(name,"mp4");
+    return true;
+  case f_m4a:
+    wcscpy(filter,L"M4A (MPEG-4 Part 14) (*.m4a)");
+    wcscpy(ext,L"*.m4a");
+    strcpy(name,"ipod");
+    return true;
+  case f_aiff:
+    wcscpy(filter,L"Audio IFF (*.aiff)");
+    wcscpy(ext,L"*.aiff");
+    strcpy(name,"aiff");
+    return true;
+  case f_nut:
+    wcscpy(filter,L"NUT (*.nut)");
+    wcscpy(ext,L"*.nut");
+    strcpy(name,"nut");
+    return true;
+  case f_ext:
+  case f_exta:
+    wcscpy(filter,L"any format by FFMPEG (*.*)");
+    wcscpy(ext,L"*.*");
+    strcpy(name,"");
+    return true;
+  }
+  return false;
 }
 
 bool VDXAPIENTRY ff_create_output(const VDXInputDriverContext *pContext, IVDXOutputFileDriver **ppDriver)

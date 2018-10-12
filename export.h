@@ -92,13 +92,19 @@ public:
   struct StreamInfo{
     AVStream* st;
     int64_t frame;
+    int64_t offset_num;
+    int64_t offset_den;
     AVRational time_base;
+    bool bswap_pcm;
 
     StreamInfo(){
       st = 0;
       frame = 0;
+      offset_num = 0;
+      offset_den = 1;
       time_base.den = 0;
       time_base.num = 0;
+      bswap_pcm = false;
     }
   };
 
@@ -106,6 +112,9 @@ public:
   std::vector<StreamInfo> stream;
   AVFormatContext* ofmt;
   bool header;
+
+  void* a_buf;
+  uint32 a_buf_size;
 
   FFOutputFile(const VDXInputDriverContext &pContext);
   ~FFOutputFile();
@@ -120,6 +129,7 @@ public:
   void import_bmp(AVStream *st, const void *pFormat, int cbFormat);
   void import_wav(AVStream *st, const void *pFormat, int cbFormat);
   bool test_header();
+  void* bswap_pcm(uint32 index, const void *pBuffer, uint32 cbBuffer);
 };
 
 class VDFFOutputFileDriver: public vdxunknown<IVDXOutputFileDriver>{
@@ -138,48 +148,8 @@ public:
     return true;
   }
 
-  virtual bool	VDXAPIENTRY EnumFormats(int i, wchar_t* filter, wchar_t* ext, char* name) {
-    switch(i){
-    case 0:
-      wcscpy(filter,L"AVI handled by FFMPEG (*.avi)");
-      wcscpy(ext,L"*.avi");
-      strcpy(name,"avi");
-      return true;
-    case 1:
-      wcscpy(filter,L"Matroska (*.mkv)");
-      wcscpy(ext,L"*.mkv");
-      strcpy(name,"matroska");
-      return true;
-      /*
-    case 2:
-      wcscpy(filter,L"WebM (*.webm)");
-      wcscpy(ext,L"*.webm");
-      strcpy(name,"webm");
-      return true;
-      */
-    case 2:
-      wcscpy(filter,L"QuickTime / MOV (*.mov)");
-      wcscpy(ext,L"*.mov");
-      strcpy(name,"mov");
-      return true;
-    case 3:
-      wcscpy(filter,L"MP4 (MPEG-4 Part 14) (*.mp4)");
-      wcscpy(ext,L"*.mp4");
-      strcpy(name,"mp4");
-      return true;
-    case 4:
-      wcscpy(filter,L"NUT (*.nut)");
-      wcscpy(ext,L"*.nut");
-      strcpy(name,"nut");
-      return true;
-    case 5:
-      wcscpy(filter,L"any format by FFMPEG (*.*)");
-      wcscpy(ext,L"*.*");
-      strcpy(name,"");
-      return true;
-    }
-    return false;
-  }
+  virtual bool	VDXAPIENTRY EnumFormats(int i, wchar_t* filter, wchar_t* ext, char* name);
+  virtual uint32	VDXAPIENTRY GetFormatCaps(int i);
 };
 
 extern VDXPluginInfo ff_output_info;
