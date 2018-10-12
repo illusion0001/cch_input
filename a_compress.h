@@ -123,6 +123,7 @@ public:
 
 class VDFFAudio_flac: public VDFFAudio{
 public:
+  enum {flag_jointstereo=2};
   struct Config:public VDFFAudio::Config{
   } codec_config;
 
@@ -134,11 +135,48 @@ public:
   virtual void InitContext();
   virtual size_t GetConfigSize(){ return sizeof(Config); }
   virtual void reset_config();
+  virtual bool HasConfig(){ return true; }
+  virtual void ShowConfig(VDXHWND parent);
+};
+
+class VDFFAudio_vorbis: public VDFFAudio{
+public:
+  struct Config:public VDFFAudio::Config{
+  } codec_config;
+
+  VDFFAudio_vorbis(const VDXInputDriverContext &pContext):VDFFAudio(pContext){
+    config = &codec_config;
+    reset_config();
+  }
+  virtual void CreateCodec();
+  virtual void InitContext();
+  virtual size_t GetConfigSize(){ return sizeof(Config); }
+  virtual void reset_config();
   virtual bool HasConfig(){ return false; }
+};
+
+class VDFFAudio_opus: public VDFFAudio{
+public:
+  enum {flag_limited_rate=4};
+  struct Config:public VDFFAudio::Config{
+  } codec_config;
+
+  VDFFAudio_opus(const VDXInputDriverContext &pContext):VDFFAudio(pContext){
+    config = &codec_config;
+    reset_config();
+  }
+  virtual void CreateCodec();
+  virtual void InitContext();
+  virtual size_t GetConfigSize(){ return sizeof(Config); }
+  virtual void reset_config();
+  virtual bool HasConfig(){ return true; }
+  virtual void ShowConfig(VDXHWND parent);
 };
 
 extern VDXPluginInfo ff_aacenc_info;
 extern VDXPluginInfo ff_mp3enc_info;
 extern VDXPluginInfo ff_flacenc_info;
+extern VDXPluginInfo ff_vorbisenc_info;
+extern VDXPluginInfo ff_opusenc_info;
 
 #endif

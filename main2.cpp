@@ -232,6 +232,8 @@ VDPluginInfo* kPlugins[]={
   &ff_mp3enc_info,
   &ff_aacenc_info,
   &ff_flacenc_info,
+  //&ff_vorbisenc_info, todo: report delay
+  //&ff_opusenc_info, todo: not wav descriptor
   &ff_plugin_video,
   &ff_plugin_image,
   &ff_plugin_audio,
