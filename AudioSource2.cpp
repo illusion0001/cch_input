@@ -13,6 +13,7 @@ VDFFAudioSource::VDFFAudioSource(const VDXInputDriverContext& context)
   frame = 0;
   buffer = 0;
   next_sample = 0;
+  first_sample = AV_NOPTS_VALUE;
   discard_samples = 0;
   out_layout = 0;
   out_fmt = AV_SAMPLE_FMT_NONE;
@@ -99,12 +100,12 @@ int	VDFFAudioSource::initStream(VDFFInputFile* pSource, int streamIndex)
         // fill 10 hours
         sample_count = int64_t(3600*10)*m_pCodecCtx->sample_rate;
       } else {
-        sample_count = m_pFormatCtx->duration * m_pCodecCtx->sample_rate / AV_TIME_BASE;
+        sample_count = (m_pFormatCtx->duration * m_pCodecCtx->sample_rate + AV_TIME_BASE/2) / AV_TIME_BASE;
       }
     }
   } else {
     AVRational tb = m_pStreamCtx->time_base;
-    sample_count = m_pStreamCtx->duration * time_base.num / time_base.den;
+    sample_count = (m_pStreamCtx->duration * time_base.num + time_base.den/2) / time_base.den;
   }
 
   // lazy initialized by init_start_time
@@ -246,7 +247,25 @@ void VDFFAudioSource::reset_swr()
 
 void VDFFAudioSource::init_start_time()
 {
+  int64_t first_pts = AV_NOPTS_VALUE;
+  while(1){
+    AVPacket pkt;
+    pkt.data = 0;
+    pkt.size = 0;
+    int rf = av_read_frame(m_pFormatCtx, &pkt);
+    if(rf<0) break;
+    if(pkt.stream_index == m_streamIndex){
+      first_pts = pkt.pts;
+      av_packet_unref(&pkt);
+      break;
+    }
+    av_packet_unref(&pkt);
+  }
+
   start_time = m_pStreamCtx->start_time;
+  if(start_time==AV_NOPTS_VALUE) start_time = 0;
+  // somehow mov aac starts at pts -1024 but start_time is 0
+  if(first_pts!=AV_NOPTS_VALUE && first_pts<start_time) start_time = first_pts;
   time_adjust = 0;
   // offset start time so that it will match first video frame
   int vs = m_pSource->find_stream(m_pFormatCtx, AVMEDIA_TYPE_VIDEO);
@@ -325,11 +344,14 @@ bool VDFFAudioSource::Read(int64_t start, uint32_t count, void *lpBuffer, uint32
     return true;
   }
 
-  if(start>next_sample+m_pCodecCtx->sample_rate || start<next_sample){
+  if(next_sample==AV_NOPTS_VALUE || start>next_sample+m_pCodecCtx->sample_rate || start<next_sample){
     // required to seek
     discard_samples = int(start>=4096 ? 4096 : start);
     int64_t pos = (start-discard_samples) * time_base.den / time_base.num - time_adjust;
-    if(start==0 && pos>0) pos = 0;
+    if(start==0 && pos>=start_time){
+      pos = start_time;
+      discard_samples = 0;
+    }
     avcodec_flush_buffers(m_pCodecCtx);
     int flags = use_keys ? 0 : AVSEEK_FLAG_ANY;
     av_seek_frame(m_pFormatCtx,m_streamIndex,pos,AVSEEK_FLAG_BACKWARD|flags);
@@ -347,20 +369,30 @@ bool VDFFAudioSource::Read(int64_t start, uint32_t count, void *lpBuffer, uint32
     if(rf<0){
       // typically end of stream
       // may result from inexact sample_count too
-      insert_silence(start,count);
+      //insert_silence(start,count);
+      ri.last_sample = start;
     } else {
+      if(pkt.stream_index != m_streamIndex){
+        av_packet_unref(&pkt);
+        continue;
+      }
+
       AVPacket orig_pkt = pkt;
       do {
-        int s = pkt.size;
-        if(pkt.stream_index == m_streamIndex){
-          s = read_packet(pkt,ri);
-          if(s<0) break;
-        }
-
+        int s = read_packet(pkt,ri);
+        if(s<0) break;
         pkt.data += s;
         pkt.size -= s;
       } while (pkt.size > 0);
       av_packet_unref(&orig_pkt);
+    }
+
+    if(ri.last_sample<start) continue;
+
+    if(start==0 && first_sample>0){
+      // some crappy padding
+      // it seems aac discards first frame and vorbis too
+      insert_silence(start,(int)first_sample);
     }
 
     int n = buffer[px].copy(s0,count,lpBuffer,mRawFormat.Format.nBlockAlign);
@@ -368,11 +400,9 @@ bool VDFFAudioSource::Read(int64_t start, uint32_t count, void *lpBuffer, uint32
       *lBytesRead = n*mRawFormat.Format.nBlockAlign;
       *lSamplesRead = n;
       return true;
-    } else if(ri.first_sample>start){
+    } else {
       // seek/decode missed required sample
-      int64_t n1 = ri.first_sample-start;
-      uint32 n = count;
-      if(n1<n) n = uint32(n1);
+      int n = buffer[px].empty(s0,count);
       write_silence(lpBuffer,n);
       *lBytesRead = n*mRawFormat.Format.nBlockAlign;
       *lSamplesRead = n;
@@ -446,17 +476,26 @@ void VDFFAudioSource::invalidate(int64_t start, uint32_t count)
 int VDFFAudioSource::read_packet(AVPacket& pkt, ReadInfo& ri)
 {
   int r = avcodec_send_packet(m_pCodecCtx, &pkt);
-  if(r==AVERROR(EAGAIN)) return 0;
-  int f = avcodec_receive_frame(m_pCodecCtx, frame);
-  if(f==0){
+  if(r!=0) return -1;
+
+  while(1){
+    int f = avcodec_receive_frame(m_pCodecCtx, frame);
+    if(f!=0) break;
+
     reset_swr();
-    int64_t start = (frame->pts + time_adjust) * time_base.num / time_base.den;
     int count = frame->nb_samples;
-    if(next_sample!=AV_NOPTS_VALUE && start!=next_sample){
-      trust_sample_pos = false;
-      start = next_sample;
+    int64_t frame_start = next_sample;
+    if(frame->pts!=AV_NOPTS_VALUE){
+      if(frame->pts==start_time) discard_samples = 0;
+      frame_start = (frame->pts + time_adjust) * time_base.num / time_base.den;
+      if(next_sample!=AV_NOPTS_VALUE && frame_start!=next_sample){
+        trust_sample_pos = false;
+        frame_start = next_sample;
+      }
     }
 
+    int64_t start = frame_start;
+    if(first_sample==AV_NOPTS_VALUE || start<first_sample) first_sample = start;
     int src_pos = 0;
 
     // ignore samples to discard
@@ -532,11 +571,11 @@ int VDFFAudioSource::read_packet(AVPacket& pkt, ReadInfo& ri)
       count -= n;
     }
 
-    next_sample = start;
+    next_sample = frame_start + frame->nb_samples;
     
     // we cannot reliably join cached regions
     // so create gap to force to continue decoding
-    if(!trust_sample_pos) invalidate(next_sample,1);
+    if(!trust_sample_pos && next_sample>0) invalidate(next_sample,1);
   }
 
   return pkt.size;
@@ -605,6 +644,16 @@ int VDFFAudioSource::BufferPage::copy(int s0, uint32_t count, void* dst, int sam
     memcpy(dst, p+s0*sample_size, n*sample_size);
     return n;
   }
+  return 0;
+}
+
+int VDFFAudioSource::BufferPage::empty(int s0, uint32_t count)
+{
+  if(a0<=s0 && a1>s0) return 0;
+  if(b0<=s0 && b1>s0) return 0;
+  if(a0>s0) return s0+count<a0 ? count : a0-s0;
+  if(b0>s0) return s0+count<b0 ? count : b0-s0;
+  if(b1<=s0) return s0+count<size ? count : size-s0;
   return 0;
 }
 

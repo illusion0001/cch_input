@@ -76,6 +76,7 @@ public:
     void reset(){ a0=0; a1=0; b0=0; b1=0; p=0; }
     int copy(int s0, uint32_t count, void* dst, int sample_size);
     int alloc(int s0, uint32_t count, int& changed);
+    int empty(int s0, uint32_t count);
   };
 
   BufferPage* buffer;
@@ -86,6 +87,7 @@ public:
   int last_page;
 
   int64_t next_sample;
+  int64_t first_sample;
   int discard_samples;
   bool trust_sample_pos;
   bool use_keys;
