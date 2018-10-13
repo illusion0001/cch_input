@@ -13,6 +13,13 @@ extern "C" {
 #include <windows.h>
 #include <mmreg.h>
 
+struct WAVEFORMATEX_VDFF: public WAVEFORMATEXTENSIBLE {
+	enum AVCodecID   codec_id;
+};
+
+class __declspec(uuid("{54939996-F549-42d7-A873-BDB06385E59F}")) _KSDATAFORMAT_SUBTYPE_VDFF;
+static const CLSID KSDATAFORMAT_SUBTYPE_VDFF = __uuidof(_KSDATAFORMAT_SUBTYPE_VDFF); 
+
 class VDFFAudio: public vdxunknown<IVDXAudioEnc>{
 public:
   const VDXInputDriverContext &mContext;
@@ -66,6 +73,7 @@ public:
 
   virtual void SetInputFormat(VDXWAVEFORMATEX* format);
   virtual void Shutdown(){}
+  void select_fmt(AVSampleFormat* list);
 
   virtual bool IsEnded() const { return false; }
 
@@ -139,6 +147,23 @@ public:
   virtual void ShowConfig(VDXHWND parent);
 };
 
+class VDFFAudio_alac: public VDFFAudio{
+public:
+  struct Config:public VDFFAudio::Config{
+  } codec_config;
+
+  VDFFAudio_alac(const VDXInputDriverContext &pContext):VDFFAudio(pContext){
+    config = &codec_config;
+    reset_config();
+  }
+  virtual void CreateCodec();
+  virtual void InitContext();
+  virtual size_t GetConfigSize(){ return sizeof(Config); }
+  virtual void reset_config();
+  virtual bool HasConfig(){ return true; }
+  virtual void ShowConfig(VDXHWND parent);
+};
+
 class VDFFAudio_vorbis: public VDFFAudio{
 public:
   struct Config:public VDFFAudio::Config{
@@ -176,6 +201,7 @@ public:
 extern VDXPluginInfo ff_aacenc_info;
 extern VDXPluginInfo ff_mp3enc_info;
 extern VDXPluginInfo ff_flacenc_info;
+extern VDXPluginInfo ff_alacenc_info;
 extern VDXPluginInfo ff_vorbisenc_info;
 extern VDXPluginInfo ff_opusenc_info;
 

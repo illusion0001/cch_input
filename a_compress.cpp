@@ -88,6 +88,11 @@ void VDFFAudio::InitContext()
 
 void VDFFAudio::export_wav()
 {
+  if(out_format){
+    free(out_format);
+    out_format = 0;
+    out_format_size = 0;
+  }
   IOWBuffer io;
   int buf_size = 4096;
   void* buf = av_malloc(buf_size);
@@ -112,6 +117,49 @@ cleanup:
   av_free(avio_ctx->buffer);
   av_free(avio_ctx);
   avformat_free_context(ofmt);
+
+  if(!out_format){
+    // make our private descriptor
+    out_format_size = sizeof(WAVEFORMATEX_VDFF) + ctx->extradata_size;
+    out_format = (WAVEFORMATEXTENSIBLE*)malloc(out_format_size);
+    out_format->Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
+    out_format->Format.nChannels = ctx->channels;
+    out_format->Format.nSamplesPerSec = ctx->sample_rate;
+    out_format->Format.nAvgBytesPerSec = (DWORD)(ctx->bit_rate/8);
+    out_format->Format.nBlockAlign = ctx->block_align;
+    out_format->Format.wBitsPerSample = ctx->bits_per_coded_sample;
+    out_format->Format.cbSize = out_format_size-sizeof(WAVEFORMATEX);
+    out_format->Samples.wSamplesPerBlock = ctx->frame_size;
+    out_format->dwChannelMask = 0;
+    out_format->SubFormat = KSDATAFORMAT_SUBTYPE_VDFF;
+
+    WAVEFORMATEX_VDFF* ff = (WAVEFORMATEX_VDFF*)out_format;
+    ff->codec_id = ctx->codec_id;
+    if(ctx->extradata_size){
+      char* p = (char*)(ff+1);
+      memcpy(p,ctx->extradata,ctx->extradata_size);
+    }
+  }
+}
+
+void VDFFAudio::select_fmt(AVSampleFormat* list){
+  int best_pos = -1;
+
+  for(int y=0; ; y++){
+    AVSampleFormat yfmt = codec->sample_fmts[y];
+    if(yfmt==AV_SAMPLE_FMT_NONE) break;
+
+    for(int x=0; ; x++){
+      AVSampleFormat xfmt = list[x];
+      if(xfmt==AV_SAMPLE_FMT_NONE) break;
+      if(xfmt==yfmt){
+        if(best_pos==-1 || x<best_pos){
+          best_pos = x;
+          ctx->sample_fmt = yfmt;
+        }
+      }
+    }
+  }
 }
 
 void VDFFAudio::SetInputFormat(VDXWAVEFORMATEX* format){
@@ -136,6 +184,15 @@ void VDFFAudio::SetInputFormat(VDXWAVEFORMATEX* format){
     if(fx->dwChannelMask && av_get_channel_layout_nb_channels(fx->dwChannelMask)==format->mChannels)
       ctx->channel_layout = fx->dwChannelMask;
     if(fx->SubFormat==KSDATAFORMAT_SUBTYPE_IEEE_FLOAT) in_fmt = AV_SAMPLE_FMT_FLT;
+  }
+
+  if(in_fmt==AV_SAMPLE_FMT_FLT){
+    AVSampleFormat list[] = {AV_SAMPLE_FMT_FLT, AV_SAMPLE_FMT_FLTP, AV_SAMPLE_FMT_S32, AV_SAMPLE_FMT_S32P, AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_S16P, AV_SAMPLE_FMT_NONE};
+    select_fmt(list);
+  }
+  if(in_fmt==AV_SAMPLE_FMT_S16){
+    AVSampleFormat list[] = {AV_SAMPLE_FMT_S16, AV_SAMPLE_FMT_S16P, AV_SAMPLE_FMT_FLT, AV_SAMPLE_FMT_FLTP, AV_SAMPLE_FMT_NONE};
+    select_fmt(list);
   }
 
   //if(ofmt->oformat->flags & AVFMT_GLOBALHEADER)
@@ -710,6 +767,112 @@ INT_PTR AConfigFlac::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
 void VDFFAudio_flac::ShowConfig(VDXHWND parent)
 {
   AConfigFlac cfg;
+  cfg.Show((HWND)parent,this);
+}
+
+//-----------------------------------------------------------------------------------
+
+void VDFFAudio_alac::reset_config()
+{
+  codec_config.clear();
+  codec_config.version = 1;
+  codec_config.bitrate = 0;
+  codec_config.quality = 2;
+}
+
+void VDFFAudio_alac::CreateCodec()
+{
+  codec = avcodec_find_encoder(AV_CODEC_ID_ALAC);
+}
+
+void VDFFAudio_alac::InitContext()
+{
+  ctx->compression_level = codec_config.quality;
+}
+
+//-----------------------------------------------------------------------------------
+
+bool VDXAPIENTRY ff_create_alacenc(const VDXInputDriverContext *pContext, IVDXAudioEnc **ppDriver)
+{
+  VDFFAudio *p = new VDFFAudio_alac(*pContext);
+  if(!p) return false;
+  *ppDriver = p;
+  p->AddRef();
+  return true;
+}
+
+VDXAudioEncDefinition ff_alacenc={
+  sizeof(VDXAudioEncDefinition),
+  0, //flags
+  L"FFMpeg ALAC (Apple Lossless)",
+  "ffmpeg_alac",
+  ff_create_alacenc
+};
+
+VDXPluginInfo ff_alacenc_info={
+  sizeof(VDXPluginInfo),
+  L"FFMpeg ALAC (Apple Lossless)",
+  L"Anton Shekhovtsov",
+  L"Encode audio to ALAC format.",
+  1,
+  kVDXPluginType_AudioEnc,
+  0,
+  12, // min api version
+  kVDXPlugin_APIVersion,
+  kVDXPlugin_AudioEncAPIVersion,  // min output api version
+  kVDXPlugin_AudioEncAPIVersion,
+  &ff_alacenc
+};
+
+
+class AConfigAlac: public AConfigBase{
+public:
+  VDFFAudio_alac::Config* codec_config;
+
+  AConfigAlac(){ dialog_id = IDD_ENC_ALAC; }
+  INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam);
+  void init_quality();
+  void change_quality();
+};
+
+void AConfigAlac::init_quality()
+{
+  SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMIN, FALSE, 0);
+  SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMAX, TRUE, 2);
+  SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETPOS, TRUE, codec_config->quality);
+  SetDlgItemInt(mhdlg, IDC_QUALITY_VALUE, codec_config->quality, false);
+}
+
+void AConfigAlac::change_quality()
+{
+  int x = SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_GETPOS, 0, 0);
+  codec_config->quality = x;
+  SetDlgItemInt(mhdlg, IDC_QUALITY_VALUE, codec_config->quality, false);
+}
+
+INT_PTR AConfigAlac::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
+{
+  switch(msg){
+  case WM_INITDIALOG:
+    {
+      codec_config = (VDFFAudio_alac::Config*)codec->config;
+      init_quality();
+      break;
+    }
+
+  case WM_HSCROLL:
+    if((HWND)lParam==GetDlgItem(mhdlg,IDC_QUALITY)){
+      change_quality();
+      break;
+    }
+    return false;
+  }
+  return AConfigBase::DlgProc(msg,wParam,lParam);
+}
+
+void VDFFAudio_alac::ShowConfig(VDXHWND parent)
+{
+  AConfigAlac cfg;
   cfg.Show((HWND)parent,this);
 }
 

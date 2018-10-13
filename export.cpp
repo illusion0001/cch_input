@@ -3,6 +3,7 @@
 #include "VideoSource2.h"
 #include "AudioSource2.h"
 #include "export.h"
+#include "a_compress.h"
 #include "cineform.h"
 #include <string>
 #include <windows.h>
@@ -720,6 +721,30 @@ void FFOutputFile::import_bmp(AVStream *st, const void *pFormat, int cbFormat)
 
 void FFOutputFile::import_wav(AVStream *st, const void *pFormat, int cbFormat)
 {
+  if(cbFormat>=sizeof(WAVEFORMATEX_VDFF)){
+    const WAVEFORMATEX_VDFF* ff = (const WAVEFORMATEX_VDFF*)pFormat;
+    if(ff->Format.wFormatTag==WAVE_FORMAT_EXTENSIBLE && ff->SubFormat==KSDATAFORMAT_SUBTYPE_VDFF){
+      st->codec->codec_id = ff->codec_id;
+      st->codec->codec_tag = 0;
+      st->codec->channels = ff->Format.nChannels;
+      st->codec->channel_layout = 0;
+      st->codec->sample_rate = ff->Format.nSamplesPerSec;
+      st->codec->block_align = ff->Format.nBlockAlign;
+      st->codec->frame_size = ff->Samples.wSamplesPerBlock;
+      st->codec->sample_fmt = AV_SAMPLE_FMT_NONE;
+      st->codec->bits_per_coded_sample = ff->Format.wBitsPerSample;
+      st->codec->bit_rate = ff->Format.nAvgBytesPerSec*8;
+
+      if(cbFormat>sizeof(WAVEFORMATEX_VDFF)){
+        int size = cbFormat-sizeof(WAVEFORMATEX_VDFF);
+        st->codec->extradata_size = size;
+        st->codec->extradata = (uint8_t*)av_mallocz(size + AV_INPUT_BUFFER_PADDING_SIZE);
+        memcpy(st->codec->extradata, ff+1, size);
+      }
+      return;
+    }
+  }
+
   uint32 dwHeader[20];
   dwHeader[0]	= FOURCC_RIFF;
   dwHeader[1] = 20 - 8 + cbFormat;
@@ -972,7 +997,7 @@ bool VDXAPIENTRY VDFFOutputFileDriver::EnumFormats(int i, wchar_t* filter, wchar
     return true;
   case f_mka:
     wcscpy(filter,L"Matroska Audio (*.mka)");
-    wcscpy(ext,L"*.mkv");
+    wcscpy(ext,L"*.mka");
     strcpy(name,"matroska");
     return true;
   case f_webm:
