@@ -281,6 +281,10 @@ bool VDFFAudio::Convert(bool flush, bool requireOutput){
 
   av_packet_unref(&pkt);
   avcodec_receive_packet(ctx,&pkt);
+  {for(int i=0; i<pkt.side_data_elems; i++){
+    AVPacketSideData& s = pkt.side_data[i];
+    if(s.type==AV_PKT_DATA_NEW_EXTRADATA) export_wav();
+  }}
   if(pkt.size) return true;
 
   return false;
@@ -883,7 +887,8 @@ void VDFFAudio_vorbis::reset_config()
   codec_config.clear();
   codec_config.version = 1;
   codec_config.flags = 0;
-  codec_config.bitrate = 0;
+  codec_config.bitrate = 160;
+  codec_config.quality = 500;
 }
 
 void VDFFAudio_vorbis::CreateCodec()
@@ -893,6 +898,102 @@ void VDFFAudio_vorbis::CreateCodec()
 
 void VDFFAudio_vorbis::InitContext()
 {
+  if(config->flags & flag_constant_rate){
+    ctx->bit_rate = config->bitrate*1000*ctx->channels;
+    ctx->rc_min_rate = ctx->bit_rate;
+    ctx->rc_max_rate = ctx->bit_rate;
+  } else {
+    ctx->flags |= AV_CODEC_FLAG_QSCALE;
+    ctx->global_quality = (FF_QP2LAMBDA * config->quality + 50) / 100;
+    ctx->bit_rate = -1;
+    ctx->rc_min_rate = -1;
+    ctx->rc_max_rate = -1;
+  }
+}
+
+class AConfigVorbis: public AConfigBase{
+public:
+  VDFFAudio_vorbis::Config* codec_config;
+
+  AConfigVorbis(){ dialog_id = IDD_ENC_VORBIS; }
+  INT_PTR DlgProc(UINT msg, WPARAM wParam, LPARAM lParam);
+  void init_quality();
+  void change_quality();
+};
+
+void AConfigVorbis::init_quality()
+{
+  if(codec_config->flags & VDFFAudio::flag_constant_rate){
+    //! WTF is valid bitrate range? neither ffmpeg nor xiph tell anything but it will fail with error otherwise
+    SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMIN, FALSE, 32);
+    SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMAX, TRUE, 240);
+    SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETPOS, TRUE, codec_config->bitrate);
+    char buf[80];
+    sprintf(buf,"%dk",codec_config->bitrate);
+    SetDlgItemText(mhdlg, IDC_QUALITY_VALUE, buf);
+    SetDlgItemText(mhdlg, IDC_QUALITY_LABEL, "Bitrate");
+  } else {
+    SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMIN, FALSE, 0);
+    SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETRANGEMAX, TRUE, 110);
+    SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_SETPOS, TRUE, (100-codec_config->quality/10));
+    char buf[80];
+    sprintf(buf,"%1.1f",codec_config->quality*0.01);
+    SetDlgItemText(mhdlg, IDC_QUALITY_VALUE, buf);
+    SetDlgItemText(mhdlg, IDC_QUALITY_LABEL, "Quality (high-low)");
+  }
+}
+
+void AConfigVorbis::change_quality()
+{
+  int x = SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_GETPOS, 0, 0);
+  if(codec_config->flags & VDFFAudio::flag_constant_rate){
+    codec_config->bitrate = x;
+    char buf[80];
+    sprintf(buf,"%dk",codec_config->bitrate);
+    SetDlgItemText(mhdlg, IDC_QUALITY_VALUE, buf);
+  } else {
+    codec_config->quality = (100-x)*10;
+    char buf[80];
+    sprintf(buf,"%1.1f",codec_config->quality*0.01);
+    SetDlgItemText(mhdlg, IDC_QUALITY_VALUE, buf);
+  }
+}
+
+INT_PTR AConfigVorbis::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
+{
+  switch(msg){
+  case WM_INITDIALOG:
+    {
+      codec_config = (VDFFAudio_vorbis::Config*)codec->config;
+      init_quality();
+      CheckDlgButton(mhdlg, IDC_CBR, codec_config->flags & VDFFAudio::flag_constant_rate);
+      break;
+    }
+
+  case WM_HSCROLL:
+    if((HWND)lParam==GetDlgItem(mhdlg,IDC_QUALITY)){
+      change_quality();
+      break;
+    }
+    return false;
+
+  case WM_COMMAND:
+    switch(LOWORD(wParam)){
+    case IDC_CBR:
+      codec_config->flags &= ~VDFFAudio::flag_constant_rate;
+      if(IsDlgButtonChecked(mhdlg,IDC_CBR))
+        codec_config->flags |= VDFFAudio::flag_constant_rate;
+      init_quality();
+      break;
+    }
+  }
+  return AConfigBase::DlgProc(msg,wParam,lParam);
+}
+
+void VDFFAudio_vorbis::ShowConfig(VDXHWND parent)
+{
+  AConfigVorbis cfg;
+  cfg.Show((HWND)parent,this);
 }
 
 //-----------------------------------------------------------------------------------
@@ -909,14 +1010,14 @@ bool VDXAPIENTRY ff_create_vorbisenc(const VDXInputDriverContext *pContext, IVDX
 VDXAudioEncDefinition ff_vorbisenc={
   sizeof(VDXAudioEncDefinition),
   0, //flags
-  L"FFMpeg Vorbis",
+  L"FFMpeg Vorbis (libvorbis)",
   "ffmpeg_vorbis",
   ff_create_vorbisenc
 };
 
 VDXPluginInfo ff_vorbisenc_info={
   sizeof(VDXPluginInfo),
-  L"FFMpeg Vorbis",
+  L"FFMpeg Vorbis (libvorbis)",
   L"Anton Shekhovtsov",
   L"Encode audio to Vorbis format.",
   1,
@@ -945,7 +1046,7 @@ void VDFFAudio_opus::CreateCodec()
 
 void VDFFAudio_opus::InitContext()
 {
-  ctx->bit_rate = config->bitrate;
+  ctx->bit_rate = config->bitrate*ctx->channels;
   ctx->compression_level = config->quality;
   if(config->flags & flag_constant_rate)
     av_opt_set_int(ctx->priv_data, "vbr", 0, 0);

@@ -24,6 +24,7 @@
 #define IDD_ENC_FLAC                    117
 #define IDD_ENC_OPUS                    118
 #define IDD_ENC_ALAC                    119
+#define IDD_ENC_VORBIS                  120
 #define IDC_FORMATNAME                  1004
 #define IDC_VIDEO_PIXFMT                1006
 #define IDC_VIDEO_WXH                   1007

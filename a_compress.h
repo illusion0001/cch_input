@@ -177,7 +177,8 @@ public:
   virtual void InitContext();
   virtual size_t GetConfigSize(){ return sizeof(Config); }
   virtual void reset_config();
-  virtual bool HasConfig(){ return false; }
+  virtual bool HasConfig(){ return true; }
+  virtual void ShowConfig(VDXHWND parent);
 };
 
 class VDFFAudio_opus: public VDFFAudio{

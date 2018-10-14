@@ -549,6 +549,9 @@ void FFOutputFile::SetVideo(uint32 index, const VDXStreamInfo& si, const void *p
 {
   StreamInfo& s = stream[index];
   const VDXAVIStreamHeader& asi = si.aviHeader;
+  if(s.st){
+    return;
+  }
 
   AVStream *st = avformat_new_stream(ofmt, 0);
   st->codec->codec_type = AVMEDIA_TYPE_VIDEO;
@@ -583,10 +586,43 @@ void FFOutputFile::SetVideo(uint32 index, const VDXStreamInfo& si, const void *p
   s.time_base = st->time_base;
 }
 
+uint8_t* copy_extradata(AVCodecContext* c)
+{
+  if(!c->extradata_size) return 0;
+  uint8_t* data = (uint8_t*)av_mallocz(c->extradata_size + AV_INPUT_BUFFER_PADDING_SIZE);
+  memcpy(data, c->extradata, c->extradata_size);
+  return data;
+}
+
 void FFOutputFile::SetAudio(uint32 index, const VDXStreamInfo& si, const void *pFormat, int cbFormat)
 {
   StreamInfo& s = stream[index];
   const VDXAVIStreamHeader& asi = si.aviHeader;
+  if(s.st){
+    // push new extradata (updated by aac, flac and something else)
+    //! this doesn't work:
+    // avienc does not implement it at all
+    // matroskaenc, movenc expect audio packet with side_data
+
+    AVFormatContext* ofmt1 = avformat_alloc_context();
+    AVStream *st1 = avformat_new_stream(ofmt1, 0);
+    import_wav(st1,pFormat,cbFormat);
+    if(s.st->codecpar->extradata_size) av_freep(&s.st->codecpar->extradata);
+    if(s.st->codec->extradata_size) av_freep(&s.st->codec->extradata);
+    s.st->codecpar->extradata_size = st1->codec->extradata_size;
+    s.st->codec->extradata_size = st1->codec->extradata_size;
+    s.st->codecpar->extradata = copy_extradata(st1->codec);
+    s.st->codec->extradata = copy_extradata(st1->codec);
+    avformat_free_context(ofmt1);
+
+    // workaround for vorbis delay
+    // could have worked with side_data maybe
+    if(si.version>=2){
+      s.offset_num = si.start_num;
+      s.offset_den = si.start_den;
+    }
+    return;
+  }
 
   AVStream *st = avformat_new_stream(ofmt, 0);
   st->codec->codec_type = AVMEDIA_TYPE_AUDIO;
@@ -789,11 +825,8 @@ void FFOutputFile::import_wav(AVStream *st, const void *pFormat, int cbFormat)
   st->codec->bits_per_coded_sample = fs->codec->bits_per_coded_sample;
   st->codec->bit_rate = fs->codec->bit_rate;
 
-  if(fs->codec->extradata_size){
-    st->codec->extradata_size = fs->codec->extradata_size;
-    st->codec->extradata = (uint8_t*)av_mallocz(st->codec->extradata_size + AV_INPUT_BUFFER_PADDING_SIZE);
-    memcpy(st->codec->extradata, fs->codec->extradata, st->codec->extradata_size);
-  }
+  st->codec->extradata_size = fs->codec->extradata_size;
+  st->codec->extradata = copy_extradata(fs->codec);
 
   avformat_free_context(fmt_ctx);
   av_free(avio_ctx->buffer);
