@@ -495,8 +495,16 @@ bool VDXAPIENTRY VDFFOutputFileDriver::GetStreamControl(const wchar_t *path, con
   if(sc.version<2) return true;
 
   if(oformat->flags & AVFMT_GLOBALHEADER) sc.global_header = true;
-  if(oformat==av_guess_format("matroska", 0, 0)) sc.use_offsets = true;
-  if(oformat==av_guess_format("webm", 0, 0)) sc.use_offsets = true;
+  if(oformat==av_guess_format("matroska", 0, 0)){
+    sc.use_offsets = true;
+    sc.timebase_num = 1000;
+    sc.timebase_den = AV_TIME_BASE;
+  }
+  if(oformat==av_guess_format("webm", 0, 0)){
+    sc.use_offsets = true;
+    sc.timebase_num = 1000;
+    sc.timebase_den = AV_TIME_BASE;
+  }
   if(oformat==av_guess_format("mov", 0, 0))  sc.use_offsets = true;
   if(oformat==av_guess_format("mp4", 0, 0))  sc.use_offsets = true;
   if(oformat==av_guess_format("ipod", 0, 0)) sc.use_offsets = true;
@@ -960,7 +968,9 @@ void FFOutputFile::Write(uint32 index, const void *pBuffer, uint32 cbBuffer, Pac
   av_packet_rescale_ts(&pkt, s.time_base, s.st->time_base);
 
   if(s.offset_num!=0){
-    pkt.pts += av_rescale_q_rnd(s.offset_num, av_make_q(1,(int)s.offset_den), s.st->time_base, AV_ROUND_NEAR_INF);
+    double r = double(s.offset_num)*s.st->time_base.den/(s.offset_den*s.st->time_base.num);
+    pkt.pts += r>0 ? int64_t(r+0.5) : int64_t(r-0.5);
+    //pkt.pts += av_rescale_q_rnd(s.offset_num, av_make_q(1,(int)s.offset_den), s.st->time_base, AV_ROUND_NEAR_INF);
   }
 
   s.frame += samples;
