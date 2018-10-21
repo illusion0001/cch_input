@@ -109,9 +109,11 @@ public:
   };
 
   std::string out_ff_path;
+  std::string format_name;
   std::vector<StreamInfo> stream;
   AVFormatContext* ofmt;
   bool header;
+  bool stream_test;
 
   void* a_buf;
   uint32 a_buf_size;
@@ -119,16 +121,18 @@ public:
   FFOutputFile(const VDXInputDriverContext &pContext);
   ~FFOutputFile();
   void VDXAPIENTRY Init(const wchar_t *path, const char* format);
+  const char* GetFormatName(){ return format_name.c_str(); }
   uint32 VDXAPIENTRY CreateStream(int type);
   void VDXAPIENTRY SetVideo(uint32 index, const VDXStreamInfo& si, const void *pFormat, int cbFormat);
   void VDXAPIENTRY SetAudio(uint32 index, const VDXStreamInfo& si, const void *pFormat, int cbFormat);
   void VDXAPIENTRY Write(uint32 index, const void *pBuffer, uint32 cbBuffer, PacketInfo& info);
   void Finalize();
+  bool Begin();
   void av_error(int err);
   void adjust_codec_tag(AVStream *st);
   void import_bmp(AVStream *st, const void *pFormat, int cbFormat);
   void import_wav(AVStream *st, const void *pFormat, int cbFormat);
-  bool test_header();
+  bool test_streams();
   void* bswap_pcm(uint32 index, const void *pBuffer, uint32 cbBuffer);
 };
 

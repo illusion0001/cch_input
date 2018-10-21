@@ -30,6 +30,7 @@ VDFFAudio::VDFFAudio(const VDXInputDriverContext &pContext)
   av_init_packet(&pkt);
   total_in = 0;
   total_out = 0;
+  wav_compatible = false;
 }
 
 VDFFAudio::~VDFFAudio()
@@ -88,6 +89,7 @@ void VDFFAudio::InitContext()
 
 void VDFFAudio::export_wav()
 {
+  wav_compatible = false;
   if(out_format){
     free(out_format);
     out_format = 0;
@@ -111,6 +113,7 @@ void VDFFAudio::export_wav()
     WAVEFORMATEXTENSIBLE* ff = (WAVEFORMATEXTENSIBLE*)(io.data+20);
     out_format = (WAVEFORMATEXTENSIBLE*)malloc(out_format_size);
     memcpy(out_format,ff,out_format_size);
+    wav_compatible = true;
   }
 
 cleanup:
@@ -259,6 +262,13 @@ void VDFFAudio::GetStreamInfo(VDXStreamInfo& si) const {
   si.aviHeader.dwSampleSize = ctx->block_align;
   si.aviHeader.dwScale = ctx->frame_size;
   si.aviHeader.dwRate = ctx->sample_rate;
+}
+
+int VDFFAudio::SuggestFileFormat(const char* name){
+  if(strcmp(name,"wav")==0 || strcmp(name,"avi")==0){
+    if(wav_compatible) return vd2::kFormat_Good; else return vd2::kFormat_Reject;
+  }
+  return vd2::kFormat_Unknown;
 }
 
 bool VDFFAudio::Convert(bool flush, bool requireOutput){
@@ -889,6 +899,15 @@ void VDFFAudio_vorbis::reset_config()
   codec_config.flags = 0;
   codec_config.bitrate = 160;
   codec_config.quality = 500;
+}
+
+int VDFFAudio_vorbis::SuggestFileFormat(const char* name)
+{
+  if(strcmp(name,"wav")==0 || strcmp(name,"avi")==0){
+    // disable now because seeking is broken
+    return vd2::kFormat_Unwise;
+  }
+  return VDFFAudio::SuggestFileFormat(name);
 }
 
 void VDFFAudio_vorbis::CreateCodec()

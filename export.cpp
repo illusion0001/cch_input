@@ -457,6 +457,7 @@ FFOutputFile::FFOutputFile(const VDXInputDriverContext &pContext)
 {
   ofmt = 0;
   header = false;
+  stream_test = false;
   a_buf = 0;
   a_buf_size = 0;
 }
@@ -532,6 +533,8 @@ void FFOutputFile::Init(const wchar_t *path, const char* format)
     return;
   }
 
+  format_name = oformat->name;
+
   err = avformat_alloc_output_context2(&ofmt, oformat, 0, 0);
   if(err<0){
     av_error(err);
@@ -555,6 +558,8 @@ typedef struct AVCodecTag {
 
 void FFOutputFile::SetVideo(uint32 index, const VDXStreamInfo& si, const void *pFormat, int cbFormat)
 {
+  if(!ofmt) return;
+
   StreamInfo& s = stream[index];
   const VDXAVIStreamHeader& asi = si.aviHeader;
   if(s.st){
@@ -604,6 +609,8 @@ uint8_t* copy_extradata(AVCodecContext* c)
 
 void FFOutputFile::SetAudio(uint32 index, const VDXStreamInfo& si, const void *pFormat, int cbFormat)
 {
+  if(!ofmt) return;
+
   StreamInfo& s = stream[index];
   const VDXAVIStreamHeader& asi = si.aviHeader;
   if(s.st){
@@ -846,7 +853,14 @@ void FFOutputFile::adjust_codec_tag(AVStream *st)
   ::adjust_codec_tag(ofmt->oformat,st);
 }
 
-bool FFOutputFile::test_header()
+bool FFOutputFile::Begin()
+{
+  bool r = test_streams();
+  stream_test = true;
+  return r;
+}
+
+bool FFOutputFile::test_streams()
 {
   {for(int i=0; i<(int)stream.size(); i++){
     StreamInfo& si = stream[i];
@@ -884,7 +898,8 @@ bool FFOutputFile::test_header()
     if(failed){
       std::string msg;
       msg += avcodec_get_name(codec_id);
-      msg += ": codec not currently supported in container";
+      msg += ": codec not currently supported in container ";
+      msg += format_name;
       mContext.mpCallbacks->SetError(msg.c_str());
       return false;
     }
@@ -916,7 +931,7 @@ void FFOutputFile::Write(uint32 index, const void *pBuffer, uint32 cbBuffer, Pac
   if(!ofmt) return;
 
   if(!header){
-    if(!test_header()){
+    if(!stream_test && !test_streams()){
       Finalize();
       return;
     }

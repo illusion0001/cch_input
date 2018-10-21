@@ -14,11 +14,10 @@ extern "C" {
 #include <mmreg.h>
 
 struct WAVEFORMATEX_VDFF: public WAVEFORMATEXTENSIBLE {
-	enum AVCodecID   codec_id;
+  enum AVCodecID codec_id;
 };
 
-class __declspec(uuid("{54939996-F549-42d7-A873-BDB06385E59F}")) _KSDATAFORMAT_SUBTYPE_VDFF;
-static const CLSID KSDATAFORMAT_SUBTYPE_VDFF = __uuidof(_KSDATAFORMAT_SUBTYPE_VDFF); 
+const GUID KSDATAFORMAT_SUBTYPE_VDFF = {0x54939996, 0xF549, 0x42d7, 0xA8, 0x73, 0xBD, 0xB0, 0x63, 0x85, 0xE5, 0x9F};
 
 class VDFFAudio: public vdxunknown<IVDXAudioEnc>{
 public:
@@ -52,6 +51,7 @@ public:
 
   WAVEFORMATEXTENSIBLE* out_format;
   int out_format_size;
+  bool wav_compatible;
 
   VDFFAudio(const VDXInputDriverContext &pContext);
   ~VDFFAudio();
@@ -92,6 +92,7 @@ public:
   virtual const void	*LockOutputBuffer(unsigned& bytes);
   virtual void		UnlockOutputBuffer(unsigned bytes);
   virtual unsigned	CopyOutput(void *dst, unsigned bytes, sint64& duration);
+  virtual int SuggestFileFormat(const char* name);
 };
 
 class VDFFAudio_aac: public VDFFAudio{
@@ -103,6 +104,7 @@ public:
     config = &codec_config;
     reset_config();
   }
+  virtual const char* GetElementaryFormat(){ return "aac"; }
   virtual void CreateCodec();
   virtual void InitContext();
   virtual size_t GetConfigSize(){ return sizeof(Config); }
@@ -121,6 +123,7 @@ public:
     config = &codec_config;
     reset_config();
   }
+  virtual const char* GetElementaryFormat(){ return "mp3"; }
   virtual void CreateCodec();
   virtual void InitContext();
   virtual size_t GetConfigSize(){ return sizeof(Config); }
@@ -139,6 +142,7 @@ public:
     config = &codec_config;
     reset_config();
   }
+  virtual const char* GetElementaryFormat(){ return "flac"; }
   virtual void CreateCodec();
   virtual void InitContext();
   virtual size_t GetConfigSize(){ return sizeof(Config); }
@@ -156,6 +160,7 @@ public:
     config = &codec_config;
     reset_config();
   }
+  virtual const char* GetElementaryFormat(){ return "caf"; }
   virtual void CreateCodec();
   virtual void InitContext();
   virtual size_t GetConfigSize(){ return sizeof(Config); }
@@ -173,6 +178,8 @@ public:
     config = &codec_config;
     reset_config();
   }
+  virtual const char* GetElementaryFormat(){ return "ogg"; }
+  int SuggestFileFormat(const char* name);
   virtual void CreateCodec();
   virtual void InitContext();
   virtual size_t GetConfigSize(){ return sizeof(Config); }
@@ -191,6 +198,7 @@ public:
     config = &codec_config;
     reset_config();
   }
+  virtual const char* GetElementaryFormat(){ return "ogg"; }
   virtual void CreateCodec();
   virtual void InitContext();
   virtual size_t GetConfigSize(){ return sizeof(Config); }
