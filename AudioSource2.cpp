@@ -61,9 +61,7 @@ int	VDFFAudioSource::initStream(VDFFInputFile* pSource, int streamIndex)
 
   AVCodec* pDecoder = avcodec_find_decoder(m_pStreamCtx->codecpar->codec_id);
   if(!pDecoder){
-    char buf[AV_FOURCC_MAX_STRING_SIZE];
-    av_fourcc_make_string(buf,m_pCodecCtx->codec_tag);
-    mContext.mpCallbacks->SetError("FFMPEG: Unsupported codec (%s)", buf);
+    mContext.mpCallbacks->SetError("FFMPEG: Unsupported codec (%d)", m_pStreamCtx->codecpar->codec_id);
     return -1;
   }
   m_pCodecCtx = avcodec_alloc_context3(pDecoder);
