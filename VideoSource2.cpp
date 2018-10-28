@@ -1,3 +1,4 @@
+#define __STDC_LIMIT_MACROS
 #include "VideoSource2.h"
 #include "InputFile2.h"
 #include "cineform.h"
@@ -17,6 +18,8 @@ uint8_t* align_buf(uint8_t* p)
 {
   return (uint8_t*)(ptrdiff_t(p+line_align-1) & ~(line_align-1));
 }
+
+#define AV_SEEK_START INT64_MIN
 
 VDFFVideoSource::VDFFVideoSource(const VDXInputDriverContext& context)
   :mContext(context)
@@ -213,6 +216,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   if(!m_pCodecCtx){
     return -1;
   }
+  m_pCodecCtx->flags2 = AV_CODEC_FLAG2_SHOW_ALL;
   avcodec_parameters_to_context(m_pCodecCtx,m_pStreamCtx->codecpar);
 
   AVRational r_fr = av_stream_get_r_frame_rate(m_pStreamCtx);
@@ -242,7 +246,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
       int64_t pos = m_pStreamCtx->duration;
       if(pos==AV_NOPTS_VALUE) pos = int64_t(sample_count)*time_base.den / time_base.num;
       av_seek_frame(m_pFormatCtx,m_streamIndex,pos,AVSEEK_FLAG_BACKWARD);
-      av_seek_frame(m_pFormatCtx,m_streamIndex,m_pStreamCtx->start_time,AVSEEK_FLAG_BACKWARD);
+      av_seek_frame(m_pFormatCtx,m_streamIndex,AV_SEEK_START,AVSEEK_FLAG_BACKWARD);
     }
     trust_index = false;
     sparse_index = false;
@@ -470,10 +474,20 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
     }}
   }
 
-  //! hack around start_time
-  // looks like ffmpeg will save first packet pts as start_time
-  // this is bullshit if the packet belongs to reordered frame (example: BBI frame sequence)
+  // start_time rarely known before actually decoding, init from here
   read_frame(0,true);
+  // workaround for unspecified delay
+  // found in MVI_4722.MP4
+  if(sample_count>1 && !m_pCodecCtx->has_b_frames && possible_delay()){
+    read_frame(1,false);
+    if(m_pCodecCtx->has_b_frames){
+      free_buffers();
+      avcodec_flush_buffers(m_pCodecCtx);
+      av_seek_frame(m_pFormatCtx, m_streamIndex, AV_SEEK_START, AVSEEK_FLAG_BACKWARD);
+      read_frame(0,true);
+    }
+  }
+
   if(frame_fmt!=m_pCodecCtx->pix_fmt){
     init_format();
   }
@@ -481,7 +495,17 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
   return 0;
 }
 
-bool VDFFVideoSource::allow_copy()
+bool VDFFVideoSource::possible_delay()
+{
+  if(is_intra()) return false;
+
+  AVCodecID codec_id = m_pStreamCtx->codecpar->codec_id;
+  const AVCodecDescriptor* desc = avcodec_descriptor_get(codec_id);
+  if(desc && (desc->props & AV_CODEC_PROP_REORDER)) return true;
+  return false;
+}
+
+bool VDFFVideoSource::is_intra()
 {
   if(is_image_list) return false;
   if(trust_index && keyframe_gap==1) return true;
@@ -520,8 +544,14 @@ bool VDFFVideoSource::allow_copy()
   if(codec_id==CFHD_ID) return true;
 
   const AVCodecDescriptor* desc = avcodec_descriptor_get(codec_id);
-  if(desc && (desc->props & AV_CODEC_PROP_INTRA_ONLY)) return true; 
+  if(desc && (desc->props & AV_CODEC_PROP_INTRA_ONLY)) return true;
 
+  return false;
+}
+
+bool VDFFVideoSource::allow_copy()
+{
+  if(is_intra()) return true;
   return false;
 }
 
@@ -1792,9 +1822,8 @@ int VDFFVideoSource::calc_seek(int jump, int64_t& pos)
       }
     }
 
-    if(jump==0 && pos>0){
-      // unconfirmed (probably useless)
-      pos = 0;
+    if(jump==0){
+      pos = AV_SEEK_START;
       dst = 0;
     }
 

@@ -1,7 +1,10 @@
+#define __STDC_LIMIT_MACROS
 #include "AudioSource2.h"
 #include "InputFile2.h"
 #include <Ks.h>
 #include <KsMedia.h>
+
+#define AV_SEEK_START INT64_MIN
 
 VDFFAudioSource::VDFFAudioSource(const VDXInputDriverContext& context)
   :mContext( context )
@@ -77,7 +80,7 @@ int	VDFFAudioSource::initStream(VDFFInputFile* pSource, int streamIndex)
 
   AVRational tb = m_pStreamCtx->time_base;
   // should normally reduce to integer if timebase is derived from sample_rate
-  av_reduce(&time_base.num, &time_base.den, m_pCodecCtx->sample_rate*tb.num, tb.den, INT_MAX);
+  av_reduce(&time_base.num, &time_base.den, int64(m_pCodecCtx->sample_rate)*tb.num, tb.den, INT_MAX);
 
   trust_sample_pos = false;
   if(time_base.den==1) trust_sample_pos = true; // works for mp4
@@ -346,8 +349,8 @@ bool VDFFAudioSource::Read(int64_t start, uint32_t count, void *lpBuffer, uint32
     // required to seek
     discard_samples = int(start>=4096 ? 4096 : start);
     int64_t pos = (start-discard_samples) * time_base.den / time_base.num - time_adjust;
-    if(start==0 && pos>=start_time){
-      pos = start_time;
+    if(start==0){
+      pos = AV_SEEK_START;
       discard_samples = 0;
     }
     avcodec_flush_buffers(m_pCodecCtx);

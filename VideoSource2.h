@@ -205,7 +205,9 @@ public:
   void setCopyMode(bool v);
   void setDecodeMode(bool v);
   void setCacheMode(bool v);
+  bool is_intra();
   bool allow_copy();
+  bool possible_delay();
   int calc_sparse_key(int64_t sample, int64_t& pos);
   int calc_seek(int jump, int64_t& pos);
   int calc_prefetch(int jump);
