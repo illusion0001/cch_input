@@ -936,6 +936,8 @@ void FFOutputFile::Write(uint32 index, const void *pBuffer, uint32 cbBuffer, Pac
       return;
     }
 
+    if(!(ofmt->oformat->flags & AVFMT_TS_NEGATIVE)) ofmt->avoid_negative_ts = AVFMT_AVOID_NEG_TS_MAKE_NON_NEGATIVE;
+
     int err = 0;
     if(!(ofmt->oformat->flags & AVFMT_NOFILE)){
       err = avio_open(&ofmt->pb, out_ff_path.c_str(), AVIO_FLAG_WRITE);
