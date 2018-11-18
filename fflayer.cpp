@@ -74,6 +74,8 @@ bool logoOpenImage(HWND hwnd, wchar_t* path, int max_path) {
   ofn.lpstrFile = szFile;
   ofn.nMaxFile = MAX_PATH;
   ofn.Flags = OFN_EXPLORER | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY | OFN_ENABLESIZING | OFN_ENABLETEMPLATE;
+  ofn.lpTemplateName = MAKEINTRESOURCEW(IDD_FFLAYER_FILE);
+  ofn.hInstance = hInstance;
 
   BOOL result = GetOpenFileNameW(&ofn);
 

@@ -25,6 +25,7 @@
 #define IDD_ENC_OPUS                    118
 #define IDD_ENC_ALAC                    119
 #define IDD_ENC_VORBIS                  120
+#define IDD_FFLAYER_FILE                121
 #define IDC_FORMATNAME                  1004
 #define IDC_VIDEO_PIXFMT                1006
 #define IDC_VIDEO_WXH                   1007
@@ -122,7 +123,7 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        113
+#define _APS_NEXT_RESOURCE_VALUE        122
 #define _APS_NEXT_COMMAND_VALUE         40001
 #define _APS_NEXT_CONTROL_VALUE         1065
 #define _APS_NEXT_SYMED_VALUE           101
