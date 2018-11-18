@@ -48,6 +48,7 @@ public:
   AVPacket pkt;
   sint64 total_in;
   sint64 total_out;
+  int max_packet;
 
   WAVEFORMATEXTENSIBLE* out_format;
   int out_format_size;

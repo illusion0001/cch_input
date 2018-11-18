@@ -31,6 +31,7 @@ VDFFAudio::VDFFAudio(const VDXInputDriverContext &pContext)
   total_in = 0;
   total_out = 0;
   wav_compatible = false;
+  max_packet = 0;
 }
 
 VDFFAudio::~VDFFAudio()
@@ -114,6 +115,12 @@ void VDFFAudio::export_wav()
     out_format = (WAVEFORMATEXTENSIBLE*)malloc(out_format_size);
     memcpy(out_format,ff,out_format_size);
     wav_compatible = true;
+
+    if(codec->id==AV_CODEC_ID_AAC){
+      // is this ffmpeg' job to calculate right size?
+      if(max_packet>out_format->Format.nBlockAlign)
+        out_format->Format.nBlockAlign = max_packet;
+    }
   }
 
 cleanup:
@@ -295,6 +302,9 @@ bool VDFFAudio::Convert(bool flush, bool requireOutput){
     AVPacketSideData& s = pkt.side_data[i];
     if(s.type==AV_PKT_DATA_NEW_EXTRADATA) export_wav();
   }}
+  if(pkt.size>max_packet) max_packet = pkt.size;
+  if(flush) export_wav();
+
   if(pkt.size) return true;
 
   return false;
