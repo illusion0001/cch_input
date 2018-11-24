@@ -155,6 +155,9 @@ int VDFFVideoSource::init_duration(const AVRational fr)
       e = abs(e);
       if(e>sample_count_error) sample_count_error = e;
 
+      // found in some mp4 produced with GPAC 0.5.1
+      if(m_pStreamCtx->nb_index_entries>0 && (m_pStreamCtx->index_entries[0].flags & AVINDEX_DISCARD_FRAME)!=0) sample_count_error++;
+
     } else {
       if(m_pSource->is_image){
         sample_count = 1;
@@ -279,7 +282,11 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
       int64_t exp_dt = time_base.den/time_base.num;
       int64_t min_dt = exp_dt;
       {for(int i=1; i<m_pStreamCtx->nb_index_entries; i++){
-        int64_t dt = m_pStreamCtx->index_entries[i].timestamp - m_pStreamCtx->index_entries[i-1].timestamp;
+        AVIndexEntry& i0 = m_pStreamCtx->index_entries[i-1];
+        AVIndexEntry& i1 = m_pStreamCtx->index_entries[i];
+        if(i0.flags & AVINDEX_DISCARD_FRAME) continue;
+        if(i1.flags & AVINDEX_DISCARD_FRAME) continue;
+        int64_t dt = i1.timestamp - i0.timestamp;
         if(dt<(exp_dt-1) || dt>(exp_dt+1)){
           has_vfr = true;
         }
