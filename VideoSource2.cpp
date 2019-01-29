@@ -139,7 +139,7 @@ int VDFFVideoSource::init_duration(const AVRational fr)
       // also works with mkv (derived from file duration)
       int64_t start_pts = m_pStreamCtx->start_time;
       if(start_pts==AV_NOPTS_VALUE) start_pts = 0;
-      duration = duration - start_pts;
+      duration -= start_pts;
       //! above idea fails on Hilary.0000.ts
 
       bool mts = false;
@@ -147,7 +147,8 @@ int VDFFVideoSource::init_duration(const AVRational fr)
       if(m_pFormatCtx->iformat==mts_format) mts = true;
 
       if(mts || duration<=0){
-        duration = m_pStreamCtx->duration;
+        // undo previous step
+        duration += start_pts;
         start_pts = 0; // ignore count_error
       }
       sample_count = (int)((duration * time_base.num + rndd) / time_base.den);
