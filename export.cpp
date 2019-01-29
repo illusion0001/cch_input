@@ -458,6 +458,7 @@ FFOutputFile::FFOutputFile(const VDXInputDriverContext &pContext)
   ofmt = 0;
   header = false;
   stream_test = false;
+  mp4_faststart = false;
   a_buf = 0;
   a_buf_size = 0;
 }
@@ -490,6 +491,8 @@ bool VDXAPIENTRY VDFFOutputFileDriver::GetStreamControl(const wchar_t *path, con
   int err = 0; 
   AVOutputFormat* oformat = 0;
   if(format && format[0]) oformat = av_guess_format(format, 0, 0);
+  if(strcmp(format,"mov+faststart")==0) oformat = av_guess_format("mov", 0, 0);
+  if(strcmp(format,"mp4+faststart")==0) oformat = av_guess_format("mp4", 0, 0);
   if(!oformat) oformat = av_guess_format(0, out_ff_path, 0);
   if(!oformat) return false;
 
@@ -526,6 +529,8 @@ void FFOutputFile::Init(const wchar_t *path, const char* format)
   int err = 0; 
   AVOutputFormat* oformat = 0;
   if(format && format[0]) oformat = av_guess_format(format, 0, 0);
+  if(strcmp(format,"mov+faststart")==0){ oformat = av_guess_format("mov", 0, 0); mp4_faststart=true; }
+  if(strcmp(format,"mp4+faststart")==0){ oformat = av_guess_format("mp4", 0, 0); mp4_faststart=true; }
   if(!oformat) oformat = av_guess_format(0, out_ff_path, 0);
   if(!oformat){
     mContext.mpCallbacks->SetError("Unable to find a suitable output format");
@@ -535,7 +540,7 @@ void FFOutputFile::Init(const wchar_t *path, const char* format)
 
   format_name = oformat->name;
 
-  err = avformat_alloc_output_context2(&ofmt, oformat, 0, 0);
+  err = avformat_alloc_output_context2(&ofmt, oformat, 0, out_ff_path); // filename needed for second pass
   if(err<0){
     av_error(err);
     Finalize();
@@ -823,26 +828,29 @@ void FFOutputFile::import_wav(AVStream *st, const void *pFormat, int cbFormat)
   AVFormatContext* fmt_ctx = avformat_alloc_context();
   fmt_ctx->pb = avio_ctx;
   int err = avformat_open_input(&fmt_ctx, 0, 0, 0);
-  if(err<0) av_error(err);
+  if(err<0){ av_error(err); goto fail; }
   err = avformat_find_stream_info(fmt_ctx, 0);
-  if(err<0) av_error(err);
+  if(err<0){ av_error(err); goto fail; }
 
-  AVStream *fs = fmt_ctx->streams[0];
+  {
+    AVStream *fs = fmt_ctx->streams[0];
 
-  st->codec->codec_id = fs->codec->codec_id;
-  st->codec->codec_tag = fs->codec->codec_tag;
-  st->codec->channels = fs->codec->channels;
-  st->codec->channel_layout = fs->codec->channel_layout;
-  st->codec->sample_rate = fs->codec->sample_rate;
-  st->codec->block_align = fs->codec->block_align;
-  st->codec->frame_size = fs->codec->frame_size;
-  st->codec->sample_fmt = fs->codec->sample_fmt;
-  st->codec->bits_per_coded_sample = fs->codec->bits_per_coded_sample;
-  st->codec->bit_rate = fs->codec->bit_rate;
+    st->codec->codec_id = fs->codec->codec_id;
+    st->codec->codec_tag = fs->codec->codec_tag;
+    st->codec->channels = fs->codec->channels;
+    st->codec->channel_layout = fs->codec->channel_layout;
+    st->codec->sample_rate = fs->codec->sample_rate;
+    st->codec->block_align = fs->codec->block_align;
+    st->codec->frame_size = fs->codec->frame_size;
+    st->codec->sample_fmt = fs->codec->sample_fmt;
+    st->codec->bits_per_coded_sample = fs->codec->bits_per_coded_sample;
+    st->codec->bit_rate = fs->codec->bit_rate;
 
-  st->codec->extradata_size = fs->codec->extradata_size;
-  st->codec->extradata = copy_extradata(fs->codec);
+    st->codec->extradata_size = fs->codec->extradata_size;
+    st->codec->extradata = copy_extradata(fs->codec);
+  }
 
+  fail:
   avformat_free_context(fmt_ctx);
   av_free(avio_ctx->buffer);
   av_free(avio_ctx);
@@ -926,6 +934,8 @@ bool FFOutputFile::test_streams()
   return true;
 }
 
+#define FF_MOV_FLAG_FASTSTART             (1 <<  7)
+
 void FFOutputFile::Write(uint32 index, const void *pBuffer, uint32 cbBuffer, PacketInfo& info)
 {
   if(!ofmt) return;
@@ -948,7 +958,11 @@ void FFOutputFile::Write(uint32 index, const void *pBuffer, uint32 cbBuffer, Pac
       }
     }
 
-    err = avformat_write_header(ofmt, 0);
+    AVDictionary* options = 0;
+    if(mp4_faststart) av_dict_set_int(&options, "movflags", FF_MOV_FLAG_FASTSTART, 0);
+
+    err = avformat_write_header(ofmt, &options);
+    av_dict_free(&options);
     if(err<0){
       av_error(err);
       Finalize();
@@ -1011,7 +1025,9 @@ enum {
   f_mka,
   f_webm,
   f_mov,
+  f_mov_faststart,
   f_mp4,
+  f_mp4_faststart,
   f_m4a,
   f_aiff,
   f_nut,
@@ -1028,6 +1044,8 @@ uint32 VDXAPIENTRY VDFFOutputFileDriver::GetFormatCaps(int i)
   case f_webm:
   case f_mov:
   case f_mp4:
+  case f_mov_faststart:
+  case f_mp4_faststart:
   case f_nut:
     return kFormatCaps_UseVideo|kFormatCaps_UseAudio|kFormatCaps_OffsetStreams;
   case f_mka:
@@ -1070,10 +1088,20 @@ bool VDXAPIENTRY VDFFOutputFileDriver::EnumFormats(int i, wchar_t* filter, wchar
     wcscpy(ext,L"*.mov");
     strcpy(name,"mov");
     return true;
+  case f_mov_faststart:
+    wcscpy(filter,L"MOV +faststart (*.mov)");
+    wcscpy(ext,L"*.mov");
+    strcpy(name,"mov+faststart");
+    return true;
   case f_mp4:
     wcscpy(filter,L"MP4 (MPEG-4 Part 14) (*.mp4)");
     wcscpy(ext,L"*.mp4");
     strcpy(name,"mp4");
+    return true;
+  case f_mp4_faststart:
+    wcscpy(filter,L"MP4 +faststart (*.mp4)");
+    wcscpy(ext,L"*.mp4");
+    strcpy(name,"mp4+faststart");
     return true;
   case f_m4a:
     wcscpy(filter,L"M4A (MPEG-4 Part 14) (*.m4a)");

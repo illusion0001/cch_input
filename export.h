@@ -114,6 +114,7 @@ public:
   AVFormatContext* ofmt;
   bool header;
   bool stream_test;
+  bool mp4_faststart;
 
   void* a_buf;
   uint32 a_buf_size;
