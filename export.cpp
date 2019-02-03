@@ -734,6 +734,8 @@ void* FFOutputFile::bswap_pcm(uint32 index, const void *pBuffer, uint32 cbBuffer
   return a_buf;
 }
 
+const AVCodecTag* avformat_get_nut_video_tags();
+
 void FFOutputFile::import_bmp(AVStream *st, const void *pFormat, int cbFormat)
 {
   BITMAPINFOHEADER* bm = (BITMAPINFOHEADER*)pFormat;
@@ -760,6 +762,17 @@ void FFOutputFile::import_bmp(AVStream *st, const void *pFormat, int cbFormat)
         break;
       }
       mov_tag++;
+    }
+  }
+
+  if(!codec_id){
+    const AVCodecTag* nut_tag = avformat_get_nut_video_tags();
+    while(nut_tag->id!=AV_CODEC_ID_NONE){
+      if(nut_tag->tag==tag){
+        codec_id = nut_tag->id;
+        break;
+      }
+      nut_tag++;
     }
   }
 

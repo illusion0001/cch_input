@@ -406,6 +406,7 @@
     <ClCompile Include="..\vd2\VDXFrame\VideoFilterEntry.cpp" />
     <ClCompile Include="..\vfmain.cpp" />
     <ClCompile Include="..\VideoSource2.cpp" />
+    <ClCompile Include="..\nut.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\avlib.def" />

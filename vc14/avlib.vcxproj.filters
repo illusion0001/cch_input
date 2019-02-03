@@ -538,6 +538,7 @@
     <ClCompile Include="..\main2.cpp" />
     <ClCompile Include="..\mov_mp4.cpp" />
     <ClCompile Include="..\VideoSource2.cpp" />
+    <ClCompile Include="..\nut.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\cineform\Common\fsm17.inc">

@@ -1171,6 +1171,10 @@
 			>
 		</File>
 		<File
+			RelativePath="..\nut.cpp"
+			>
+		</File>
+		<File
 			RelativePath="..\resource.h"
 			>
 		</File>
