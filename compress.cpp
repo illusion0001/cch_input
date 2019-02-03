@@ -177,6 +177,17 @@ void copy_yuv(AVFrame* frame, const VDXPixmapLayout* layout, const void* data, i
   }
 }
 
+void copy_gray(AVFrame* frame, const VDXPixmapLayout* layout, const void* data, int bpp)
+{
+  int w2 = layout->w;
+  int h2 = layout->h;
+  {for(int y=0; y<layout->h; y++){
+    uint8* s = (uint8*)data + layout->data + layout->pitch*y;
+    uint8* d = frame->data[0] + frame->linesize[0]*y;
+    memcpy(d,s,layout->w*bpp);
+  }}
+}
+
 struct CodecBase: public CodecClass{
   enum {
     format_rgb = 1,
@@ -187,6 +198,7 @@ struct CodecBase: public CodecClass{
     format_yuva420 = 6,
     format_yuva422 = 7,
     format_yuva444 = 8,
+    format_gray = 9,
   };
 
   struct Config{
@@ -323,6 +335,13 @@ struct CodecBase: public CodecClass{
       if(bits==10) return test_av_format(AV_PIX_FMT_YUVA444P10LE);
       if(bits==16) return test_av_format(AV_PIX_FMT_YUVA444P16LE);
       break;
+    case format_gray:
+      if(bits==8) return test_av_format(AV_PIX_FMT_GRAY8);
+      if(bits==9) return test_av_format(AV_PIX_FMT_GRAY9LE);
+      if(bits==10) return test_av_format(AV_PIX_FMT_GRAY10LE);
+      if(bits==12) return test_av_format(AV_PIX_FMT_GRAY12LE);
+      if(bits==16) return test_av_format(AV_PIX_FMT_GRAY16LE);
+      break;
     }
     return false;
   }
@@ -445,6 +464,19 @@ struct CodecBase: public CodecClass{
           info->ref_a = max_value;
         }
         return nsVDXPixmap::kPixFormat_YUV444_Alpha_Planar16;
+      }
+    }
+
+    if(config->format==format_gray){
+      if(config->bits==8){
+        return nsVDXPixmap::kPixFormat_Y8;
+      }
+      if(config->bits>8){
+        int max_value = (1 << config->bits)-1;
+        if(info){
+          info->ref_r = max_value;
+        }
+        return nsVDXPixmap::kPixFormat_Y16;
       }
     }
 
@@ -703,6 +735,26 @@ struct CodecBase: public CodecClass{
       }
     }
 
+    if(config->format==format_gray){
+      switch(config->bits){
+      case 16:
+        ctx->pix_fmt = AV_PIX_FMT_GRAY16LE;
+        break;
+      case 12:
+        ctx->pix_fmt = AV_PIX_FMT_GRAY12LE;
+        break;
+      case 10:
+        ctx->pix_fmt = AV_PIX_FMT_GRAY10LE;
+        break;
+      case 9:
+        ctx->pix_fmt = AV_PIX_FMT_GRAY9LE;
+        break;
+      case 8:
+        ctx->pix_fmt = AV_PIX_FMT_GRAY8;
+        break;
+      }
+    }
+
     ctx->bit_rate = 400000;
     ctx->width = layout->w;
     ctx->height = layout->h;
@@ -828,6 +880,12 @@ struct CodecBase: public CodecClass{
       case nsVDXPixmap::kPixFormat_YUV444_Alpha_Planar16:
         copy_yuv(frame,layout,icc->lpInput,2);
         break;
+      case nsVDXPixmap::kPixFormat_Y8:
+        copy_gray(frame,layout,icc->lpInput,1);
+        break;
+      case nsVDXPixmap::kPixFormat_Y16:
+        copy_gray(frame,layout,icc->lpInput,2);
+        break;
       }
 
       ret = avcodec_encode_video2(ctx, &pkt, frame, &got_output);
@@ -915,10 +973,11 @@ void ConfigBase::init_format()
     "YUV 4:2:0 + Alpha",
     "YUV 4:2:2 + Alpha",
     "YUV 4:4:4 + Alpha",
+    "Gray",
   };
 
   SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_RESETCONTENT, 0, 0);
-  for(int i=0; i<8; i++)
+  for(int i=0; i<9; i++)
     SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_ADDSTRING, 0, (LPARAM)color_names[i]);
   SendDlgItemMessage(mhdlg, IDC_COLORSPACE, CB_SETCURSEL, codec->config->format-1, 0);
 }
@@ -1162,6 +1221,8 @@ struct CodecFFV1: public CodecBase{
     case nsVDXPixmap::kPixFormat_YUV420_Alpha_Planar16:
     case nsVDXPixmap::kPixFormat_YUV422_Alpha_Planar16:
     case nsVDXPixmap::kPixFormat_YUV444_Alpha_Planar16:
+    case nsVDXPixmap::kPixFormat_Y8:
+    case nsVDXPixmap::kPixFormat_Y16:
       return 1;
     }
     return 0;
@@ -1352,6 +1413,8 @@ struct CodecHUFF: public CodecBase{
     case nsVDXPixmap::kPixFormat_YUV420_Alpha_Planar16:
     case nsVDXPixmap::kPixFormat_YUV422_Alpha_Planar16:
     case nsVDXPixmap::kPixFormat_YUV444_Alpha_Planar16:
+    case nsVDXPixmap::kPixFormat_Y8:
+    case nsVDXPixmap::kPixFormat_Y16:
       return 1;
     }
     return 0;
@@ -1506,7 +1569,7 @@ INT_PTR ConfigProres::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
   case WM_HSCROLL:
     if((HWND)lParam==GetDlgItem(mhdlg,IDC_QUALITY)){
       CodecProres::Config* config = (CodecProres::Config*)codec->config;
-      config->qscale = SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_GETPOS, 0, 0);
+      config->qscale = (int)SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_GETPOS, 0, 0);
       SetDlgItemInt(mhdlg, IDC_QUALITY_VALUE, config->qscale, false);
       break;
     }
@@ -1676,7 +1739,7 @@ INT_PTR ConfigH264::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
 
   case WM_HSCROLL:
     if((HWND)lParam==GetDlgItem(mhdlg,IDC_QUALITY)){
-      config->crf = SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_GETPOS, 0, 0);
+      config->crf = (int)SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_GETPOS, 0, 0);
       SetDlgItemInt(mhdlg, IDC_QUALITY_VALUE, config->crf, false);
       break;
     }
@@ -1862,7 +1925,7 @@ INT_PTR ConfigH265::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
 
   case WM_HSCROLL:
     if((HWND)lParam==GetDlgItem(mhdlg,IDC_QUALITY)){
-      config->crf = SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_GETPOS, 0, 0);
+      config->crf = (int)SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_GETPOS, 0, 0);
       SetDlgItemInt(mhdlg, IDC_QUALITY_VALUE, config->crf, false);
       break;
     }
@@ -2004,7 +2067,7 @@ INT_PTR ConfigVP8::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
 
   case WM_HSCROLL:
     if((HWND)lParam==GetDlgItem(mhdlg,IDC_QUALITY)){
-      config->crf = SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_GETPOS, 0, 0);
+      config->crf = (int)SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_GETPOS, 0, 0);
       SetDlgItemInt(mhdlg, IDC_QUALITY_VALUE, config->crf, false);
       break;
     }
@@ -2129,7 +2192,7 @@ INT_PTR ConfigVP9::DlgProc(UINT msg, WPARAM wParam, LPARAM lParam)
 
   case WM_HSCROLL:
     if((HWND)lParam==GetDlgItem(mhdlg,IDC_QUALITY)){
-      config->crf = SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_GETPOS, 0, 0);
+      config->crf = (int)SendDlgItemMessage(mhdlg, IDC_QUALITY, TBM_GETPOS, 0, 0);
       SetDlgItemInt(mhdlg, IDC_QUALITY_VALUE, config->crf, false);
       break;
     }
