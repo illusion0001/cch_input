@@ -22,6 +22,24 @@ extern bool config_decode_magic;
 extern bool config_decode_cfhd;
 extern bool config_disable_cache;
 
+void widechar_to_utf8(char *dst, int max_dst, const wchar_t *src)
+{
+  *dst = 0;
+  WideCharToMultiByte(CP_UTF8, 0, src, -1, dst, max_dst, 0, 0);
+}
+
+void utf8_to_widechar(wchar_t *dst, int max_dst, const char *src)
+{
+  *dst = 0;
+  MultiByteToWideChar(CP_UTF8, 0, src, -1, dst, max_dst);
+}
+
+bool FileExist(const wchar_t* name)
+{
+  DWORD a = GetFileAttributesW(name);
+  return ((a!=0xFFFFFFFF) && !(a & FILE_ATTRIBUTE_DIRECTORY));
+}
+
 bool check_magic_vfw(DWORD fcc)
 {
   if(config_decode_magic) return false;
@@ -188,7 +206,7 @@ int detect_mp4_mov(const void *pHeader, int32_t nHeaderSize, int64_t nFileSize)
   return -1;
 }
 
-int detect_ff(VDXMediaInfo& info, const void *pHeader, int32_t nHeaderSize)
+int detect_ff(VDXMediaInfo& info, const void *pHeader, int32_t nHeaderSize, const wchar_t* fileName)
 {
   init_av();
 
@@ -212,28 +230,38 @@ int detect_ff(VDXMediaInfo& info, const void *pHeader, int32_t nHeaderSize)
   // mpegts is detected with score 2, can be confused with arbitrary text file
   // ac3 is not detected, but score is raised to 1 (not 0)
   // tga is not detected, score is 0
+  // also tga is detected as mp3 with score 1
    
   if(score==AVPROBE_SCORE_MAX) return 1;
-  if(score>0) return 0;
-  return -1;
-}
 
-void widechar_to_utf8(char *dst, int max_dst, const wchar_t *src)
-{
-  *dst = 0;
-  WideCharToMultiByte(CP_UTF8, 0, src, -1, dst, max_dst, 0, 0);
-}
+  if(!fileName){
+    if(score>0) return 0;
+    return -1;
+  }
 
-void utf8_to_widechar(wchar_t *dst, int max_dst, const char *src)
-{
-  *dst = 0;
-  MultiByteToWideChar(CP_UTF8, 0, src, -1, dst, max_dst);
-}
+  const int ff_path_size = MAX_PATH*4; // utf8, worst case
+  char ff_path[ff_path_size];
+  widechar_to_utf8(ff_path, ff_path_size, fileName);
 
-bool FileExist(const wchar_t* name)
-{
-  DWORD a = GetFileAttributesW(name);
-  return ((a!=0xFFFFFFFF) && !(a & FILE_ATTRIBUTE_DIRECTORY));
+  AVFormatContext* ctx = 0;
+  int err = 0; 
+  err = avformat_open_input(&ctx, ff_path, 0, 0);
+  if(err!=0) return -1;
+  err = avformat_find_stream_info(ctx, 0);
+  if(err<0){
+    avformat_close_input(&ctx);
+    return -1;
+  }
+  fmt = ctx->iformat;
+  {for(int i=0; i<100; i++){
+    int c = fmt->name[i];
+    info.format_name[i] = c;
+    if(c==0) break;
+  }}
+  info.format_name[99] = 0;
+  avformat_close_input(&ctx);
+
+  return 1;
 }
 
 //----------------------------------------------------------------------------------------------
@@ -254,6 +282,11 @@ int VDXAPIENTRY VDFFInputFileDriver::DetectBySignature(const void *pHeader, int3
 
 int VDXAPIENTRY VDFFInputFileDriver::DetectBySignature2(VDXMediaInfo& info, const void *pHeader, int32_t nHeaderSize, const void *pFooter, int32_t nFooterSize, int64_t nFileSize)
 {
+  return DetectBySignature3(info,pHeader,nHeaderSize,pFooter,nFooterSize,nFileSize,0);
+}
+
+int VDXAPIENTRY VDFFInputFileDriver::DetectBySignature3(VDXMediaInfo& info, const void *pHeader, sint32 nHeaderSize, const void *pFooter, sint32 nFooterSize, sint64 nFileSize, const wchar_t* fileName)
+{
   int avi_q = detect_avi(info,pHeader,nHeaderSize);
 
   if(avi_q==1) return kDC_High;
@@ -264,7 +297,7 @@ int VDXAPIENTRY VDFFInputFileDriver::DetectBySignature2(VDXMediaInfo& info, cons
     return kDC_High;
   }
 
-  int ff_q = detect_ff(info,pHeader,nHeaderSize);
+  int ff_q = detect_ff(info,pHeader,nHeaderSize,fileName);
   if(ff_q==1) return kDC_Moderate;
   if(ff_q==0) return kDC_VeryLow;
 
@@ -435,7 +468,7 @@ void VDFFInputFile::Init(const wchar_t *szFile, IVDXInputOptions *in_opts)
 
 int VDFFInputFile::GetFileFlags()
 {
-  int flags = 0;
+  int flags = VDFFInputFileDriver::kFF_AppendSequence;
   if(is_image_list) flags |= VDFFInputFileDriver::kFF_Sequence;
   return flags;
 }
@@ -485,12 +518,21 @@ bool VDXAPIENTRY VDFFInputFile::Append(const wchar_t* szFile)
 {
   if(!szFile) return true;
 
+  return Append2(szFile, VDFFInputFileDriver::kOF_SingleFile, 0);
+}
+
+bool VDXAPIENTRY VDFFInputFile::Append2(const wchar_t *szFile, int flags, IVDXInputOptions *opts)
+{
+  if(!szFile) return true;
+
   VDFFInputFile* head = head_segment ? head_segment : this;
   VDFFInputFile* last = head;
   while(last->next_segment) last = last->next_segment;
 
   VDFFInputFile* f = new VDFFInputFile(mContext);
   f->head_segment = head;
+  if(flags & VDFFInputFileDriver::kOF_AutoSegmentScan) f->auto_append = true; else f->auto_append = false;
+  if(flags & VDFFInputFileDriver::kOF_SingleFile) f->single_file_mode = true; else f->single_file_mode = false;
   f->Init(szFile,0);
 
   if(!f->m_pFormatCtx){

@@ -28,6 +28,7 @@ public:
 
   enum FileFlags {
     kFF_Sequence = 1,
+    kFF_AppendSequence = 2,
   };
 
   VDFFInputFileDriver(const VDXInputDriverContext& context);
@@ -35,6 +36,7 @@ public:
 
   int		VDXAPIENTRY DetectBySignature(const void *pHeader, int32_t nHeaderSize, const void *pFooter, int32_t nFooterSize, int64_t nFileSize);
   int		VDXAPIENTRY DetectBySignature2(VDXMediaInfo& info, const void *pHeader, int32_t nHeaderSize, const void *pFooter, int32_t nFooterSize, int64_t nFileSize);
+  int		VDXAPIENTRY DetectBySignature3(VDXMediaInfo& info, const void *pHeader, sint32 nHeaderSize, const void *pFooter, sint32 nFooterSize, sint64 nFileSize, const wchar_t* fileName);
   bool	VDXAPIENTRY CreateInputFile(uint32_t flags, IVDXInputFile **ppFile);
 
 protected:
@@ -123,6 +125,7 @@ public:
 
   void VDXAPIENTRY Init(const wchar_t *szFile, IVDXInputOptions *opts);
   bool VDXAPIENTRY Append(const wchar_t *szFile);
+  bool VDXAPIENTRY Append2(const wchar_t *szFile, int flags, IVDXInputOptions *opts);
 
   bool VDXAPIENTRY PromptForOptions(VDXHWND, IVDXInputOptions **r);
   bool VDXAPIENTRY CreateOptions(const void *buf, uint32_t len, IVDXInputOptions **r);
