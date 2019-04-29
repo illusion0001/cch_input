@@ -1,5 +1,6 @@
 #pragma once
 
+#define __STDC_LIMIT_MACROS
 #include <stdint.h>
 #include <vd2/plugin/vdinputdriver.h>
 #include <vd2/VDXFrame/Unknown.h>
@@ -149,3 +150,7 @@ protected:
   const VDXInputDriverContext& mContext;
   static bool test_append(VDFFInputFile* f0, VDFFInputFile* f1);
 };
+
+#define AV_SEEK_START INT64_MIN
+
+int seek_frame(AVFormatContext *s, int stream_index, int64_t timestamp, int flags);

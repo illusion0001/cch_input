@@ -845,3 +845,14 @@ bool VDFFInputFile::GetAudioSource(int index, IVDXAudioSource **ppAS)
 
   return true;
 }
+
+int seek_frame(AVFormatContext *s, int stream_index, int64_t timestamp, int flags)
+{
+  int r = av_seek_frame(s,stream_index,timestamp,flags);
+  if(r==-1 && timestamp==AV_SEEK_START){
+    AVStream* st = s->streams[stream_index];
+    if(st->nb_index_entries) timestamp = st->index_entries[0].timestamp;
+    r = av_seek_frame(s,stream_index,timestamp,flags);
+  }
+  return r;
+}

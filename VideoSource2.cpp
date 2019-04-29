@@ -1,6 +1,5 @@
-#define __STDC_LIMIT_MACROS
-#include "VideoSource2.h"
 #include "InputFile2.h"
+#include "VideoSource2.h"
 #include "cineform.h"
 #include "export.h"
 
@@ -18,8 +17,6 @@ uint8_t* align_buf(uint8_t* p)
 {
   return (uint8_t*)(ptrdiff_t(p+line_align-1) & ~(line_align-1));
 }
-
-#define AV_SEEK_START INT64_MIN
 
 VDFFVideoSource::VDFFVideoSource(const VDXInputDriverContext& context)
   :mContext(context)
@@ -249,14 +246,19 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
       // works for 2017-04-07 08-53-48.flv
       int64_t pos = m_pStreamCtx->duration;
       if(pos==AV_NOPTS_VALUE) pos = int64_t(sample_count)*time_base.den / time_base.num;
-      av_seek_frame(m_pFormatCtx,m_streamIndex,pos,AVSEEK_FLAG_BACKWARD);
-      av_seek_frame(m_pFormatCtx,m_streamIndex,AV_SEEK_START,AVSEEK_FLAG_BACKWARD);
+      seek_frame(m_pFormatCtx,m_streamIndex,pos,AVSEEK_FLAG_BACKWARD);
+      seek_frame(m_pFormatCtx,m_streamIndex,AV_SEEK_START,AVSEEK_FLAG_BACKWARD);
     }
     trust_index = false;
     sparse_index = false;
 
     if(m_pStreamCtx->nb_index_entries>2){
-      if(abs(m_pStreamCtx->nb_index_entries - sample_count)<=sample_count_error){
+      // when avi has dropped frames ffmpeg removes these entries from index - find way to avoid this?
+      AVInputFormat* avi_format = av_find_input_format("avi");
+      if(m_pFormatCtx->iformat==avi_format){
+        sample_count = m_pStreamCtx->nb_index_entries;
+        trust_index = true;
+      } else if(abs(m_pStreamCtx->nb_index_entries - sample_count)<=sample_count_error){
         sample_count = m_pStreamCtx->nb_index_entries;
         trust_index = true;
       } else {
@@ -491,7 +493,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
     if(m_pCodecCtx->has_b_frames){
       free_buffers();
       avcodec_flush_buffers(m_pCodecCtx);
-      av_seek_frame(m_pFormatCtx, m_streamIndex, AV_SEEK_START, AVSEEK_FLAG_BACKWARD);
+      seek_frame(m_pFormatCtx, m_streamIndex, AV_SEEK_START, AVSEEK_FLAG_BACKWARD);
       read_frame(0,true);
     }
   }
@@ -1941,7 +1943,7 @@ bool VDFFVideoSource::Read(sint64 start, uint32 lCount, void *lpBuffer, uint32 c
     if(jump<next_frame) enable_prefetch = true;
 
     avcodec_flush_buffers(m_pCodecCtx);
-    av_seek_frame(m_pFormatCtx,m_streamIndex,seek_pos,AVSEEK_FLAG_BACKWARD);
+    ::seek_frame(m_pFormatCtx,m_streamIndex,seek_pos,AVSEEK_FLAG_BACKWARD);
     if(trust_index || is_image_list) next_frame = seek_frame; else next_frame = -1;
 
     // this helps to prevent seeking again to satisfy same request

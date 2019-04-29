@@ -1,10 +1,7 @@
-#define __STDC_LIMIT_MACROS
-#include "AudioSource2.h"
 #include "InputFile2.h"
+#include "AudioSource2.h"
 #include <Ks.h>
 #include <KsMedia.h>
-
-#define AV_SEEK_START INT64_MIN
 
 VDFFAudioSource::VDFFAudioSource(const VDXInputDriverContext& context)
   :mContext( context )
@@ -355,7 +352,7 @@ bool VDFFAudioSource::Read(int64_t start, uint32_t count, void *lpBuffer, uint32
     }
     avcodec_flush_buffers(m_pCodecCtx);
     int flags = use_keys ? 0 : AVSEEK_FLAG_ANY;
-    av_seek_frame(m_pFormatCtx,m_streamIndex,pos,AVSEEK_FLAG_BACKWARD|flags);
+    seek_frame(m_pFormatCtx,m_streamIndex,pos,AVSEEK_FLAG_BACKWARD|flags);
     next_sample = AV_NOPTS_VALUE;
   }
 
