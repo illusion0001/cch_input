@@ -165,6 +165,7 @@ public:
 
   bool flip_image;
   bool trust_index;
+  bool avi_drop_index;
   bool sparse_index;
   bool has_vfr;
   bool average_fr;

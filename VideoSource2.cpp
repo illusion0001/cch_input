@@ -45,6 +45,7 @@ VDFFVideoSource::VDFFVideoSource(const VDXInputDriverContext& context)
   direct_buffer = false;
   direct_cfhd = false;
   is_image_list = false;
+  avi_drop_index = false;
   copy_mode = false;
   decode_mode = true;
   small_cache_mode = false;
@@ -256,8 +257,9 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
       // when avi has dropped frames ffmpeg removes these entries from index - find way to avoid this?
       AVInputFormat* avi_format = av_find_input_format("avi");
       if(m_pFormatCtx->iformat==avi_format){
-        sample_count = m_pStreamCtx->nb_index_entries;
-        trust_index = true;
+        //sample_count = m_pStreamCtx->nb_index_entries;
+        //trust_index = true;
+        trust_index = (sample_count==m_pStreamCtx->nb_index_entries);
       } else if(abs(m_pStreamCtx->nb_index_entries - sample_count)<=sample_count_error){
         sample_count = m_pStreamCtx->nb_index_entries;
         trust_index = true;
@@ -335,6 +337,8 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
           if(d>keyframe_gap) keyframe_gap = d;
         }
       }}
+      int d = sample_count-p0;
+      if(d>keyframe_gap) keyframe_gap = d;
     }
   }
 
@@ -473,6 +477,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
 
   AVInputFormat* avi_format = av_find_input_format("avi");
   if(m_pFormatCtx->iformat==avi_format){
+    avi_drop_index = true;
     memset(frame_type,'D',ft_size);
 
     {for(int i=0; i<m_pStreamCtx->nb_index_entries; i++){
@@ -2091,7 +2096,9 @@ int VDFFVideoSource::handle_frame_num(int64_t pts, int64_t dts)
   if(ts==AV_NOPTS_VALUE) ts = dts;
   int pos = next_frame;
 
-  if(!trust_index && !is_image_list){
+  if(avi_drop_index && pos!=-1){
+    while(pos<sample_count && frame_type[pos]=='D') pos++;
+  } else if(!trust_index && !is_image_list){
     if(ts==AV_NOPTS_VALUE && pos==-1) return -1;
 
     if(ts!=AV_NOPTS_VALUE){
