@@ -468,7 +468,7 @@ int VDFFVideoSource::initStream( VDFFInputFile* pSource, int streamIndex )
     direct_format = malloc(direct_format_len);
     memset(direct_format, 0, direct_format_len);
     BITMAPINFOHEADER* outhdr = (BITMAPINFOHEADER*)direct_format;
-    outhdr->biSize        = sizeof(BITMAPINFOHEADER);
+    outhdr->biSize        = sizeof(BITMAPINFOHEADER) + m_pCodecCtx->extradata_size;
     outhdr->biWidth       = m_pCodecCtx->width;
     outhdr->biHeight      = m_pCodecCtx->height;
     outhdr->biCompression = m_streamInfo.mfccHandler;

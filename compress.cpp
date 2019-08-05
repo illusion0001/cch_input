@@ -505,9 +505,10 @@ struct CodecBase: public CodecClass{
     outhdr->biBitCount    = 32;
     if(layout->format==nsVDXPixmap::kPixFormat_XRGB64) outhdr->biBitCount = 48;
     outhdr->biCompression = codec_tag;
-    if(ctx && ctx->codec_tag) outhdr->biCompression = ctx->codec_tag;
     outhdr->biSizeImage   = iWidth*iHeight*8;
     if(ctx){
+      outhdr->biSize = sizeof(BITMAPINFOHEADER) + ctx->extradata_size;
+      if(ctx->codec_tag) outhdr->biCompression = ctx->codec_tag;
       uint8* p = ((uint8*)outhdr)+sizeof(BITMAPINFOHEADER);
       memset(p,0,extra_size);
       memcpy(p,ctx->extradata,ctx->extradata_size);
