@@ -34,4 +34,4 @@
 @set syslib=-lvfw32 -lcomdlg32 -lz -lopus -lvorbis -lvorbisenc -llzma -liconv -lbz2 -lws2_32 -lgmp -lsecur32 -logg -lksguid
 
 @echo linking
-@g++ -O2 -static-libgcc -mdll -s -Wl,--enable-stdcall-fixup %src%\avlib.def -L%lib% %objlist% %fflib% %syslib% %libcfhd% -lole32 -o %out%\avlib-1.vdplugin 2>>%log%
+@g++ -O2 -static -static-libgcc -mdll -s -Wl,--enable-stdcall-fixup %src%\avlib.def -L%lib% %objlist% %fflib% %syslib% %libcfhd% -lole32 -o %out%\avlib-1.vdplugin 2>>%log%

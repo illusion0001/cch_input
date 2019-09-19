@@ -639,6 +639,7 @@ AVFormatContext* VDFFInputFile::open_file(AVMediaType type, int streamIndex)
   if(strcmp(fmt->iformat->name,"webp_pipe")==0) is_image=true;
   if(strcmp(fmt->iformat->name,"apng")==0){ is_image=true; single_file_mode=true; }
   if(strcmp(fmt->iformat->name,"gif")==0){ is_image=true; single_file_mode=true; }
+  if(strcmp(fmt->iformat->name,"fits")==0){ is_image=true; single_file_mode=true; }
 
   AVInputFormat* fmt_image2 = av_find_input_format("image2");
 
