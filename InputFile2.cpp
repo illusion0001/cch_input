@@ -578,9 +578,12 @@ bool VDXAPIENTRY VDFFInputFile::Append2(const wchar_t *szFile, int flags, IVDXIn
         if(f1==f) break;
       }
     } else {
+      // no audio is allowed
+      /*
       last->next_segment = 0;
       f->Release();
       return false;
+      */
     }
   }
 
