@@ -19,8 +19,9 @@ extern HINSTANCE hInstance;
 void utf8_to_widechar(wchar_t *dst, int max_dst, const char *src);
 void widechar_to_utf8(char *dst, int max_dst, const wchar_t *src);
 
-void adjust_codec_tag2(AVOutputFormat* format, AVStream* st)
+void adjust_codec_tag2(const char* src_format, AVOutputFormat* format, AVStream* st)
 {
+  if(src_format && strcmp(src_format,format->name)==0) return;
   AVCodecID codec_id = st->codecpar->codec_id;
   unsigned int tag = st->codecpar->codec_tag;
   st->codecpar->codec_tag = 0;
@@ -31,8 +32,9 @@ void adjust_codec_tag2(AVOutputFormat* format, AVStream* st)
     st->codecpar->codec_tag = tag;
 }
 
-void adjust_codec_tag(AVOutputFormat* format, AVStream* st)
+void adjust_codec_tag(const char* src_format, AVOutputFormat* format, AVStream* st)
 {
+  if(src_format && strcmp(src_format,format->name)==0) return;
   AVCodecID codec_id = st->codec->codec_id;
   unsigned int tag = st->codec->codec_tag;
   st->codec->codec_tag = 0;
@@ -49,7 +51,7 @@ uint32 export_avi_fcc(AVStream* src)
   AVStream* st = avformat_new_stream(ctx,0);
   avcodec_copy_context(st->codec, src->codec);
   AVOutputFormat* format = av_guess_format("avi", 0, 0);
-  adjust_codec_tag(format,st);
+  adjust_codec_tag(0,format,st);
   uint32 r = st->codec->codec_tag;
   // missing tag in type1 avi
   if(!r) r = av_codec_get_tag(format->codec_tag, src->codec->codec_id);
@@ -322,7 +324,7 @@ bool VDXAPIENTRY VDFFInputFile::ExecuteExport(int id, VDXHWND parent, IProjectSt
       err = avcodec_parameters_copy(out_stream->codecpar, in_stream->codecpar);
       if(err<0) goto end;
 
-      adjust_codec_tag2(ofmt->oformat,out_stream);
+      adjust_codec_tag2(m_pFormatCtx->iformat->name,ofmt->oformat,out_stream);
 
       out_stream->sample_aspect_ratio = in_stream->sample_aspect_ratio;
       out_stream->avg_frame_rate = in_stream->avg_frame_rate;
@@ -871,7 +873,8 @@ void FFOutputFile::import_wav(AVStream *st, const void *pFormat, int cbFormat)
 
 void FFOutputFile::adjust_codec_tag(AVStream *st)
 {
-  ::adjust_codec_tag(ofmt->oformat,st);
+  // initial tag imported from bmp: suitable for avi
+  ::adjust_codec_tag("avi",ofmt->oformat,st);
 }
 
 bool FFOutputFile::Begin()
@@ -973,6 +976,10 @@ void FFOutputFile::Write(uint32 index, const void *pBuffer, uint32 cbBuffer, Pac
 
     AVDictionary* options = 0;
     if(mp4_faststart) av_dict_set_int(&options, "movflags", FF_MOV_FLAG_FASTSTART, 0);
+    if(strcmp(ofmt->oformat->name,"avi")==0){
+      // we take care of tags
+      av_dict_set_int(&options, "strict", -2, 0);
+    }
 
     err = avformat_write_header(ofmt, &options);
     av_dict_free(&options);
