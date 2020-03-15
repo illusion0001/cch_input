@@ -274,6 +274,8 @@ struct CodecCF: public CodecClass{
     CFHD_PixelFormat pixelFormat = CFHD_PIXEL_FORMAT_UNKNOWN;
     CFHD_EncodedFormat encodedFormat = CFHD_ENCODED_FORMAT_UNKNOWN;
     CFHD_EncodingFlags encodingFlags = CFHD_ENCODING_FLAGS_NONE;
+    int channels = 0;
+    int subw = layout->w;
 
     switch(config.format){
     case format_rgb:
@@ -281,11 +283,13 @@ struct CodecCF: public CodecClass{
       if(config.bits==8) pixelFormat = CFHD_PIXEL_FORMAT_RG24;
       if(config.bits==10) pixelFormat = CFHD_PIXEL_FORMAT_R210;
       if(config.bits==16) pixelFormat = CFHD_PIXEL_FORMAT_B64A;
+      channels = 3;
       break;
     case format_rgba:
       encodedFormat = CFHD_ENCODED_FORMAT_RGBA_4444;
       if(config.bits==8) pixelFormat = CFHD_PIXEL_FORMAT_BGRA;
       if(config.bits==16) pixelFormat = CFHD_PIXEL_FORMAT_B64A;
+      channels = 4;
       break;
     case format_yuv422:
       if(!use709) encodingFlags |= CFHD_ENCODING_FLAGS_YUV_601;
@@ -293,6 +297,8 @@ struct CodecCF: public CodecClass{
       if(config.bits==8) pixelFormat = CFHD_PIXEL_FORMAT_YUY2;
       if(config.bits==10) pixelFormat = CFHD_PIXEL_FORMAT_V210;
       if(config.bits==16) pixelFormat = CFHD_PIXEL_FORMAT_YU64;
+      channels = 3;
+      subw = (layout->w+1)/2;
       break;
     case format_bayer_rg:
     case format_bayer_gr:
@@ -300,6 +306,7 @@ struct CodecCF: public CodecClass{
     case format_bayer_gb:
       encodedFormat = CFHD_ENCODED_FORMAT_BAYER;
       pixelFormat = CFHD_PIXEL_FORMAT_BYR4;
+      channels = 1;
       break;
     }
 
@@ -323,6 +330,25 @@ struct CodecCF: public CodecClass{
       //CFHD_MetadataAdd(metadataRef, TAG_DECODE_CURVE, METADATATYPE_UINT32, 4, &curve, false);
     }
 
+    // rough estimation of required memory
+    int thread_size = 0;
+    // input buffer (below)
+    thread_size += abs(layout->pitch)*layout->h;
+    // output sample (maxed)
+    thread_size += layout->w*layout->h*8;
+    // transform buffer
+    thread_size += layout->w*layout->h*2;
+    {for(int i=1; i<channels; i++) thread_size += subw*layout->h*2; }
+    // wavelet stack
+    thread_size += layout->w*layout->h*21/8;
+    {for(int i=1; i<channels; i++) thread_size += subw*layout->h*21/8; }
+    int max_threads = 0;
+    #ifndef _WIN64
+    // lets think it is ok to use at most 600M
+    max_threads = 600*1024*1024/thread_size;
+    if(max_threads<2) max_threads = 2;
+    #endif
+
     int threads = config.threads;
     if(threads!=1){
       if(threads==0){
@@ -331,6 +357,7 @@ struct CodecCF: public CodecClass{
         threads = info.dwNumberOfProcessors;
       }
       if(threads>frame_total) threads = frame_total;
+      if(max_threads && threads>max_threads) threads = max_threads;
     }
     if(layout->format==nsVDXPixmap::kPixFormat_XRGB64) buffer_count = 1;
     if(threads>1) buffer_count = threads;
